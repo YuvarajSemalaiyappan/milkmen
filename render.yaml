@@ -3,7 +3,7 @@ services:
     name: milkmen
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build:render
+    buildCommand: npm ci --include=dev && npm run build:render
     startCommand: cd server && npx prisma migrate deploy && node dist/index.js
     envVars:
       - key: NODE_ENV
