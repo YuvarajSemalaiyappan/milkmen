@@ -316,7 +316,7 @@ router.post('/push', authenticateToken, async (req: AuthRequest, res: Response) 
           const quantity = data.quantity as number
           const ratePerLiter = data.ratePerLiter as number
           const totalAmount = quantity * ratePerLiter
-          const status = (data.status as string) || 'DELIVERED'
+          const status = ((data.status as string) || 'DELIVERED') as 'DELIVERED' | 'SKIPPED' | 'CANCELLED'
 
           result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
             const delivery = await tx.delivery.create({
@@ -389,7 +389,7 @@ router.post('/push', authenticateToken, async (req: AuthRequest, res: Response) 
                 date: new Date(data.date as string),
                 amount,
                 type: data.type as 'PAID_TO_FARMER' | 'RECEIVED_FROM_CUSTOMER' | 'ADVANCE_TO_FARMER' | 'ADVANCE_FROM_CUSTOMER',
-                method: (data.method as string) || 'CASH',
+                method: ((data.method as string) || 'CASH') as 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'OTHER',
                 notes: data.notes as string | undefined,
                 syncStatus: 'SYNCED'
               }
