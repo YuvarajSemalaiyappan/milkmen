@@ -5,12 +5,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import path from 'path'
 
+const isDev = process.env.NODE_ENV !== 'production'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    basicSsl(),
+    ...(isDev ? [basicSsl()] : []),
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: {
