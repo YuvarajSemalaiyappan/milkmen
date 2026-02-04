@@ -69,12 +69,16 @@ if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url))
   const clientDist = path.join(__dirname, '../../apps/mobile-web/dist')
   app.use(express.static(clientDist))
-  app.get('*', (_req, res) => {
+  // SPA fallback — serve index.html for non-API routes
+  app.use((_req, res, next) => {
+    if (_req.path.startsWith('/api') || _req.path === '/health') {
+      return next()
+    }
     res.sendFile('index.html', { root: clientDist })
   })
 }
 
-// 404 handler (API routes only in production, all routes in dev)
+// 404 handler (API routes only)
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' })
 })
