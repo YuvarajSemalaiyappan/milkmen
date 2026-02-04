@@ -1,0 +1,7 @@
+export { SettingsPage } from './SettingsPage'
+export { ProfilePage } from './ProfilePage'
+export { BusinessSettingsPage } from './BusinessSettingsPage'
+export { StaffManagementPage } from './StaffManagementPage'
+export { RateSettingsPage } from './RateSettingsPage'
+export { SyncSettingsPage } from './SyncSettingsPage'
+export { AboutPage } from './AboutPage'

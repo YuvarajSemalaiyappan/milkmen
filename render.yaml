@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: milkmen
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build:render
+    startCommand: cd server && npx prisma migrate deploy && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # Set manually — Neon connection string
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SETUP_SECRET
+        generateValue: true
+      - key: PORT
+        value: 10000

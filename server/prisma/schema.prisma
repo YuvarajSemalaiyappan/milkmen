@@ -1,0 +1,433 @@
+// Prisma schema for Milkmen - Milk Collection & Sales Management
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Multi-tenant: Each business is isolated
+model Business {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users               User[]
+  farmers             Farmer[]
+  customers           Customer[]
+  collections         Collection[]
+  deliveries          Delivery[]
+  payments            Payment[]
+  rates               Rate[]
+  routes              Route[]
+  subscription        Subscription?
+  subscriptionPayments SubscriptionPayment[]
+}
+
+model User {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  name      String
+  phone     String
+  pinHash   String // bcrypt hash of 4-digit PIN
+  role      Role     @default(STAFF)
+  isActive  Boolean  @default(true)
+  mustChangePin Boolean @default(false) // Force PIN change on next login
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  collections        Collection[]
+  deliveries         Delivery[]
+  payments           Payment[]
+  farmerSortOrders   UserFarmerOrder[]
+  customerSortOrders UserCustomerOrder[]
+  routes             UserRoute[]
+
+  @@unique([businessId, phone])
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+model Farmer {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  name        String
+  phone       String?
+  village     String?
+  defaultRate Decimal  @db.Decimal(6, 2) // Default rate per liter
+  isActive    Boolean  @default(true)
+  balance     Decimal  @default(0) @db.Decimal(10, 2) // Positive = we owe them
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  collections Collection[]
+  payments    Payment[]
+  rates       Rate[]
+  sortOrders  UserFarmerOrder[]
+  routes      RouteFarmer[]
+
+  @@unique([businessId, phone])
+  @@index([businessId, isActive])
+}
+
+// User-specific sort order for farmers (for route optimization)
+model UserFarmerOrder {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id])
+  farmerId  String
+  farmer    Farmer @relation(fields: [farmerId], references: [id])
+  sortOrder Int    // Lower number = higher in list
+
+  @@unique([userId, farmerId])
+  @@index([userId, sortOrder])
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  name            String
+  phone           String?
+  address         String?
+  defaultRate     Decimal  @db.Decimal(6, 2) // Default rate per liter
+
+  // Subscription (optional)
+  subscriptionQty Decimal? @db.Decimal(5, 2) // Default daily quantity
+  subscriptionAM  Boolean  @default(true)    // Morning delivery
+  subscriptionPM  Boolean  @default(false)   // Evening delivery
+
+  isActive  Boolean  @default(true)
+  balance   Decimal  @default(0) @db.Decimal(10, 2) // Positive = they owe us
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries Delivery[]
+  payments   Payment[]
+  sortOrders UserCustomerOrder[]
+  routes     RouteCustomer[]
+
+  @@unique([businessId, phone])
+  @@index([businessId, isActive])
+}
+
+// User-specific sort order for customers (for delivery route optimization)
+model UserCustomerOrder {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  shift      Shift?   // Optional: separate sort order for AM vs PM
+  sortOrder  Int      // Lower number = higher in list
+
+  @@unique([userId, customerId, shift])
+  @@index([userId, shift, sortOrder])
+}
+
+// Fat-based pricing
+model Rate {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  farmerId     String?  // If null, it's the default business rate
+  farmer       Farmer?  @relation(fields: [farmerId], references: [id])
+
+  fatFrom      Decimal  @db.Decimal(3, 1) // e.g., 3.0
+  fatTo        Decimal  @db.Decimal(3, 1) // e.g., 4.0
+  ratePerLiter Decimal  @db.Decimal(6, 2) // e.g., 45.00
+
+  effectiveFrom DateTime @default(now())
+  effectiveTo   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([businessId, farmerId, effectiveFrom])
+}
+
+model Collection {
+  id String @id @default(cuid())
+
+  // Offline sync fields
+  localId    String?    @unique // Client-generated ID for offline
+  syncStatus SyncStatus @default(SYNCED)
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  farmerId String
+  farmer   Farmer @relation(fields: [farmerId], references: [id])
+
+  collectedBy String
+  user        User   @relation(fields: [collectedBy], references: [id])
+
+  date  DateTime @db.Date
+  shift Shift    @default(MORNING)
+
+  quantity     Decimal  @db.Decimal(6, 2) // Liters
+  fatContent   Decimal? @db.Decimal(3, 1) // Fat percentage
+  ratePerLiter Decimal  @db.Decimal(6, 2) // ACTUAL rate for THIS collection
+  totalAmount  Decimal  @db.Decimal(10, 2)
+
+  // Rate edit tracking
+  rateEditedAt DateTime? // When was rate last edited
+  rateEditedBy String?   // Who edited the rate (user ID)
+  originalRate Decimal?  @db.Decimal(6, 2) // Original rate before any edits
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, date])
+  @@index([farmerId, date])
+}
+
+model Delivery {
+  id String @id @default(cuid())
+
+  // Offline sync fields
+  localId    String?    @unique
+  syncStatus SyncStatus @default(SYNCED)
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  deliveredBy String
+  user        User   @relation(fields: [deliveredBy], references: [id])
+
+  date  DateTime @db.Date
+  shift Shift    @default(MORNING)
+
+  quantity     Decimal @db.Decimal(6, 2)
+  ratePerLiter Decimal @db.Decimal(6, 2) // ACTUAL rate for THIS delivery
+  totalAmount  Decimal @db.Decimal(10, 2)
+
+  // Rate edit tracking
+  rateEditedAt DateTime? // When was rate edited
+  originalRate Decimal?  @db.Decimal(6, 2) // Original rate before edit
+
+  isSubscription Boolean        @default(false) // Auto-generated from subscription
+  status         DeliveryStatus @default(DELIVERED)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, date])
+  @@index([customerId, date])
+}
+
+enum Shift {
+  MORNING
+  EVENING
+}
+
+enum DeliveryStatus {
+  DELIVERED
+  SKIPPED    // Customer requested skip
+  CANCELLED  // Not delivered
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  // Offline sync fields
+  localId    String?    @unique
+  syncStatus SyncStatus @default(SYNCED)
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  // Either farmer OR customer (not both)
+  farmerId   String?
+  farmer     Farmer?   @relation(fields: [farmerId], references: [id])
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  recordedBy String
+  user       User   @relation(fields: [recordedBy], references: [id])
+
+  date   DateTime @db.Date
+  amount Decimal  @db.Decimal(10, 2)
+  type   PaymentType
+  method PaymentMethod @default(CASH)
+
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([businessId, date])
+  @@index([farmerId])
+  @@index([customerId])
+}
+
+enum PaymentType {
+  PAID_TO_FARMER        // We pay farmer
+  RECEIVED_FROM_CUSTOMER // Customer pays us
+  ADVANCE_TO_FARMER     // Advance given to farmer
+  ADVANCE_FROM_CUSTOMER // Advance from customer
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  OTHER
+}
+
+enum SyncStatus {
+  PENDING  // Created offline, needs sync
+  SYNCING  // Currently syncing
+  SYNCED   // Successfully synced
+  FAILED   // Sync failed, needs retry
+}
+
+// ============================================
+// ROUTE MANAGEMENT MODELS
+// ============================================
+
+model Route {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userRoutes     UserRoute[]
+  routeFarmers   RouteFarmer[]
+  routeCustomers RouteCustomer[]
+
+  @@unique([businessId, name])
+  @@index([businessId, isActive])
+}
+
+model UserRoute {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routeId   String
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, routeId])
+  @@index([userId])
+  @@index([routeId])
+}
+
+model RouteFarmer {
+  id        String   @id @default(cuid())
+  routeId   String
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  farmerId  String
+  farmer    Farmer   @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([routeId, farmerId])
+  @@index([routeId, sortOrder])
+}
+
+model RouteCustomer {
+  id         String   @id @default(cuid())
+  routeId    String
+  route      Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([routeId, customerId])
+  @@index([routeId, sortOrder])
+}
+
+// ============================================
+// SUPER ADMIN & SUBSCRIPTION MODELS
+// ============================================
+
+// Super Admin (Developer admin account)
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   // bcrypt hash of strong password
+  name         String
+  secretKey    String   @unique // For initial setup API
+
+  // Password reset
+  resetToken   String?
+  resetExpires DateTime?
+
+  createdAt DateTime  @default(now())
+  lastLogin DateTime?
+}
+
+// Subscription tracking for businesses
+model Subscription {
+  id         String   @id @default(cuid())
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id])
+
+  plan   SubscriptionPlan   @default(MONTHLY)
+  status SubscriptionStatus @default(INACTIVE)
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Payment history for subscriptions
+model SubscriptionPayment {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  plan   SubscriptionPlan
+  amount Decimal          @db.Decimal(10, 2)
+
+  paymentMethod String?  // CASH, UPI, BANK_TRANSFER
+  transactionId String?  // UPI ref number, bank ref, etc.
+  notes         String?
+
+  paidAt     DateTime @default(now())
+  validFrom  DateTime
+  validUntil DateTime
+
+  recordedBy String // Admin user ID who recorded this
+
+  @@index([businessId, paidAt])
+}
+
+enum SubscriptionPlan {
+  MONTHLY     // 30 days
+  QUARTERLY   // 90 days
+  HALF_YEARLY // 180 days
+  ANNUAL      // 365 days
+}
+
+enum SubscriptionStatus {
+  INACTIVE  // Never activated
+  ACTIVE    // Currently active
+  EXPIRED   // Was active, now expired
+  SUSPENDED // Manually suspended by admin
+}
