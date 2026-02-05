@@ -67,6 +67,16 @@ app.use('/api/admin/subscriptions', adminSubscriptionsRoutes)
 // Serve frontend static files in production
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+  // Admin panel — served under /admin
+  const adminDist = path.join(__dirname, '../../apps/admin-panel/dist')
+  app.use('/admin', express.static(adminDist))
+  // Admin SPA fallback — serve admin index.html for /admin/* non-API routes
+  app.use('/admin/*', (_req, res) => {
+    res.sendFile('index.html', { root: adminDist })
+  })
+
+  // Mobile web — served at root
   const clientDist = path.join(__dirname, '../../apps/mobile-web/dist')
   app.use(express.static(clientDist))
   // SPA fallback — serve index.html for non-API routes

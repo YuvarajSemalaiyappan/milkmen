@@ -5,6 +5,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 import path from 'path'
 
 export default defineConfig({
+  base: '/admin/',
   plugins: [react(), tailwindcss(), basicSsl()],
   resolve: {
     alias: {

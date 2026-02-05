@@ -16,7 +16,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 
   if (response.status === 401) {
     useAuthStore.getState().logout()
-    window.location.href = '/login'
+    window.location.href = '/admin/login'
     throw new Error('Unauthorized')
   }
 
