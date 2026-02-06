@@ -72,6 +72,8 @@ export function TodayDeliveriesPage() {
       })
 
       setDeliveryItems(items)
+    } catch (error) {
+      console.error('Error loading delivery items:', error)
     } finally {
       setIsLoading(false)
     }
