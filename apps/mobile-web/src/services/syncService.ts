@@ -214,8 +214,10 @@ class SyncService {
 
   // Full sync - process queue and pull changes
   async sync(): Promise<void> {
+    // Save lastSyncAt BEFORE processing, so pullChanges uses the correct timestamp
+    const lastSyncAt = useSyncStore.getState().lastSyncAt || 0
     await this.processQueue()
-    await this.pullChanges()
+    await this.pullChanges(lastSyncAt)
   }
 
   // Retry failed items
@@ -236,11 +238,11 @@ class SyncService {
   }
 
   // Pull changes from server
-  async pullChanges(): Promise<void> {
+  async pullChanges(overrideLastSync?: number): Promise<void> {
     if (!navigator.onLine) return
 
     try {
-      const lastSync = useSyncStore.getState().lastSyncAt || 0
+      const lastSync = overrideLastSync ?? useSyncStore.getState().lastSyncAt ?? 0
       const response = await syncApi.pull(lastSync) as {
         success: boolean
         data?: {
@@ -262,6 +264,9 @@ class SyncService {
         if (collections) await this.mergeCollections(collections)
         if (deliveries) await this.mergeDeliveries(deliveries)
         if (payments) await this.mergePayments(payments)
+
+        // Update lastSyncAt after successful pull
+        useSyncStore.getState().finishSync(true)
       }
     } catch (error) {
       console.error('Pull changes error:', error)
