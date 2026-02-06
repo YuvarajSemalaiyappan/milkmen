@@ -207,8 +207,8 @@ export function useCollections() {
       .toArray()
 
     return {
-      liters: collections.reduce((sum, c) => sum + c.data.quantity, 0),
-      amount: collections.reduce((sum, c) => sum + c.data.totalAmount, 0),
+      liters: collections.reduce((sum, c) => sum + Number(c.data.quantity), 0),
+      amount: collections.reduce((sum, c) => sum + Number(c.data.totalAmount), 0),
       count: collections.length
     }
   }, [])

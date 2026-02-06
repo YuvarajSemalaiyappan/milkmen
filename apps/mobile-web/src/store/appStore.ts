@@ -44,11 +44,9 @@ interface Toast {
   duration?: number
 }
 
-// Get current shift based on time of day
-function getCurrentShift(): Shift {
-  const hour = new Date().getHours()
-  // Morning: 4 AM to 12 PM, Evening: 12 PM to 4 AM
-  return hour >= 4 && hour < 12 ? 'MORNING' : 'EVENING'
+// Default shift (user manually selects based on subscription they want to work with)
+function getDefaultShift(): Shift {
+  return 'MORNING'
 }
 
 // Get today's date in YYYY-MM-DD format
@@ -65,7 +63,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
-      currentShift: getCurrentShift(),
+      currentShift: getDefaultShift(),
       selectedDate: getToday(),
       isSidebarOpen: false,
       isBottomSheetOpen: false,

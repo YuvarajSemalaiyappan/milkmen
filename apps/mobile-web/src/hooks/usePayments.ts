@@ -221,11 +221,11 @@ export function usePayments() {
 
       const totalPaid = payments
         .filter((p) => p.data.type === 'PAID_TO_FARMER')
-        .reduce((sum, p) => sum + p.data.amount, 0)
+        .reduce((sum, p) => sum + Number(p.data.amount), 0)
 
       const totalAdvance = payments
         .filter((p) => p.data.type === 'ADVANCE_TO_FARMER')
-        .reduce((sum, p) => sum + p.data.amount, 0)
+        .reduce((sum, p) => sum + Number(p.data.amount), 0)
 
       return {
         totalPaid,
@@ -252,11 +252,11 @@ export function usePayments() {
 
       const totalReceived = payments
         .filter((p) => p.data.type === 'RECEIVED_FROM_CUSTOMER')
-        .reduce((sum, p) => sum + p.data.amount, 0)
+        .reduce((sum, p) => sum + Number(p.data.amount), 0)
 
       const totalAdvance = payments
         .filter((p) => p.data.type === 'ADVANCE_FROM_CUSTOMER')
-        .reduce((sum, p) => sum + p.data.amount, 0)
+        .reduce((sum, p) => sum + Number(p.data.amount), 0)
 
       return {
         totalReceived,

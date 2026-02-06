@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Milk, Truck, CreditCard, Plus } from 'lucide-react'
+import { Milk, Truck, CreditCard, Plus, Crown, AlertTriangle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout'
 import { StatCard, Card, Badge } from '@/components/ui'
@@ -14,6 +14,7 @@ export function DashboardPage() {
   const currentShift = useAppStore((state) => state.currentShift)
   const setCurrentShift = useAppStore((state) => state.setCurrentShift)
   const user = useAuthStore((state) => state.user)
+  const subscription = useAuthStore((state) => state.subscription)
 
   const { todayTotals: collectionTotals, todayCollections } = useCollections()
   const { todayTotals: deliveryTotals, todayDeliveries } = useDeliveries()
@@ -88,6 +89,61 @@ export function DashboardPage() {
           </div>
         )}
 
+        {/* Plan Card */}
+        {subscription && (
+          <div
+            onClick={() => navigate('/settings/subscription')}
+            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+              subscription.daysRemaining <= 0
+                ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'
+                : subscription.daysRemaining <= 7
+                  ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700'
+                  : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700'
+            }`}
+          >
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+              subscription.daysRemaining <= 0
+                ? 'bg-red-100 dark:bg-red-900/50'
+                : subscription.daysRemaining <= 7
+                  ? 'bg-amber-100 dark:bg-amber-900/50'
+                  : 'bg-blue-100 dark:bg-blue-900/50'
+            }`}>
+              {subscription.daysRemaining <= 7 && subscription.daysRemaining > 0 ? (
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              ) : subscription.daysRemaining <= 0 ? (
+                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              ) : (
+                <Crown className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold ${
+                subscription.daysRemaining <= 0
+                  ? 'text-red-700 dark:text-red-300'
+                  : subscription.daysRemaining <= 7
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : 'text-blue-700 dark:text-blue-300'
+              }`}>
+                {subscription.plan} Plan
+              </p>
+              <p className={`text-xs ${
+                subscription.daysRemaining <= 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : subscription.daysRemaining <= 7
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-blue-600 dark:text-blue-400'
+              }`}>
+                {subscription.daysRemaining <= 0
+                  ? 'Plan expired'
+                  : subscription.daysRemaining <= 7
+                    ? `Expiring soon - ${subscription.daysRemaining} days left`
+                    : `${subscription.daysRemaining} days remaining`
+                }
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Shift Toggle */}
         <ShiftToggle
           value={currentShift}
@@ -100,14 +156,14 @@ export function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
             title={t('dashboard.todayCollection')}
-            value={`${collectionTotals.liters.toFixed(1)} ${t('common.liter')}`}
+            value={`${Number(collectionTotals.liters).toFixed(1)} ${t('common.liter')}`}
             subtitle={formatCurrency(collectionTotals.amount)}
             icon={<Milk className="w-6 h-6" />}
             color="blue"
           />
           <StatCard
             title={t('dashboard.todaySales')}
-            value={`${deliveryTotals.liters.toFixed(1)} ${t('common.liter')}`}
+            value={`${Number(deliveryTotals.liters).toFixed(1)} ${t('common.liter')}`}
             subtitle={formatCurrency(deliveryTotals.amount)}
             icon={<Truck className="w-6 h-6" />}
             color="green"
@@ -173,7 +229,7 @@ export function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 dark:text-white truncate">{item.name}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {item.quantity.toFixed(1)}L - {formatCurrency(item.amount)}
+                        {Number(item.quantity).toFixed(1)}L - {formatCurrency(item.amount)}
                       </p>
                     </div>
                     <Badge variant={item.type === 'collection' ? 'info' : 'success'} size="sm">

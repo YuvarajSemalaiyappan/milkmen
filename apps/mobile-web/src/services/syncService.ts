@@ -280,6 +280,31 @@ class SyncService {
     return Date.now()
   }
 
+  // Helper to normalize date to YYYY-MM-DD format (local time)
+  private toDateString(value: unknown): string {
+    if (typeof value === 'string') {
+      // If already in YYYY-MM-DD format, return as is
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value
+      }
+      // Otherwise parse and convert to local date
+      const d = new Date(value)
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    if (value instanceof Date) {
+      const year = value.getFullYear()
+      const month = String(value.getMonth() + 1).padStart(2, '0')
+      const day = String(value.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    // Default to today
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
   // Merge methods for each table type
   private async mergeFarmers(records: unknown[]): Promise<void> {
     for (const record of records as Array<Record<string, unknown>>) {
@@ -372,7 +397,7 @@ class SyncService {
           updatedAt,
           data: {
             farmerId: record.farmerId as string,
-            date: record.date as string,
+            date: this.toDateString(record.date),
             shift: record.shift as 'MORNING' | 'EVENING',
             quantity: record.quantity as number,
             fatContent: record.fatContent as number | undefined,
@@ -401,7 +426,7 @@ class SyncService {
           updatedAt,
           data: {
             customerId: record.customerId as string,
-            date: record.date as string,
+            date: this.toDateString(record.date),
             shift: record.shift as 'MORNING' | 'EVENING',
             quantity: record.quantity as number,
             ratePerLiter: record.ratePerLiter as number,
@@ -432,7 +457,7 @@ class SyncService {
           data: {
             farmerId: record.farmerId as string | undefined,
             customerId: record.customerId as string | undefined,
-            date: record.date as string,
+            date: this.toDateString(record.date),
             amount: record.amount as number,
             type: record.type as 'PAID_TO_FARMER' | 'RECEIVED_FROM_CUSTOMER' | 'ADVANCE_TO_FARMER' | 'ADVANCE_FROM_CUSTOMER',
             method: (record.method as 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'OTHER') || 'CASH',

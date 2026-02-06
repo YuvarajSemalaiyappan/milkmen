@@ -14,14 +14,20 @@ export function useDeliveries() {
   // Today's deliveries
   const todayDeliveries = useLiveQuery(async () => {
     const today = getToday()
-    return db.deliveries
+    const deliveries = await db.deliveries
       .filter((d) => d.data.date === today)
       .toArray()
+    console.log('[useDeliveries] Today:', today, 'Found deliveries:', deliveries.length, deliveries.map(d => d.id))
+    return deliveries
   }, [])
 
   // All deliveries
   const deliveries = useLiveQuery(
-    () => db.deliveries.orderBy('updatedAt').reverse().toArray(),
+    async () => {
+      const all = await db.deliveries.orderBy('updatedAt').reverse().toArray()
+      console.log('[useDeliveries] All deliveries in DB:', all.length)
+      return all
+    },
     []
   )
 
@@ -61,6 +67,11 @@ export function useDeliveries() {
       }
 
       await db.deliveries.add(delivery)
+      console.log('[useDeliveries] Delivery saved to IndexedDB:', delivery.id, delivery.data)
+
+      // Verify it was saved
+      const savedDelivery = await db.deliveries.get(delivery.id)
+      console.log('[useDeliveries] Verified saved delivery:', savedDelivery ? 'Found' : 'NOT FOUND')
 
       // Update customer balance (they owe us)
       const customer = await db.customers.get(data.customerId)
@@ -209,8 +220,8 @@ export function useDeliveries() {
       .toArray()
 
     return {
-      liters: deliveries.reduce((sum, d) => sum + d.data.quantity, 0),
-      amount: deliveries.reduce((sum, d) => sum + d.data.totalAmount, 0),
+      liters: deliveries.reduce((sum, d) => sum + Number(d.data.quantity), 0),
+      amount: deliveries.reduce((sum, d) => sum + Number(d.data.totalAmount), 0),
       count: deliveries.length
     }
   }, [])

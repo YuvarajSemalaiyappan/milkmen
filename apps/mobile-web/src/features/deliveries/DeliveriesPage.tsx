@@ -14,13 +14,23 @@ export function DeliveriesPage() {
   const currentShift = useAppStore((state) => state.currentShift)
   const setCurrentShift = useAppStore((state) => state.setCurrentShift)
 
-  const { todayDeliveries, todayTotals, isLoading } = useDeliveries()
+  const { todayDeliveries, isLoading } = useDeliveries()
   const { customers } = useCustomers()
 
   // Filter deliveries by current shift
   const shiftDeliveries = todayDeliveries.filter(
     (d) => d.data.shift === currentShift
   )
+
+  // Calculate shift-specific totals
+  const shiftTotals = shiftDeliveries.reduce(
+    (acc, d) => ({
+      liters: acc.liters + Number(d.data.quantity),
+      amount: acc.amount + Number(d.data.totalAmount)
+    }),
+    { liters: 0, amount: 0 }
+  )
+
   const pendingCount = shiftDeliveries.filter(
     (d) => d.data.status === 'PENDING'
   ).length
@@ -59,8 +69,8 @@ export function DeliveriesPage() {
         <div className="grid grid-cols-2 gap-4">
           <StatCard
             title={t('delivery.todayTotal')}
-            value={`${todayTotals.liters} ${t('common.liter')}`}
-            subtitle={formatCurrency(todayTotals.amount)}
+            value={`${shiftTotals.liters} ${t('common.liter')}`}
+            subtitle={formatCurrency(shiftTotals.amount)}
             icon={<Truck className="w-6 h-6" />}
             color="green"
           />
