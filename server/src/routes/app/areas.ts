@@ -40,7 +40,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       where: { routeId: routeId as string },
       orderBy: { sortOrder: 'asc' },
       include: {
-        _count: { select: { routeCustomers: true } }
+        _count: { select: { routeCustomers: true, routeFarmers: true } }
       }
     })
 
@@ -94,7 +94,7 @@ router.post('/', authenticateToken, requireOwnerOrManager, async (req: AuthReque
         sortOrder: (maxSort?.sortOrder ?? -1) + 1
       },
       include: {
-        _count: { select: { routeCustomers: true } }
+        _count: { select: { routeCustomers: true, routeFarmers: true } }
       }
     })
 

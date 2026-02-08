@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -13,8 +13,8 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Card, Badge } from '@/components/ui'
-import { ShiftToggle, EmptyState, RouteFilter } from '@/components/common'
-import { useCustomers, useDeliveries, usePayments, useRouteCustomerIds } from '@/hooks'
+import { ShiftToggle, EmptyState, RouteFilter, SortableList } from '@/components/common'
+import { useCustomers, useDeliveries, usePayments, useRouteCustomerIds, useSortOrder } from '@/hooks'
 import { useAppStore, useRouteStore } from '@/store'
 import { formatCurrency, getToday } from '@/utils'
 import type { LocalCustomer, LocalDelivery, Shift } from '@/types'
@@ -38,6 +38,7 @@ export function TodayDeliveriesPage() {
   const { customerIds: routeCustomerIds } = useRouteCustomerIds(selectedRouteId, selectedAreaId)
 
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const { applySortOrder, saveSortOrder } = useSortOrder('customer', currentShift)
 
   const deliveryItems = useMemo(() => {
     // Filter subscribed customers for current shift
@@ -53,8 +54,11 @@ export function TodayDeliveriesPage() {
       ? subscribedCustomers.filter((c) => routeCustomerIds.has(c.id))
       : subscribedCustomers
 
+    // Apply saved sort order
+    const sortedCustomers = applySortOrder(filteredCustomers)
+
     // Map customers to delivery items
-    const items: DeliveryItem[] = filteredCustomers.map((customer) => {
+    const items: DeliveryItem[] = sortedCustomers.map((customer) => {
       const existingDelivery = todayDeliveries.find(
         (d) =>
           d.data.customerId === customer.id && d.data.shift === currentShift
@@ -71,14 +75,18 @@ export function TodayDeliveriesPage() {
       }
     })
 
-    // Sort: pending first, then delivered, then skipped
+    // Sort: pending first, then delivered, then skipped (within each group, custom order preserved)
     items.sort((a, b) => {
       const order = { pending: 0, delivered: 1, skipped: 2 }
       return order[a.status] - order[b.status]
     })
 
     return items
-  }, [activeCustomers, todayDeliveries, currentShift, routeCustomerIds])
+  }, [activeCustomers, todayDeliveries, currentShift, routeCustomerIds, applySortOrder])
+
+  const handleReorder = useCallback((newIds: string[]) => {
+    saveSortOrder(newIds)
+  }, [saveSortOrder])
 
   const handleMarkDelivered = async (item: DeliveryItem) => {
     if (!item.customer.data.subscriptionQty) return
@@ -192,133 +200,163 @@ export function TodayDeliveriesPage() {
           />
         ) : (
           <div className="space-y-3">
-            {deliveryItems.map((item) => (
-              <Card
-                key={item.customer.id}
-                className={
-                  item.status === 'delivered'
-                    ? 'bg-green-50 border-green-200'
-                    : item.status === 'skipped'
-                    ? 'bg-gray-50 border-gray-200'
-                    : ''
-                }
-              >
-                <div className="space-y-3">
-                  {/* Customer Info */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">{item.customer.data.name}</h3>
-                        {item.status === 'delivered' && (
-                          <Badge variant="success" size="sm">
-                            <Check className="w-3 h-3 mr-1" />
-                            {t('delivery.delivered')}
-                          </Badge>
-                        )}
-                        {item.status === 'skipped' && (
-                          <Badge variant="warning" size="sm">
-                            {t('delivery.skipped')}
-                          </Badge>
-                        )}
-                      </div>
-
-                      {item.customer.data.address && (
-                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-                          <MapPin className="w-3 h-3" />
-                          {item.customer.data.address}
-                        </p>
-                      )}
-
-                      <div className="flex items-center gap-3 mt-1 text-sm">
-                        <span className="text-gray-700">
-                          {item.customer.data.subscriptionQty}L @ {formatCurrency(item.customer.data.defaultRate)}/L
-                        </span>
-                        <span className="font-semibold text-primary-600">
-                          = {formatCurrency(
-                            (item.customer.data.subscriptionQty || 0) *
-                              item.customer.data.defaultRate
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    {item.customer.data.phone && (
-                      <a
-                        href={`tel:${item.customer.data.phone}`}
-                        className="p-2 text-primary-600 hover:bg-primary-50 rounded-full"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Phone className="w-5 h-5" />
-                      </a>
-                    )}
-                  </div>
-
-                  {/* Balance Due */}
-                  {item.customer.data.balance > 0 && (
-                    <div className="bg-red-50 rounded-lg p-2 flex items-center justify-between">
-                      <span className="text-sm text-red-700">
-                        {t('customer.balanceDue')}: {formatCurrency(item.customer.data.balance)}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleReceivePayment(item)}
-                        leftIcon={<IndianRupee className="w-3 h-3" />}
-                      >
-                        {t('payment.receive')}
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  {item.status === 'pending' && (
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleMarkDelivered(item)}
-                        isLoading={processingId === item.customer.id}
-                        fullWidth
-                        leftIcon={<Check className="w-4 h-4" />}
-                      >
-                        {t('delivery.markDelivered')}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleMarkSkipped(item)}
-                        disabled={processingId === item.customer.id}
-                        leftIcon={<X className="w-4 h-4" />}
-                      >
-                        {t('delivery.skip')}
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Edit delivered */}
-                  {item.status === 'delivered' && item.delivery && (
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => navigate(`/deliver/edit/${item.delivery?.id}`)}
-                        fullWidth
-                      >
-                        {t('common.edit')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleReceivePayment(item)}
-                        leftIcon={<IndianRupee className="w-3 h-3" />}
-                      >
-                        {t('payment.receive')}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            ))}
+            <SortableList
+              items={deliveryItems.map((i) => i.customer.id)}
+              onReorder={handleReorder}
+              renderItem={(id) => {
+                const item = deliveryItems.find((i) => i.customer.id === id)!
+                return (
+                  <DeliveryCard
+                    item={item}
+                    processingId={processingId}
+                    onMarkDelivered={handleMarkDelivered}
+                    onMarkSkipped={handleMarkSkipped}
+                    onReceivePayment={handleReceivePayment}
+                    onEdit={(deliveryId) => navigate(`/deliver/edit/${deliveryId}`)}
+                    t={t}
+                  />
+                )
+              }}
+            />
           </div>
         )}
       </div>
     </AppShell>
+  )
+}
+
+interface DeliveryCardProps {
+  item: DeliveryItem
+  processingId: string | null
+  onMarkDelivered: (item: DeliveryItem) => void
+  onMarkSkipped: (item: DeliveryItem) => void
+  onReceivePayment: (item: DeliveryItem) => void
+  onEdit: (deliveryId: string) => void
+  t: (key: string) => string
+}
+
+function DeliveryCard({ item, processingId, onMarkDelivered, onMarkSkipped, onReceivePayment, onEdit, t }: DeliveryCardProps) {
+  return (
+    <Card
+      className={
+        item.status === 'delivered'
+          ? 'bg-green-50 border-green-200'
+          : item.status === 'skipped'
+          ? 'bg-gray-50 border-gray-200'
+          : ''
+      }
+    >
+      <div className="space-y-3">
+        {/* Customer Info */}
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold">{item.customer.data.name}</h3>
+              {item.status === 'delivered' && (
+                <Badge variant="success" size="sm">
+                  <Check className="w-3 h-3 mr-1" />
+                  {t('delivery.delivered')}
+                </Badge>
+              )}
+              {item.status === 'skipped' && (
+                <Badge variant="warning" size="sm">
+                  {t('delivery.skipped')}
+                </Badge>
+              )}
+            </div>
+
+            {item.customer.data.address && (
+              <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                <MapPin className="w-3 h-3" />
+                {item.customer.data.address}
+              </p>
+            )}
+
+            <div className="flex items-center gap-3 mt-1 text-sm">
+              <span className="text-gray-700">
+                {item.customer.data.subscriptionQty}L @ {formatCurrency(item.customer.data.defaultRate)}/L
+              </span>
+              <span className="font-semibold text-primary-600">
+                = {formatCurrency(
+                  (item.customer.data.subscriptionQty || 0) *
+                    item.customer.data.defaultRate
+                )}
+              </span>
+            </div>
+          </div>
+
+          {item.customer.data.phone && (
+            <a
+              href={`tel:${item.customer.data.phone}`}
+              className="p-2 text-primary-600 hover:bg-primary-50 rounded-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Phone className="w-5 h-5" />
+            </a>
+          )}
+        </div>
+
+        {/* Balance Due */}
+        {item.customer.data.balance > 0 && (
+          <div className="bg-red-50 rounded-lg p-2 flex items-center justify-between">
+            <span className="text-sm text-red-700">
+              {t('customer.balanceDue')}: {formatCurrency(item.customer.data.balance)}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onReceivePayment(item)}
+              leftIcon={<IndianRupee className="w-3 h-3" />}
+            >
+              {t('payment.receive')}
+            </Button>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        {item.status === 'pending' && (
+          <div className="flex gap-2">
+            <Button
+              onClick={() => onMarkDelivered(item)}
+              isLoading={processingId === item.customer.id}
+              fullWidth
+              leftIcon={<Check className="w-4 h-4" />}
+            >
+              {t('delivery.markDelivered')}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => onMarkSkipped(item)}
+              disabled={processingId === item.customer.id}
+              leftIcon={<X className="w-4 h-4" />}
+            >
+              {t('delivery.skip')}
+            </Button>
+          </div>
+        )}
+
+        {/* Edit delivered */}
+        {item.status === 'delivered' && item.delivery && (
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onEdit(item.delivery!.id)}
+              fullWidth
+            >
+              {t('common.edit')}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onReceivePayment(item)}
+              leftIcon={<IndianRupee className="w-3 h-3" />}
+            >
+              {t('payment.receive')}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
   )
 }

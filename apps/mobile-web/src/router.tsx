@@ -137,8 +137,16 @@ export const router = createBrowserRouter([
         element: <DeliveriesPage />
       },
       {
+        path: '/deliver/today',
+        element: <TodayDeliveriesPage />
+      },
+      {
         path: '/deliver/add',
         element: <AddDeliveryPage />
+      },
+      {
+        path: '/deliver/edit/:id',
+        element: <DeliveryDetailPage />
       },
       {
         path: '/deliver/:id',

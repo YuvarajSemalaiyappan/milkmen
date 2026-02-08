@@ -248,6 +248,7 @@ export interface RouteFarmer {
   id: string
   routeId: string
   farmerId: string
+  areaId?: string
   sortOrder: number
 }
 
@@ -273,13 +274,14 @@ export interface Area {
 export interface AreaWithCounts extends Area {
   _count: {
     routeCustomers: number
+    routeFarmers: number
   }
 }
 
 // User sort orders
 export interface UserFarmerOrder {
   id: string
-  odlocalId: string
+  localId: string
   userId: string
   farmerId: string
   sortOrder: number

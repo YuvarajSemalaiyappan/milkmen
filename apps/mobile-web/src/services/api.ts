@@ -299,8 +299,8 @@ export const routesApi = {
     api.post(`/routes/${routeId}/users`, { userIds }),
   removeUser: (routeId: string, userId: string) =>
     api.delete(`/routes/${routeId}/users/${userId}`),
-  assignFarmers: (routeId: string, farmerIds: string[], sortOrders?: Record<string, number>) =>
-    api.post(`/routes/${routeId}/farmers`, { farmerIds, sortOrders }),
+  assignFarmers: (routeId: string, farmerIds: string[], sortOrders?: Record<string, number>, areaId?: string) =>
+    api.post(`/routes/${routeId}/farmers`, { farmerIds, sortOrders, areaId }),
   removeFarmer: (routeId: string, farmerId: string) =>
     api.delete(`/routes/${routeId}/farmers/${farmerId}`),
   assignCustomers: (routeId: string, customerIds: string[], sortOrders?: Record<string, number>, areaId?: string) =>
@@ -308,7 +308,9 @@ export const routesApi = {
   removeCustomer: (routeId: string, customerId: string) =>
     api.delete(`/routes/${routeId}/customers/${customerId}`),
   getCustomerIds: (routeId: string, areaId?: string) =>
-    api.get(`/routes/${routeId}/customer-ids${areaId ? `?areaId=${areaId}` : ''}`)
+    api.get(`/routes/${routeId}/customer-ids${areaId ? `?areaId=${areaId}` : ''}`),
+  getFarmerIds: (routeId: string, areaId?: string) =>
+    api.get(`/routes/${routeId}/farmer-ids${areaId ? `?areaId=${areaId}` : ''}`)
 }
 
 // Subscription API

@@ -7,7 +7,8 @@ import { z } from 'zod'
 import { Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
-import { useFarmers } from '@/hooks'
+import { useFarmers, useRoutes, useAreas } from '@/hooks'
+import { routesApi } from '@/services/api'
 
 const farmerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -24,7 +25,11 @@ export function AddFarmerPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addFarmer } = useFarmers()
+  const { routes } = useRoutes()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
+  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null)
+  const { areas } = useAreas(selectedRouteId)
 
   const {
     register,
@@ -50,7 +55,7 @@ export function AddFarmerPage() {
   const onSubmit = async (data: FarmerFormData) => {
     try {
       setIsSubmitting(true)
-      await addFarmer({
+      const result = await addFarmer({
         name: data.name,
         phone: data.phone || undefined,
         village: data.village || undefined,
@@ -58,6 +63,16 @@ export function AddFarmerPage() {
         collectAM: data.collectAM,
         collectPM: data.collectPM
       })
+
+      // Assign to route if selected and farmer has a server ID
+      if (selectedRouteId && result && !result.id.startsWith('local_')) {
+        try {
+          await routesApi.assignFarmers(selectedRouteId, [result.id], undefined, selectedAreaId || undefined)
+        } catch {
+          // Non-critical: farmer created but route assignment failed
+        }
+      }
+
       navigate('/farmers')
     } catch (error) {
       console.error('Failed to add farmer:', error)
@@ -130,6 +145,46 @@ export function AddFarmerPage() {
                 </label>
               </div>
             </div>
+
+            {/* Route / Area Assignment */}
+            {routes.length > 0 && (
+              <div className="border-t dark:border-gray-700 pt-4 mt-4 space-y-3">
+                <h3 className="font-medium text-gray-900 dark:text-white">
+                  {t('farmer.selectRoute')}
+                </h3>
+                <select
+                  value={selectedRouteId || ''}
+                  onChange={(e) => {
+                    setSelectedRouteId(e.target.value || null)
+                    setSelectedAreaId(null)
+                  }}
+                  className="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white"
+                >
+                  <option value="">{t('common.none')}</option>
+                  {routes.map((route) => (
+                    <option key={route.id} value={route.id}>{route.name}</option>
+                  ))}
+                </select>
+
+                {selectedRouteId && areas.length > 0 && (
+                  <>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('farmer.selectArea')}
+                    </label>
+                    <select
+                      value={selectedAreaId || ''}
+                      onChange={(e) => setSelectedAreaId(e.target.value || null)}
+                      className="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white"
+                    >
+                      <option value="">{t('common.none')}</option>
+                      {areas.map((area) => (
+                        <option key={area.id} value={area.id}>{area.name}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-3 pt-4">
               <Button

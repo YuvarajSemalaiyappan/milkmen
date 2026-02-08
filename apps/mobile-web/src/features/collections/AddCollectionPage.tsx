@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Search, User } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
-import { ShiftToggle, NumberPad } from '@/components/common'
-import { useFarmers, useCollections } from '@/hooks'
-import { useAppStore } from '@/store'
+import { ShiftToggle, NumberPad, RouteFilter, SortableList } from '@/components/common'
+import { useFarmers, useCollections, useRouteFarmerIds, useSortOrder } from '@/hooks'
+import { useAppStore, useRouteStore } from '@/store'
 import { formatCurrency, formatRate } from '@/utils/format'
 import { calculateTotal } from '@/utils/calculate'
 import type { LocalFarmer } from '@/types'
@@ -23,6 +23,9 @@ export function AddCollectionPage() {
 
   const { activeFarmers, searchFarmers } = useFarmers()
   const { addCollection } = useCollections()
+  const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
+  const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
+  const { farmerIds: routeFarmerIds } = useRouteFarmerIds(selectedRouteId, selectedAreaId)
 
   const [step, setStep] = useState<Step>('select-farmer')
   const [searchQuery, setSearchQuery] = useState('')
@@ -58,6 +61,20 @@ export function AddCollectionPage() {
   useEffect(() => {
     setFilteredFarmers(activeFarmers)
   }, [activeFarmers])
+
+  const { applySortOrder, saveSortOrder } = useSortOrder('farmer')
+
+  // Filter by route/area
+  const routeFilteredFarmers = useMemo(() => {
+    const filtered = routeFarmerIds
+      ? filteredFarmers.filter(f => routeFarmerIds.has(f.id))
+      : filteredFarmers
+    return applySortOrder(filtered)
+  }, [filteredFarmers, routeFarmerIds, applySortOrder])
+
+  const handleReorder = useCallback((newIds: string[]) => {
+    saveSortOrder(newIds)
+  }, [saveSortOrder])
 
   const selectFarmer = (farmer: LocalFarmer) => {
     setSelectedFarmer(farmer)
@@ -102,6 +119,9 @@ export function AddCollectionPage() {
 
         {step === 'select-farmer' && (
           <>
+            {/* Route Filter */}
+            <RouteFilter />
+
             {/* Search */}
             <Input
               placeholder={t('collection.selectFarmer')}
@@ -112,35 +132,40 @@ export function AddCollectionPage() {
 
             {/* Farmer List */}
             <Card padding="none">
-              <ul className="divide-y divide-gray-100 dark:divide-gray-700">
-                {filteredFarmers.map((farmer) => (
-                  <li key={farmer.id}>
-                    <button
-                      onClick={() => selectFarmer(farmer)}
-                      className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
-                        <User className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {farmer.data.name}
-                        </p>
-                        {farmer.data.village && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {farmer.data.village}
+              <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                <SortableList
+                  items={routeFilteredFarmers.map((f) => f.id)}
+                  onReorder={handleReorder}
+                  renderItem={(id) => {
+                    const farmer = routeFilteredFarmers.find((f) => f.id === id)!
+                    return (
+                      <button
+                        onClick={() => selectFarmer(farmer)}
+                        className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
+                          <User className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="font-medium text-gray-900 dark:text-white">
+                            {farmer.data.name}
                           </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {formatRate(farmer.data.defaultRate)}
-                        </p>
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                          {farmer.data.village && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {farmer.data.village}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {formatRate(farmer.data.defaultRate)}
+                          </p>
+                        </div>
+                      </button>
+                    )
+                  }}
+                />
+              </div>
             </Card>
           </>
         )}
@@ -211,7 +236,7 @@ export function AddCollectionPage() {
                   onChange={setQuantity}
                   maxLength={6}
                   allowDecimal
-                  decimalPlaces={1}
+                  decimalPlaces={2}
                 />
               </div>
             </Card>

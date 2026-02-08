@@ -1,11 +1,12 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, Milk, User } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Card } from '@/components/ui'
 import { ShiftToggle, EmptyState, RouteFilter } from '@/components/common'
-import { useAppStore } from '@/store'
-import { useCollections, useFarmers } from '@/hooks'
+import { useAppStore, useRouteStore } from '@/store'
+import { useCollections, useFarmers, useRouteFarmerIds } from '@/hooks'
 import { formatCurrency } from '@/utils'
 
 export function CollectionsPage() {
@@ -16,10 +17,19 @@ export function CollectionsPage() {
 
   const { todayCollections, isLoading } = useCollections()
   const { farmers } = useFarmers()
+  const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
+  const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
+  const { farmerIds: routeFarmerIds } = useRouteFarmerIds(selectedRouteId, selectedAreaId)
+
+  // Filter collections by route/area
+  const filteredCollections = useMemo(() => {
+    if (!routeFarmerIds) return todayCollections
+    return todayCollections.filter(c => routeFarmerIds.has(c.data.farmerId))
+  }, [todayCollections, routeFarmerIds])
 
   // Shift-specific totals
   const calcShiftTotals = (shift: 'MORNING' | 'EVENING') => {
-    const filtered = todayCollections.filter(c => c.data.shift === shift)
+    const filtered = filteredCollections.filter(c => c.data.shift === shift)
     return {
       liters: filtered.reduce((sum, c) => sum + Number(c.data.quantity), 0),
       amount: filtered.reduce((sum, c) => sum + Number(c.data.totalAmount), 0)
@@ -31,7 +41,7 @@ export function CollectionsPage() {
   const totalAmount = amTotals.amount + pmTotals.amount
 
   // Filter collections by current shift
-  const shiftCollections = todayCollections.filter(
+  const shiftCollections = filteredCollections.filter(
     (c) => c.data.shift === currentShift
   )
 

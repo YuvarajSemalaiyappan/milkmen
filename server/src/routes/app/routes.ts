@@ -23,7 +23,8 @@ const assignUsersSchema = z.object({
 
 const assignFarmersSchema = z.object({
   farmerIds: z.array(z.string()),
-  sortOrders: z.record(z.string(), z.number()).optional()
+  sortOrders: z.record(z.string(), z.number()).optional(),
+  areaId: z.string().optional()
 })
 
 const assignCustomersSchema = z.object({
@@ -179,7 +180,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
         areas: {
           orderBy: { sortOrder: 'asc' },
           include: {
-            _count: { select: { routeCustomers: true } }
+            _count: { select: { routeCustomers: true, routeFarmers: true } }
           }
         }
       }
@@ -469,7 +470,7 @@ router.post('/:id/farmers', authenticateToken, requireOwnerOrManager, async (req
       })
     }
 
-    const { farmerIds, sortOrders } = validation.data
+    const { farmerIds, sortOrders, areaId } = validation.data
 
     // Verify all farmers belong to business
     const farmers = await prisma.farmer.findMany({
@@ -482,6 +483,19 @@ router.post('/:id/farmers', authenticateToken, requireOwnerOrManager, async (req
       })
     }
 
+    // Verify areaId belongs to this route if provided
+    if (areaId) {
+      const area = await prisma.area.findFirst({
+        where: { id: areaId, routeId }
+      })
+      if (!area) {
+        return res.status(400).json({
+          success: false,
+          error: 'Area not found in this route'
+        })
+      }
+    }
+
     // Replace all farmer assignments
     await prisma.$transaction([
       prisma.routeFarmer.deleteMany({ where: { routeId } }),
@@ -489,6 +503,7 @@ router.post('/:id/farmers', authenticateToken, requireOwnerOrManager, async (req
         data: farmerIds.map((farmerId, index) => ({
           routeId,
           farmerId,
+          areaId: areaId || null,
           sortOrder: sortOrders?.[farmerId] ?? index
         }))
       })
@@ -683,6 +698,37 @@ router.get('/:id/customer-ids', authenticateToken, async (req: AuthRequest, res:
   } catch (error) {
     console.error('Get customer IDs error:', error)
     return res.status(500).json({ success: false, error: 'Failed to fetch customer IDs' })
+  }
+})
+
+// GET /api/routes/:id/farmer-ids?areaId=xxx - Get farmer IDs for route/area filtering
+router.get('/:id/farmer-ids', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId, userId } = req.user!
+    const routeId = req.params.id as string
+    const { areaId } = req.query
+
+    // Check access
+    const hasAccess = await userHasRouteAccess(userId, routeId, businessId)
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: 'Access denied' })
+    }
+
+    const where: Record<string, unknown> = { routeId }
+    if (areaId) {
+      where.areaId = areaId as string
+    }
+
+    const routeFarmers = await prisma.routeFarmer.findMany({
+      where,
+      select: { farmerId: true }
+    })
+
+    const farmerIds = routeFarmers.map(rf => rf.farmerId)
+    return res.json({ success: true, data: farmerIds })
+  } catch (error) {
+    console.error('Get farmer IDs error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to fetch farmer IDs' })
   }
 })
 

@@ -56,7 +56,8 @@
     "viewAll": "View All",
     "morning": "Morning",
     "evening": "Evening",
-    "day": "Day"
+    "day": "Day",
+    "holdToReorder": "Hold to reorder"
   },
   "nav": {
     "home": "Home",
@@ -154,7 +155,9 @@
     "deleteConfirm": "Are you sure you want to delete this farmer? This cannot be undone.",
     "edit": "Edit Farmer",
     "noCollections": "No collections yet",
-    "collectionShift": "Collection Shift"
+    "collectionShift": "Collection Shift",
+    "selectRoute": "Select Route",
+    "selectArea": "Select Area"
   },
   "customer": {
     "title": "Customers",
@@ -277,7 +280,16 @@
     "paidToFarmer": "Paid to Farmer",
     "receivedFromCustomer": "Received from Customer",
     "banktransfer": "Bank Transfer",
-    "receive": "Receive"
+    "receive": "Receive",
+    "dateFilter": "Date Filter",
+    "fromDate": "From Date",
+    "toDate": "To Date",
+    "fromShift": "From Shift",
+    "toShift": "To Shift",
+    "periodTotal": "Period Total",
+    "usePeriodTotal": "Use Period Total",
+    "calculating": "Calculating...",
+    "entries": "entries"
   },
   "reports": {
     "title": "Reports",
@@ -481,6 +493,7 @@
     "addFirst": "Add areas to organize customers within this route",
     "allAreas": "All Areas",
     "customers": "customers",
+    "farmers": "farmers",
     "confirmDelete": "Are you sure you want to delete this area?",
     "enterName": "Enter area name"
   },

@@ -52,7 +52,7 @@ interface RouteDetail {
     name: string
     description?: string
     sortOrder: number
-    _count: { routeCustomers: number }
+    _count: { routeCustomers: number; routeFarmers: number }
   }>
 }
 
@@ -262,7 +262,7 @@ export function RouteDetailPage() {
                       <div>
                         <p className="font-medium text-gray-900 dark:text-white">{area.name}</p>
                         <p className="text-sm text-gray-500">
-                          {area._count.routeCustomers} {t('areas.customers')}
+                          {area._count.routeFarmers} {t('areas.farmers')} &middot; {area._count.routeCustomers} {t('areas.customers')}
                         </p>
                       </div>
                       {isManager && (

@@ -336,6 +336,7 @@ model Area {
   updatedAt   DateTime @updatedAt
 
   routeCustomers RouteCustomer[]
+  routeFarmers   RouteFarmer[]
 
   @@unique([routeId, name])
   @@index([routeId, sortOrder])
@@ -360,11 +361,14 @@ model RouteFarmer {
   route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
   farmerId  String
   farmer    Farmer   @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  areaId    String?
+  area      Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
   @@unique([routeId, farmerId])
   @@index([routeId, sortOrder])
+  @@index([areaId])
 }
 
 model RouteCustomer {

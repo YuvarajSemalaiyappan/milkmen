@@ -33,6 +33,7 @@ export function AddDeliveryPage() {
   const [rate, setRate] = useState('')
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showNumPad, setShowNumPad] = useState(false)
 
   // Set of customerIds that already have a DELIVERED delivery for today + current shift
   const deliveredSet = useMemo(() => {
@@ -228,13 +229,73 @@ export function AddDeliveryPage() {
                   {quantity || '0'} <span className="text-xl">L</span>
                 </p>
               </div>
-              <NumberPad
-                value={quantity}
-                onChange={setQuantity}
-                maxLength={6}
-                allowDecimal
-                decimalPlaces={1}
-              />
+              {showNumPad ? (
+                <>
+                  <NumberPad
+                    value={quantity}
+                    onChange={setQuantity}
+                    maxLength={6}
+                    allowDecimal
+                    decimalPlaces={2}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNumPad(false)}
+                    className="w-full mt-2 py-2 text-sm font-medium text-blue-600 dark:text-blue-400"
+                  >
+                    {t('common.back')}
+                  </button>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-5 gap-2">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => {
+                          const current = parseFloat(quantity) || 0
+                          const result = current + n
+                          setQuantity(String(parseFloat(result.toFixed(2))))
+                        }}
+                        className="py-3 rounded-lg text-lg font-semibold bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white active:bg-gray-200 dark:active:bg-gray-600"
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    {[0.25, 0.5, 0.75].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => {
+                          const current = parseFloat(quantity) || 0
+                          const result = current + n
+                          setQuantity(String(parseFloat(result.toFixed(2))))
+                        }}
+                        className="py-3 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white active:bg-gray-200 dark:active:bg-gray-600"
+                      >
+                        .{String(n).split('.')[1]}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setQuantity('')}
+                      className="py-3 rounded-lg text-lg font-semibold bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 active:bg-red-200 dark:active:bg-red-800/50"
+                    >
+                      C
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowNumPad(true)}
+                      className="py-3 rounded-lg text-sm font-semibold bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 active:bg-blue-200 dark:active:bg-blue-800/50"
+                    >
+                      123
+                    </button>
+                  </div>
+                </div>
+              )}
             </Card>
 
             {/* Rate */}

@@ -1,18 +1,48 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { User, UserCircle } from 'lucide-react'
+import { User, UserCircle, Calculator } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Card } from '@/components/ui'
-import { NumberPad } from '@/components/common'
+import { NumberPad, ShiftToggle } from '@/components/common'
 import { useFarmers, useCustomers } from '@/hooks'
 import { useAppStore } from '@/store'
 import { db, generateLocalId, now } from '@/db/localDb'
 import { syncService } from '@/services/syncService'
 import { formatCurrency } from '@/utils/format'
-import type { LocalFarmer, LocalCustomer, PaymentType, PaymentMethod } from '@/types'
+import type { LocalFarmer, LocalCustomer, PaymentType, PaymentMethod, Shift } from '@/types'
 
 type RecipientType = 'farmer' | 'customer'
+
+function getStartOfMonth(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+function getToday(): string {
+  return new Date().toISOString().split('T')[0]
+}
+
+function shiftOrd(shift: Shift): number {
+  return shift === 'MORNING' ? 0 : 1
+}
+
+function isInShiftRange(
+  recordDate: string,
+  recordShift: Shift,
+  fromDate: string,
+  fromShift: Shift,
+  toDate: string,
+  toShift: Shift
+): boolean {
+  if (recordDate > fromDate && recordDate < toDate) return true
+  if (recordDate === fromDate && recordDate === toDate) {
+    return shiftOrd(recordShift) >= shiftOrd(fromShift) && shiftOrd(recordShift) <= shiftOrd(toShift)
+  }
+  if (recordDate === fromDate) return shiftOrd(recordShift) >= shiftOrd(fromShift)
+  if (recordDate === toDate) return shiftOrd(recordShift) <= shiftOrd(toShift)
+  return false
+}
 
 export function AddPaymentPage() {
   const { t } = useTranslation()
@@ -33,6 +63,15 @@ export function AddPaymentPage() {
   const [notes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Date+shift filter state
+  const [fromDate, setFromDate] = useState(getStartOfMonth)
+  const [toDate, setToDate] = useState(getToday)
+  const [fromShift, setFromShift] = useState<Shift>('MORNING')
+  const [toShift, setToShift] = useState<Shift>('EVENING')
+  const [periodAmount, setPeriodAmount] = useState<number | null>(null)
+  const [periodCount, setPeriodCount] = useState(0)
+  const [isCalculating, setIsCalculating] = useState(false)
+
   // Pre-select from URL params
   useEffect(() => {
     const farmerId = searchParams.get('farmerId')
@@ -52,6 +91,68 @@ export function AddPaymentPage() {
       }
     }
   }, [searchParams, activeFarmers, activeCustomers])
+
+  // Calculate period total when filters or recipient change
+  const calculatePeriodTotal = useCallback(async () => {
+    const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
+    if (!selected) {
+      setPeriodAmount(null)
+      setPeriodCount(0)
+      return
+    }
+
+    setIsCalculating(true)
+    try {
+      let total = 0
+      let count = 0
+
+      if (recipientType === 'farmer') {
+        const collections = await db.collections
+          .where('data.date')
+          .between(fromDate, toDate, true, true)
+          .toArray()
+
+        for (const c of collections) {
+          if (
+            c.data.farmerId === selected.id &&
+            isInShiftRange(c.data.date, c.data.shift, fromDate, fromShift, toDate, toShift)
+          ) {
+            total += c.data.totalAmount
+            count++
+          }
+        }
+      } else {
+        const deliveries = await db.deliveries
+          .where('data.date')
+          .between(fromDate, toDate, true, true)
+          .toArray()
+
+        for (const d of deliveries) {
+          if (
+            d.data.customerId === selected.id &&
+            d.data.status === 'DELIVERED' &&
+            isInShiftRange(d.data.date, d.data.shift, fromDate, fromShift, toDate, toShift)
+          ) {
+            total += d.data.totalAmount
+            count++
+          }
+        }
+      }
+
+      setPeriodAmount(total)
+      setPeriodCount(count)
+    } catch (error) {
+      console.error('Failed to calculate period total:', error)
+      setPeriodAmount(null)
+      setPeriodCount(0)
+    } finally {
+      setIsCalculating(false)
+    }
+  }, [recipientType, selectedFarmer, selectedCustomer, fromDate, toDate, fromShift, toShift])
+
+  useEffect(() => {
+    calculatePeriodTotal()
+  }, [calculatePeriodTotal])
 
   const handleSubmit = async () => {
     const amountNum = parseFloat(amount)
@@ -251,6 +352,92 @@ export function AddPaymentPage() {
                 >
                   {t('common.edit')}
                 </Button>
+              </div>
+            </Card>
+
+            {/* Date+Shift Filter */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <Calculator className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  {t('payment.dateFilter')}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      {t('payment.fromDate')}
+                    </label>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      max={toDate}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      {t('payment.fromShift')}
+                    </label>
+                    <ShiftToggle value={fromShift} onChange={setFromShift} size="sm" showIcons={false} fullWidth />
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      {t('payment.toDate')}
+                    </label>
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      min={fromDate}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      {t('payment.toShift')}
+                    </label>
+                    <ShiftToggle value={toShift} onChange={setToShift} size="sm" showIcons={false} fullWidth />
+                  </div>
+                </div>
+
+                {/* Period Total */}
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-600">
+                  {isCalculating ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                      {t('payment.calculating')}
+                    </p>
+                  ) : periodAmount !== null ? (
+                    <div className="text-center">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('payment.periodTotal')}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {formatCurrency(periodAmount)}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {periodCount} {t('payment.entries')}
+                      </p>
+                      {periodAmount > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAmount(Math.round(periodAmount).toString())}
+                          fullWidth
+                          className="mt-2"
+                        >
+                          {t('payment.usePeriodTotal')} ({formatCurrency(periodAmount)})
+                        </Button>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </Card>
 
