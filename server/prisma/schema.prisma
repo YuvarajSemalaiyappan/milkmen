@@ -318,9 +318,27 @@ model Route {
   userRoutes     UserRoute[]
   routeFarmers   RouteFarmer[]
   routeCustomers RouteCustomer[]
+  areas          Area[]
 
   @@unique([businessId, name])
   @@index([businessId, isActive])
+}
+
+model Area {
+  id          String   @id @default(cuid())
+  routeId     String
+  route       Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  routeCustomers RouteCustomer[]
+
+  @@unique([routeId, name])
+  @@index([routeId, sortOrder])
 }
 
 model UserRoute {
@@ -355,11 +373,14 @@ model RouteCustomer {
   route      Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  areaId     String?
+  area       Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
 
   @@unique([routeId, customerId])
   @@index([routeId, sortOrder])
+  @@index([areaId])
 }
 
 // ============================================

@@ -1,11 +1,12 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, Truck, User } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Card } from '@/components/ui'
 import { ShiftToggle, EmptyState, RouteFilter } from '@/components/common'
-import { useAppStore } from '@/store'
-import { useDeliveries, useCustomers } from '@/hooks'
+import { useAppStore, useRouteStore } from '@/store'
+import { useDeliveries, useCustomers, useRouteCustomerIds } from '@/hooks'
 import { formatCurrency } from '@/utils'
 
 export function DeliveriesPage() {
@@ -16,10 +17,19 @@ export function DeliveriesPage() {
 
   const { todayDeliveries, isLoading } = useDeliveries()
   const { customers } = useCustomers()
+  const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
+  const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
+  const { customerIds: routeCustomerIds } = useRouteCustomerIds(selectedRouteId, selectedAreaId)
+
+  // Filter deliveries by route/area
+  const filteredDeliveries = useMemo(() => {
+    if (!routeCustomerIds) return todayDeliveries
+    return todayDeliveries.filter(d => routeCustomerIds.has(d.data.customerId))
+  }, [todayDeliveries, routeCustomerIds])
 
   // Shift-specific totals
   const calcShiftTotals = (shift: 'MORNING' | 'EVENING') => {
-    const filtered = todayDeliveries.filter(d => d.data.shift === shift)
+    const filtered = filteredDeliveries.filter(d => d.data.shift === shift)
     return {
       liters: filtered.reduce((sum, d) => sum + Number(d.data.quantity), 0),
       amount: filtered.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
@@ -31,7 +41,7 @@ export function DeliveriesPage() {
   const totalAmount = amTotals.amount + pmTotals.amount
 
   // Filter deliveries by current shift
-  const shiftDeliveries = todayDeliveries.filter(
+  const shiftDeliveries = filteredDeliveries.filter(
     (d) => d.data.shift === currentShift
   )
 

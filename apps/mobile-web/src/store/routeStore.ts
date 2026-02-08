@@ -3,14 +3,18 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 
 interface RouteState {
   selectedRouteId: string | null
+  selectedAreaId: string | null
   setSelectedRoute: (routeId: string | null) => void
+  setSelectedArea: (areaId: string | null) => void
 }
 
 export const useRouteStore = create<RouteState>()(
   persist(
     (set) => ({
       selectedRouteId: null,
-      setSelectedRoute: (selectedRouteId) => set({ selectedRouteId })
+      selectedAreaId: null,
+      setSelectedRoute: (selectedRouteId) => set({ selectedRouteId, selectedAreaId: null }),
+      setSelectedArea: (selectedAreaId) => set({ selectedAreaId })
     }),
     {
       name: 'milkmen_route',

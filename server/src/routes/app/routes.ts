@@ -28,7 +28,8 @@ const assignFarmersSchema = z.object({
 
 const assignCustomersSchema = z.object({
   customerIds: z.array(z.string()),
-  sortOrders: z.record(z.string(), z.number()).optional()
+  sortOrders: z.record(z.string(), z.number()).optional(),
+  areaId: z.string().optional()
 })
 
 // Helper to check if user has access to route
@@ -173,6 +174,12 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
             customer: {
               select: { id: true, name: true, phone: true, address: true, defaultRate: true, isActive: true, balance: true }
             }
+          }
+        },
+        areas: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            _count: { select: { routeCustomers: true } }
           }
         }
       }
@@ -561,7 +568,7 @@ router.post('/:id/customers', authenticateToken, requireOwnerOrManager, async (r
       })
     }
 
-    const { customerIds, sortOrders } = validation.data
+    const { customerIds, sortOrders, areaId } = validation.data
 
     // Verify all customers belong to business
     const customers = await prisma.customer.findMany({
@@ -574,6 +581,19 @@ router.post('/:id/customers', authenticateToken, requireOwnerOrManager, async (r
       })
     }
 
+    // Verify areaId belongs to this route if provided
+    if (areaId) {
+      const area = await prisma.area.findFirst({
+        where: { id: areaId, routeId }
+      })
+      if (!area) {
+        return res.status(400).json({
+          success: false,
+          error: 'Area not found in this route'
+        })
+      }
+    }
+
     // Replace all customer assignments
     await prisma.$transaction([
       prisma.routeCustomer.deleteMany({ where: { routeId } }),
@@ -581,6 +601,7 @@ router.post('/:id/customers', authenticateToken, requireOwnerOrManager, async (r
         data: customerIds.map((customerId, index) => ({
           routeId,
           customerId,
+          areaId: areaId || null,
           sortOrder: sortOrders?.[customerId] ?? index
         }))
       })
@@ -631,6 +652,37 @@ router.delete('/:id/customers/:customerId', authenticateToken, requireOwnerOrMan
       success: false,
       error: 'Failed to remove customer'
     })
+  }
+})
+
+// GET /api/routes/:id/customer-ids?areaId=xxx - Get customer IDs for route/area filtering
+router.get('/:id/customer-ids', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId, userId } = req.user!
+    const routeId = req.params.id as string
+    const { areaId } = req.query
+
+    // Check access
+    const hasAccess = await userHasRouteAccess(userId, routeId, businessId)
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: 'Access denied' })
+    }
+
+    const where: Record<string, unknown> = { routeId }
+    if (areaId) {
+      where.areaId = areaId as string
+    }
+
+    const routeCustomers = await prisma.routeCustomer.findMany({
+      where,
+      select: { customerId: true }
+    })
+
+    const customerIds = routeCustomers.map(rc => rc.customerId)
+    return res.json({ success: true, data: customerIds })
+  } catch (error) {
+    console.error('Get customer IDs error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to fetch customer IDs' })
   }
 })
 

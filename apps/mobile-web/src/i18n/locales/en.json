@@ -190,7 +190,9 @@
     "deleteConfirm": "Are you sure you want to delete this customer? This cannot be undone.",
     "edit": "Edit Customer",
     "address": "Address",
-    "noDeliveries": "No deliveries yet"
+    "noDeliveries": "No deliveries yet",
+    "selectRoute": "Select Route",
+    "selectArea": "Select Area"
   },
   "collection": {
     "title": "Milk Collection",
@@ -470,6 +472,17 @@
     "routeCreated": "Route created",
     "routeUpdated": "Route updated",
     "routeDeleted": "Route deleted"
+  },
+  "areas": {
+    "title": "Areas",
+    "addNew": "Add Area",
+    "name": "Area Name",
+    "noAreas": "No areas added yet",
+    "addFirst": "Add areas to organize customers within this route",
+    "allAreas": "All Areas",
+    "customers": "customers",
+    "confirmDelete": "Are you sure you want to delete this area?",
+    "enterName": "Enter area name"
   },
   "shifts": {
     "morning": "Morning",

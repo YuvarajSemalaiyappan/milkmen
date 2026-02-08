@@ -21,6 +21,7 @@ import syncRoutes from './routes/app/sync.js'
 import settingsRoutes from './routes/app/settings.js'
 import ratesRoutes from './routes/app/rates.js'
 import routesRoutes from './routes/app/routes.js'
+import areaRoutes from './routes/app/areas.js'
 import adminAuthRoutes from './routes/admin/auth.js'
 import adminDashboardRoutes from './routes/admin/dashboard.js'
 import adminBusinessesRoutes from './routes/admin/businesses.js'
@@ -57,6 +58,7 @@ app.use('/api/sync', syncRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/rates', ratesRoutes)
 app.use('/api/routes', routesRoutes)
+app.use('/api/areas', areaRoutes)
 
 // Admin Routes
 app.use('/api/admin/auth', adminAuthRoutes)

@@ -255,7 +255,25 @@ export interface RouteCustomer {
   id: string
   routeId: string
   customerId: string
+  areaId?: string
   sortOrder: number
+}
+
+export interface Area {
+  id: string
+  routeId: string
+  name: string
+  description?: string
+  sortOrder: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AreaWithCounts extends Area {
+  _count: {
+    routeCustomers: number
+  }
 }
 
 // User sort orders

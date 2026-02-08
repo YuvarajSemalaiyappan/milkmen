@@ -13,9 +13,9 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Card, Badge } from '@/components/ui'
-import { ShiftToggle, EmptyState } from '@/components/common'
-import { useCustomers, useDeliveries, usePayments } from '@/hooks'
-import { useAppStore } from '@/store'
+import { ShiftToggle, EmptyState, RouteFilter } from '@/components/common'
+import { useCustomers, useDeliveries, usePayments, useRouteCustomerIds } from '@/hooks'
+import { useAppStore, useRouteStore } from '@/store'
 import { formatCurrency, getToday } from '@/utils'
 import type { LocalCustomer, LocalDelivery, Shift } from '@/types'
 
@@ -33,6 +33,10 @@ export function TodayDeliveriesPage() {
   const { todayDeliveries, addDelivery, updateDelivery } = useDeliveries()
   const { addPayment } = usePayments()
 
+  const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
+  const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
+  const { customerIds: routeCustomerIds } = useRouteCustomerIds(selectedRouteId, selectedAreaId)
+
   const [processingId, setProcessingId] = useState<string | null>(null)
 
   const deliveryItems = useMemo(() => {
@@ -44,8 +48,13 @@ export function TodayDeliveriesPage() {
       return false
     })
 
+    // Filter by route/area if selected
+    const filteredCustomers = routeCustomerIds
+      ? subscribedCustomers.filter((c) => routeCustomerIds.has(c.id))
+      : subscribedCustomers
+
     // Map customers to delivery items
-    const items: DeliveryItem[] = subscribedCustomers.map((customer) => {
+    const items: DeliveryItem[] = filteredCustomers.map((customer) => {
       const existingDelivery = todayDeliveries.find(
         (d) =>
           d.data.customerId === customer.id && d.data.shift === currentShift
@@ -69,7 +78,7 @@ export function TodayDeliveriesPage() {
     })
 
     return items
-  }, [activeCustomers, todayDeliveries, currentShift])
+  }, [activeCustomers, todayDeliveries, currentShift, routeCustomerIds])
 
   const handleMarkDelivered = async (item: DeliveryItem) => {
     if (!item.customer.data.subscriptionQty) return
@@ -148,6 +157,9 @@ export function TodayDeliveriesPage() {
           value={currentShift}
           onChange={setCurrentShift}
         />
+
+        {/* Route Filter */}
+        <RouteFilter />
 
         {/* Summary Cards */}
         <div className="grid grid-cols-3 gap-3">
