@@ -29,13 +29,11 @@ export function TodayDeliveriesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { currentShift, setCurrentShift } = useAppStore()
-  const { activeCustomers, isLoading: customersLoading } = useCustomers()
-  const { todayDeliveries, addDelivery, updateDelivery, isLoading: deliveriesLoading } = useDeliveries()
+  const { activeCustomers } = useCustomers()
+  const { todayDeliveries, addDelivery, updateDelivery } = useDeliveries()
   const { addPayment } = usePayments()
 
   const [processingId, setProcessingId] = useState<string | null>(null)
-
-  const isLoading = customersLoading || deliveriesLoading
 
   const deliveryItems = useMemo(() => {
     // Filter subscribed customers for current shift
@@ -169,15 +167,8 @@ export function TodayDeliveriesPage() {
           </Card>
         </div>
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}...
-          </div>
-        )}
-
         {/* Delivery Items */}
-        {!isLoading && deliveryItems.length === 0 ? (
+        {deliveryItems.length === 0 ? (
           <EmptyState
             icon={currentShift === 'MORNING' ? <Sun className="w-16 h-16" /> : <Moon className="w-16 h-16" />}
             title={t('delivery.noSubscriptions')}
