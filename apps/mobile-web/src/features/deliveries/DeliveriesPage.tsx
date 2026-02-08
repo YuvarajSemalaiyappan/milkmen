@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, Truck, CheckCircle, User } from 'lucide-react'
+import { Plus, Truck, User } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Card, StatCard } from '@/components/ui'
+import { Button, Card } from '@/components/ui'
 import { ShiftToggle, EmptyState, RouteFilter } from '@/components/common'
 import { useAppStore } from '@/store'
 import { useDeliveries, useCustomers } from '@/hooks'
@@ -17,23 +17,23 @@ export function DeliveriesPage() {
   const { todayDeliveries, isLoading } = useDeliveries()
   const { customers } = useCustomers()
 
+  // Shift-specific totals
+  const calcShiftTotals = (shift: 'MORNING' | 'EVENING') => {
+    const filtered = todayDeliveries.filter(d => d.data.shift === shift)
+    return {
+      liters: filtered.reduce((sum, d) => sum + Number(d.data.quantity), 0),
+      amount: filtered.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
+    }
+  }
+  const amTotals = calcShiftTotals('MORNING')
+  const pmTotals = calcShiftTotals('EVENING')
+  const totalLiters = amTotals.liters + pmTotals.liters
+  const totalAmount = amTotals.amount + pmTotals.amount
+
   // Filter deliveries by current shift
   const shiftDeliveries = todayDeliveries.filter(
     (d) => d.data.shift === currentShift
   )
-
-  // Calculate shift-specific totals
-  const shiftTotals = shiftDeliveries.reduce(
-    (acc, d) => ({
-      liters: acc.liters + Number(d.data.quantity),
-      amount: acc.amount + Number(d.data.totalAmount)
-    }),
-    { liters: 0, amount: 0 }
-  )
-
-  const pendingCount = shiftDeliveries.filter(
-    (d) => d.data.status === 'PENDING'
-  ).length
 
   // Helper to get customer name
   const getCustomerName = (customerId: string) => {
@@ -65,22 +65,29 @@ export function DeliveriesPage() {
         {/* Route Filter */}
         <RouteFilter />
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4">
-          <StatCard
-            title={t('delivery.todayTotal')}
-            value={`${shiftTotals.liters} ${t('common.liter')}`}
-            subtitle={formatCurrency(shiftTotals.amount)}
-            icon={<Truck className="w-6 h-6" />}
-            color="green"
-          />
-          <StatCard
-            title={t('delivery.pending')}
-            value={pendingCount.toString()}
-            icon={<CheckCircle className="w-6 h-6" />}
-            color="yellow"
-          />
-        </div>
+        {/* Stats with AM/PM breakdown */}
+        <Card>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-green-50 to-green-100 text-green-600">
+              <Truck className="w-5 h-5" />
+            </div>
+            <h3 className="font-semibold text-gray-900 dark:text-white">{t('delivery.todayTotal')}</h3>
+          </div>
+          <div className="space-y-1.5">
+            <div className={`flex justify-between text-sm ${currentShift === 'MORNING' ? 'font-semibold' : ''}`}>
+              <span className="text-gray-500 dark:text-gray-400">{t('common.morning')}</span>
+              <span className={currentShift === 'MORNING' ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white'}>{amTotals.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(amTotals.amount)}</span>
+            </div>
+            <div className={`flex justify-between text-sm ${currentShift === 'EVENING' ? 'font-semibold' : ''}`}>
+              <span className="text-gray-500 dark:text-gray-400">{t('common.evening')}</span>
+              <span className={currentShift === 'EVENING' ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white'}>{pmTotals.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(pmTotals.amount)}</span>
+            </div>
+            <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
+              <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
+              <span className="text-green-600 dark:text-green-400">{totalLiters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(totalAmount)}</span>
+            </div>
+          </div>
+        </Card>
 
         {/* Deliveries List */}
         <Card>

@@ -317,7 +317,7 @@ export function DeliveryDetailPage() {
                     <Droplets className="w-4 h-4" />
                     <span>{t('common.quantity')}</span>
                   </div>
-                  <span className="font-medium">{delivery.data.quantity.toFixed(1)} L</span>
+                  <span className="font-medium">{Number(delivery.data.quantity).toFixed(1)} L</span>
                 </div>
 
                 <div className="flex items-center justify-between">

@@ -5,6 +5,7 @@ import type { SyncQueueItem, SyncStatus } from '@/types'
 
 class SyncService {
   private isProcessing = false
+  private isSyncing = false
 
   constructor() {
     // Listen for online/offline events
@@ -214,10 +215,18 @@ class SyncService {
 
   // Full sync - process queue and pull changes
   async sync(): Promise<void> {
-    // Save lastSyncAt BEFORE processing, so pullChanges uses the correct timestamp
-    const lastSyncAt = useSyncStore.getState().lastSyncAt || 0
-    await this.processQueue()
-    await this.pullChanges(lastSyncAt)
+    // Prevent concurrent syncs
+    if (this.isSyncing) return
+    this.isSyncing = true
+
+    try {
+      // Save lastSyncAt BEFORE processing, so pullChanges uses the correct timestamp
+      const lastSyncAt = useSyncStore.getState().lastSyncAt || 0
+      await this.processQueue()
+      await this.pullChanges(lastSyncAt)
+    } finally {
+      this.isSyncing = false
+    }
   }
 
   // Retry failed items
@@ -323,6 +332,9 @@ class SyncService {
         }
       }
 
+      // Server balance is always the source of truth
+      const serverBalance = (record.balance as number) || 0
+
       if (!local || updatedAt > local.updatedAt) {
         await db.farmers.put({
           id,
@@ -336,9 +348,12 @@ class SyncService {
             village: record.village as string | undefined,
             defaultRate: record.defaultRate as number,
             isActive: record.isActive as boolean,
-            balance: (record.balance as number) || 0
+            balance: serverBalance
           }
         })
+      } else if (local.data.balance !== serverBalance) {
+        // Even if local record is newer, always correct balance from server
+        await db.farmers.update(id, { 'data.balance': serverBalance })
       }
     }
   }
@@ -360,6 +375,9 @@ class SyncService {
         }
       }
 
+      // Server balance is always the source of truth
+      const serverBalance = (record.balance as number) || 0
+
       if (!local || updatedAt > local.updatedAt) {
         await db.customers.put({
           id,
@@ -376,9 +394,12 @@ class SyncService {
             subscriptionAM: (record.subscriptionAM as boolean) || false,
             subscriptionPM: (record.subscriptionPM as boolean) || false,
             isActive: record.isActive as boolean,
-            balance: (record.balance as number) || 0
+            balance: serverBalance
           }
         })
+      } else if (local.data.balance !== serverBalance) {
+        // Even if local record is newer, always correct balance from server
+        await db.customers.update(id, { 'data.balance': serverBalance })
       }
     }
   }

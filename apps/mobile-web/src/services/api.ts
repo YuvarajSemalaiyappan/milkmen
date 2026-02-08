@@ -299,6 +299,11 @@ export const routesApi = {
     api.delete(`/routes/${routeId}/customers/${customerId}`)
 }
 
+// Subscription API
+export const subscriptionApi = {
+  get: () => api.get('/settings/subscription')
+}
+
 // Sync API
 export const syncApi = {
   push: (data: unknown) => api.post('/sync/push', data),

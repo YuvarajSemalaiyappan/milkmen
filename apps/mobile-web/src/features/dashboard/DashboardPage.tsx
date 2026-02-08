@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Milk, Truck, CreditCard, Plus, Crown, AlertTriangle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout'
-import { StatCard, Card, Badge } from '@/components/ui'
+import { Card, Badge } from '@/components/ui'
 import { ShiftToggle } from '@/components/common'
 import { useAppStore, useAuthStore } from '@/store'
 import { useCollections, useDeliveries, useFarmers, useCustomers } from '@/hooks'
@@ -24,6 +24,19 @@ export function DashboardPage() {
   // Calculate pending dues
   const farmerDues = activeFarmers.reduce((sum, f) => sum + Math.max(0, f.data.balance), 0)
   const customerDues = activeCustomers.reduce((sum, c) => sum + Math.max(0, c.data.balance), 0)
+
+  // Calculate shift-specific totals for collections
+  const calcShiftTotals = (items: typeof todayCollections | typeof todayDeliveries, shift: 'MORNING' | 'EVENING') => {
+    const filtered = items.filter(i => i.data.shift === shift)
+    return {
+      liters: filtered.reduce((sum, i) => sum + Number(i.data.quantity), 0),
+      amount: filtered.reduce((sum, i) => sum + Number(i.data.totalAmount), 0)
+    }
+  }
+  const amCollection = calcShiftTotals(todayCollections, 'MORNING')
+  const pmCollection = calcShiftTotals(todayCollections, 'EVENING')
+  const amDelivery = calcShiftTotals(todayDeliveries, 'MORNING')
+  const pmDelivery = calcShiftTotals(todayDeliveries, 'EVENING')
 
   // Get recent activity (combine collections and deliveries)
   const recentActivity = [
@@ -152,29 +165,79 @@ export function DashboardPage() {
           size="lg"
         />
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard
-            title={t('dashboard.todayCollection')}
-            value={`${Number(collectionTotals.liters).toFixed(1)} ${t('common.liter')}`}
-            subtitle={formatCurrency(collectionTotals.amount)}
-            icon={<Milk className="w-6 h-6" />}
-            color="blue"
-          />
-          <StatCard
-            title={t('dashboard.todaySales')}
-            value={`${Number(deliveryTotals.liters).toFixed(1)} ${t('common.liter')}`}
-            subtitle={formatCurrency(deliveryTotals.amount)}
-            icon={<Truck className="w-6 h-6" />}
-            color="green"
-          />
-          <StatCard
-            title={t('dashboard.pendingDues')}
-            value={formatCurrency(customerDues)}
-            subtitle={`${t('dashboard.toFarmers')}: ${formatCurrency(farmerDues)}`}
-            icon={<CreditCard className="w-6 h-6" />}
-            color="yellow"
-          />
+        {/* Stats with AM/PM breakdown */}
+        <div className="space-y-3">
+          {/* Today's Collection */}
+          <Card>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 text-blue-600">
+                <Milk className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-gray-900 dark:text-white">{t('dashboard.todayCollection')}</h3>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">{t('common.morning')}</span>
+                <span className="font-medium text-gray-900 dark:text-white">{amCollection.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(amCollection.amount)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">{t('common.evening')}</span>
+                <span className="font-medium text-gray-900 dark:text-white">{pmCollection.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(pmCollection.amount)}</span>
+              </div>
+              <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
+                <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
+                <span className="text-blue-600 dark:text-blue-400">{Number(collectionTotals.liters).toFixed(1)}{t('common.liter')} &middot; {formatCurrency(collectionTotals.amount)}</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Today's Sales */}
+          <Card>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-green-50 to-green-100 text-green-600">
+                <Truck className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-gray-900 dark:text-white">{t('dashboard.todaySales')}</h3>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">{t('common.morning')}</span>
+                <span className="font-medium text-gray-900 dark:text-white">{amDelivery.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(amDelivery.amount)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">{t('common.evening')}</span>
+                <span className="font-medium text-gray-900 dark:text-white">{pmDelivery.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(pmDelivery.amount)}</span>
+              </div>
+              <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
+                <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
+                <span className="text-green-600 dark:text-green-400">{Number(deliveryTotals.liters).toFixed(1)}{t('common.liter')} &middot; {formatCurrency(deliveryTotals.amount)}</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Pending Dues */}
+          <Card>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-yellow-50 to-yellow-100 text-yellow-600">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-gray-900 dark:text-white">{t('dashboard.pendingDues')}</h3>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">{t('customer.title')}</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(customerDues)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">{t('dashboard.toFarmers')}</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(farmerDues)}</span>
+              </div>
+              <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
+                <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
+                <span className="text-yellow-600 dark:text-yellow-400">{formatCurrency(customerDues + farmerDues)}</span>
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* Quick Actions */}

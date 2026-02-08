@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { AuthUser, Role } from '@/types'
+import type { AuthUser, Role, SubscriptionInfo } from '@/types'
 
 interface AuthState {
   user: AuthUser | null
   token: string | null
   refreshToken: string | null
+  subscription: SubscriptionInfo | null
   isAuthenticated: boolean
   isLoading: boolean
 
@@ -13,6 +14,7 @@ interface AuthState {
   setUser: (user: AuthUser, token: string, refreshToken: string) => void
   updateUser: (user: Partial<AuthUser>) => void
   setToken: (token: string) => void
+  setSubscription: (subscription: SubscriptionInfo) => void
   logout: () => void
   setLoading: (loading: boolean) => void
 }
@@ -23,6 +25,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       refreshToken: null,
+      subscription: null,
       isAuthenticated: false,
       isLoading: true,
 
@@ -46,11 +49,16 @@ export const useAuthStore = create<AuthState>()(
         set({ token })
       },
 
+      setSubscription: (subscription) => {
+        set({ subscription })
+      },
+
       logout: () => {
         set({
           user: null,
           token: null,
           refreshToken: null,
+          subscription: null,
           isAuthenticated: false,
           isLoading: false
         })
@@ -67,6 +75,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         token: state.token,
         refreshToken: state.refreshToken,
+        subscription: state.subscription,
         isAuthenticated: state.isAuthenticated
       })
     }

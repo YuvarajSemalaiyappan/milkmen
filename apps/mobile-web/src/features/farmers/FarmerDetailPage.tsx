@@ -122,11 +122,11 @@ export function FarmerDetailPage() {
   }
 
   const totalCollections = collections.reduce(
-    (sum, c) => sum + c.data.quantity,
+    (sum, c) => sum + Number(c.data.quantity),
     0
   )
   const totalAmount = collections.reduce(
-    (sum, c) => sum + c.data.totalAmount,
+    (sum, c) => sum + Number(c.data.totalAmount),
     0
   )
 

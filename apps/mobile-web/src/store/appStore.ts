@@ -44,9 +44,9 @@ interface Toast {
   duration?: number
 }
 
-// Default shift (user manually selects based on subscription they want to work with)
+// Auto-detect shift based on time of day: MORNING before 12 PM, EVENING after
 function getDefaultShift(): Shift {
-  return 'MORNING'
+  return new Date().getHours() < 12 ? 'MORNING' : 'EVENING'
 }
 
 // Get today's date in YYYY-MM-DD format
@@ -113,7 +113,6 @@ export const useAppStore = create<AppState>()(
       name: 'milkmen_app',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        currentShift: state.currentShift,
         selectedDate: state.selectedDate,
         theme: state.theme
       })

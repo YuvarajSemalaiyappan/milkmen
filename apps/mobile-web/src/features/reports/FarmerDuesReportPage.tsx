@@ -45,8 +45,8 @@ export function FarmerDuesReportPage() {
           const collections = await getCollectionsByFarmer(farmer.id, startDate, endDate)
           const paymentsSummary = await getFarmerPaymentsSummary(farmer.id, startDate, endDate)
 
-          const totalLiters = collections.reduce((sum, c) => sum + c.data.quantity, 0)
-          const totalAmount = collections.reduce((sum, c) => sum + c.data.totalAmount, 0)
+          const totalLiters = collections.reduce((sum, c) => sum + Number(c.data.quantity), 0)
+          const totalAmount = collections.reduce((sum, c) => sum + Number(c.data.totalAmount), 0)
           const totalPaid = paymentsSummary.totalPayments
 
           return {

@@ -34,6 +34,60 @@ const updateStaffSchema = z.object({
   isActive: z.boolean().optional()
 })
 
+// GET /api/settings/subscription - Get current subscription info
+router.get('/subscription', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const subscription = await prisma.subscription.findUnique({
+      where: { businessId: req.user!.businessId }
+    })
+
+    if (!subscription) {
+      return res.json({
+        success: true,
+        data: {
+          plan: 'FREE',
+          status: 'INACTIVE',
+          active: false,
+          startDate: null,
+          endDate: null,
+          daysRemaining: 0
+        }
+      })
+    }
+
+    const now = new Date()
+    const active = subscription.status === 'ACTIVE' && subscription.endDate != null && subscription.endDate > now
+    let daysRemaining = 0
+    if (subscription.endDate) {
+      daysRemaining = Math.ceil((subscription.endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    }
+
+    // Fetch available plan pricing
+    const pricing = await prisma.planPricing.findMany({
+      orderBy: { plan: 'asc' }
+    })
+
+    return res.json({
+      success: true,
+      data: {
+        plan: subscription.plan,
+        status: subscription.status,
+        active,
+        startDate: subscription.startDate,
+        endDate: subscription.endDate,
+        daysRemaining,
+        pricing: pricing.map((p) => ({
+          plan: p.plan,
+          amount: Number(p.amount)
+        }))
+      }
+    })
+  } catch (error) {
+    console.error('Get subscription error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to get subscription info' })
+  }
+})
+
 // GET /api/settings/profile - Get current user profile
 router.get('/profile', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {

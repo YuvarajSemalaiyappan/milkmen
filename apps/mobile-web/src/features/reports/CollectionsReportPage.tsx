@@ -94,8 +94,8 @@ export function CollectionsReportPage() {
         }
 
         const summary = summaryMap.get(farmerId)!
-        summary.totalLiters += c.data.quantity
-        summary.totalAmount += c.data.totalAmount
+        summary.totalLiters += Number(c.data.quantity)
+        summary.totalAmount += Number(c.data.totalAmount)
         summary.count++
       })
 
@@ -108,8 +108,8 @@ export function CollectionsReportPage() {
     }
   }
 
-  const totalLiters = collections.reduce((sum, c) => sum + c.data.quantity, 0)
-  const totalAmount = collections.reduce((sum, c) => sum + c.data.totalAmount, 0)
+  const totalLiters = collections.reduce((sum, c) => sum + Number(c.data.quantity), 0)
+  const totalAmount = collections.reduce((sum, c) => sum + Number(c.data.totalAmount), 0)
   const avgRate = totalLiters > 0 ? totalAmount / totalLiters : 0
 
   return (
@@ -260,7 +260,7 @@ export function CollectionsReportPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-gray-900">{collection.data.quantity.toFixed(1)}L</p>
+                    <p className="font-bold text-gray-900">{Number(collection.data.quantity).toFixed(1)}L</p>
                     <p className="text-sm text-gray-500">
                       @ {formatCurrency(collection.data.ratePerLiter)}/L
                     </p>

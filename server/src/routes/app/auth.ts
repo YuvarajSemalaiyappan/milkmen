@@ -93,11 +93,16 @@ router.post('/register', async (req, res) => {
         }
       })
 
-      // Create inactive subscription
+      // Create FREE trial subscription (active for 30 days)
+      const now = new Date()
+      const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
       await tx.subscription.create({
         data: {
           businessId: business.id,
-          status: 'INACTIVE'
+          plan: 'FREE',
+          status: 'ACTIVE',
+          startDate: now,
+          endDate
         }
       })
 
@@ -121,6 +126,13 @@ router.post('/register', async (req, res) => {
         business: {
           id: result.business.id,
           name: result.business.name
+        },
+        subscription: {
+          plan: 'FREE',
+          status: 'ACTIVE',
+          active: true,
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          daysRemaining: 30
         },
         ...tokens
       }
@@ -184,6 +196,12 @@ router.post('/login', async (req, res) => {
       subscription.endDate &&
       new Date(subscription.endDate) > new Date()
 
+    // Calculate days remaining
+    let daysRemaining = 0
+    if (subscription?.endDate) {
+      daysRemaining = Math.ceil((new Date(subscription.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    }
+
     // Generate tokens
     const tokens = generateTokens(user.id, user.businessId)
 
@@ -203,9 +221,11 @@ router.post('/login', async (req, res) => {
           name: user.business.name
         },
         subscription: {
+          plan: subscription?.plan || 'FREE',
           status: subscription?.status || 'INACTIVE',
           active: subscriptionActive,
-          endDate: subscription?.endDate
+          endDate: subscription?.endDate,
+          daysRemaining
         },
         ...tokens
       }

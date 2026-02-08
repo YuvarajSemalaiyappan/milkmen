@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
-import { useAuthStore } from '@/store'
+import { useAuthStore, useAppStore } from '@/store'
 import { syncService } from '@/services/syncService'
 
 // Feature pages
@@ -26,6 +26,7 @@ import {
   StaffManagementPage,
   RateSettingsPage,
   SyncSettingsPage,
+  SubscriptionPage,
   AboutPage
 } from '@/features/settings'
 import {
@@ -42,6 +43,9 @@ import { LoginPage, RegisterPage } from '@/features/auth'
 // Protected route wrapper
 function ProtectedRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const subscription = useAuthStore((state) => state.subscription)
+  const addToast = useAppStore((state) => state.addToast)
+  const expiryWarningShown = useRef(false)
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -61,6 +65,18 @@ function ProtectedRoute() {
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [isAuthenticated])
+
+  // Show expiry warning toast
+  useEffect(() => {
+    if (!subscription || expiryWarningShown.current) return
+    expiryWarningShown.current = true
+
+    if (subscription.daysRemaining <= 0) {
+      addToast({ type: 'error', message: 'Your plan has expired. Contact admin to renew.', duration: 5000 })
+    } else if (subscription.daysRemaining <= 7) {
+      addToast({ type: 'warning', message: `Your plan expires in ${subscription.daysRemaining} days`, duration: 5000 })
+    }
+  }, [subscription, addToast])
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
@@ -203,6 +219,10 @@ export const router = createBrowserRouter([
       {
         path: '/settings/staff',
         element: <StaffManagementPage />
+      },
+      {
+        path: '/settings/subscription',
+        element: <SubscriptionPage />
       },
       {
         path: '/settings/rates',

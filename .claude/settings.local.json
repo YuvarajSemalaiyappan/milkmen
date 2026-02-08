@@ -109,7 +109,12 @@
       "Bash(git add:*)",
       "Bash(npm ls:*)",
       "Bash(git -C \"D:\\\\Yuva\\\\milkmen\" add -A)",
-      "Bash(git -C \"D:\\\\Yuva\\\\milkmen\" status --short)"
+      "Bash(git -C \"D:\\\\Yuva\\\\milkmen\" status --short)",
+      "Bash(\"C:\\\\Program Files\\\\nodejs\\\\render.exe\" logs -r srv-d61ofmcoud1c73agul80 --limit 50 -o text --type build --direction backward)",
+      "Bash(render logs:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix path-to-regexp syntax for Express 4.21+\n\nUse {*splat} instead of bare * for admin SPA fallback route.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(npm ci:*)"
     ]
   }
 }

@@ -97,8 +97,8 @@ export function DeliveriesReportPage() {
         }
 
         const summary = summaryMap.get(customerId)!
-        summary.totalLiters += d.data.quantity
-        summary.totalAmount += d.data.totalAmount
+        summary.totalLiters += Number(d.data.quantity)
+        summary.totalAmount += Number(d.data.totalAmount)
         summary.count++
       })
 
@@ -111,8 +111,8 @@ export function DeliveriesReportPage() {
     }
   }
 
-  const totalLiters = deliveries.reduce((sum, d) => sum + d.data.quantity, 0)
-  const totalAmount = deliveries.reduce((sum, d) => sum + d.data.totalAmount, 0)
+  const totalLiters = deliveries.reduce((sum, d) => sum + Number(d.data.quantity), 0)
+  const totalAmount = deliveries.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
   const avgRate = totalLiters > 0 ? totalAmount / totalLiters : 0
 
   return (
@@ -266,7 +266,7 @@ export function DeliveriesReportPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-gray-900">{delivery.data.quantity.toFixed(1)}L</p>
+                    <p className="font-bold text-gray-900">{Number(delivery.data.quantity).toFixed(1)}L</p>
                     <p className="text-sm text-gray-500">
                       @ {formatCurrency(delivery.data.ratePerLiter)}/L
                     </p>

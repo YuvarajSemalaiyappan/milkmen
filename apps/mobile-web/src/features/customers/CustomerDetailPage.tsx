@@ -138,11 +138,11 @@ export function CustomerDetailPage() {
   }
 
   const totalDeliveries = deliveries.reduce(
-    (sum, d) => sum + d.data.quantity,
+    (sum, d) => sum + Number(d.data.quantity),
     0
   )
   const totalAmount = deliveries.reduce(
-    (sum, d) => sum + d.data.totalAmount,
+    (sum, d) => sum + Number(d.data.totalAmount),
     0
   )
 

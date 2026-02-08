@@ -284,6 +284,18 @@ export interface SyncQueueItem {
   createdAt: number
 }
 
+// Subscription types
+export type SubscriptionPlan = 'FREE' | 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'ANNUAL'
+export type SubscriptionStatus = 'INACTIVE' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED'
+
+export interface SubscriptionInfo {
+  plan: SubscriptionPlan
+  status: SubscriptionStatus
+  active: boolean
+  endDate: string | null
+  daysRemaining: number
+}
+
 // Auth types
 export interface AuthUser {
   id: string

@@ -262,7 +262,7 @@ export function CollectionDetailPage() {
                     <Droplets className="w-4 h-4" />
                     <span>{t('common.quantity')}</span>
                   </div>
-                  <span className="font-medium">{collection.data.quantity.toFixed(1)} L</span>
+                  <span className="font-medium">{Number(collection.data.quantity).toFixed(1)} L</span>
                 </div>
 
                 {collection.data.fatContent && (
@@ -271,7 +271,7 @@ export function CollectionDetailPage() {
                       <span className="w-4 h-4 text-center text-xs font-bold">%</span>
                       <span>{t('collection.fatContent')}</span>
                     </div>
-                    <span className="font-medium">{collection.data.fatContent.toFixed(1)}%</span>
+                    <span className="font-medium">{Number(collection.data.fatContent).toFixed(1)}%</span>
                   </div>
                 )}
 

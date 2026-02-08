@@ -46,8 +46,8 @@ export function CustomerDuesReportPage() {
           const paymentsSummary = await getCustomerPaymentsSummary(customer.id, startDate, endDate)
 
           const deliveredItems = deliveries.filter((d) => d.data.status === 'DELIVERED')
-          const totalLiters = deliveredItems.reduce((sum, d) => sum + d.data.quantity, 0)
-          const totalAmount = deliveredItems.reduce((sum, d) => sum + d.data.totalAmount, 0)
+          const totalLiters = deliveredItems.reduce((sum, d) => sum + Number(d.data.quantity), 0)
+          const totalAmount = deliveredItems.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
           const totalPaid = paymentsSummary.totalPayments
 
           return {

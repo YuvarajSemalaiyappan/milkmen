@@ -419,10 +419,19 @@ model SubscriptionPayment {
 }
 
 enum SubscriptionPlan {
+  FREE        // 30 days free trial
   MONTHLY     // 30 days
   QUARTERLY   // 90 days
   HALF_YEARLY // 180 days
   ANNUAL      // 365 days
+}
+
+// Admin-configurable plan pricing
+model PlanPricing {
+  id        String           @id @default(cuid())
+  plan      SubscriptionPlan @unique
+  amount    Decimal          @db.Decimal(10, 2)
+  updatedAt DateTime         @updatedAt
 }
 
 enum SubscriptionStatus {

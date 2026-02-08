@@ -6,6 +6,7 @@ import { authenticateAdmin, AdminRequest } from '../../middleware/adminAuth.js'
 const router = Router()
 
 const PLAN_DAYS: Record<string, number> = {
+  FREE: 30,
   MONTHLY: 30,
   QUARTERLY: 90,
   HALF_YEARLY: 180,
@@ -13,7 +14,7 @@ const PLAN_DAYS: Record<string, number> = {
 }
 
 const activateSchema = z.object({
-  plan: z.enum(['MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'ANNUAL']),
+  plan: z.enum(['FREE', 'MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'ANNUAL']),
   amount: z.number().min(0),
   paymentMethod: z.string().optional(),
   transactionId: z.string().optional(),
@@ -245,6 +246,70 @@ router.post('/:businessId/reactivate', authenticateAdmin, async (req: AdminReque
   } catch (error) {
     console.error('Reactivate subscription error:', error)
     return res.status(500).json({ success: false, error: 'Failed to reactivate subscription' })
+  }
+})
+
+// GET /api/admin/subscriptions/pricing - Get all plan prices
+router.get('/pricing', authenticateAdmin, async (req: AdminRequest, res: Response) => {
+  try {
+    const pricing = await prisma.planPricing.findMany({
+      orderBy: { plan: 'asc' }
+    })
+
+    return res.json({
+      success: true,
+      data: pricing.map((p) => ({
+        id: p.id,
+        plan: p.plan,
+        amount: Number(p.amount),
+        updatedAt: p.updatedAt
+      }))
+    })
+  } catch (error) {
+    console.error('Get pricing error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to get pricing' })
+  }
+})
+
+// PUT /api/admin/subscriptions/pricing - Update plan prices (bulk)
+const pricingSchema = z.object({
+  prices: z.array(z.object({
+    plan: z.enum(['FREE', 'MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'ANNUAL']),
+    amount: z.number().min(0)
+  }))
+})
+
+router.put('/pricing', authenticateAdmin, async (req: AdminRequest, res: Response) => {
+  try {
+    const validation = pricingSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: validation.error.issues })
+    }
+
+    const { prices } = validation.data
+
+    const results = await Promise.all(
+      prices.map((p) =>
+        prisma.planPricing.upsert({
+          where: { plan: p.plan },
+          create: { plan: p.plan, amount: p.amount },
+          update: { amount: p.amount }
+        })
+      )
+    )
+
+    return res.json({
+      success: true,
+      data: results.map((p) => ({
+        id: p.id,
+        plan: p.plan,
+        amount: Number(p.amount),
+        updatedAt: p.updatedAt
+      }))
+    })
+  } catch (error) {
+    console.error('Update pricing error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to update pricing' })
   }
 })
 

@@ -14,7 +14,8 @@ import {
   Sun,
   Moon,
   Monitor,
-  MapPin
+  MapPin,
+  Crown
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
@@ -44,6 +45,12 @@ export function SettingsPage() {
       titleKey: 'settings.profile',
       path: '/settings/profile',
       color: 'bg-blue-100 text-blue-600'
+    },
+    {
+      icon: Crown,
+      titleKey: 'settings.subscription',
+      path: '/settings/subscription',
+      color: 'bg-indigo-100 text-indigo-600'
     },
     {
       icon: Building2,

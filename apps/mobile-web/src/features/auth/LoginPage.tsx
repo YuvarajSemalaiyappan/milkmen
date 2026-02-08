@@ -13,6 +13,7 @@ export function LoginPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const setUser = useAuthStore((state) => state.setUser)
+  const setSubscription = useAuthStore((state) => state.setSubscription)
   const addToast = useAppStore((state) => state.addToast)
 
   const [step, setStep] = useState<Step>('phone')
@@ -64,6 +65,11 @@ export function LoginPage() {
         result.data.token,
         result.data.refreshToken
       )
+
+      // Store subscription info
+      if (result.data.subscription) {
+        setSubscription(result.data.subscription)
+      }
 
       addToast({
         type: 'success',

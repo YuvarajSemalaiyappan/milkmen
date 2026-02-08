@@ -57,8 +57,8 @@ export function ProfitLossReportPage() {
       const deliveredItems = deliveries.filter(d => d.data.status === 'DELIVERED')
 
       // Collection stats
-      const collectionLiters = collections.reduce((sum, c) => sum + c.data.quantity, 0)
-      const collectionAmount = collections.reduce((sum, c) => sum + c.data.totalAmount, 0)
+      const collectionLiters = collections.reduce((sum, c) => sum + Number(c.data.quantity), 0)
+      const collectionAmount = collections.reduce((sum, c) => sum + Number(c.data.totalAmount), 0)
       setCollectionStats({
         liters: collectionLiters,
         amount: collectionAmount,
@@ -67,8 +67,8 @@ export function ProfitLossReportPage() {
       })
 
       // Delivery stats
-      const deliveryLiters = deliveredItems.reduce((sum, d) => sum + d.data.quantity, 0)
-      const deliveryAmount = deliveredItems.reduce((sum, d) => sum + d.data.totalAmount, 0)
+      const deliveryLiters = deliveredItems.reduce((sum, d) => sum + Number(d.data.quantity), 0)
+      const deliveryAmount = deliveredItems.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
       setDeliveryStats({
         liters: deliveryLiters,
         amount: deliveryAmount,

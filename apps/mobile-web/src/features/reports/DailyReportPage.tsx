@@ -40,20 +40,20 @@ export function DailyReportPage() {
         getPaymentsByDateRange(selectedDate, selectedDate)
       ])
 
-      const collectionLiters = collections.reduce((sum, c) => sum + c.data.quantity, 0)
-      const collectionAmount = collections.reduce((sum, c) => sum + c.data.totalAmount, 0)
+      const collectionLiters = collections.reduce((sum, c) => sum + Number(c.data.quantity), 0)
+      const collectionAmount = collections.reduce((sum, c) => sum + Number(c.data.totalAmount), 0)
 
       const deliveredItems = deliveries.filter((d) => d.data.status === 'DELIVERED')
-      const salesLiters = deliveredItems.reduce((sum, d) => sum + d.data.quantity, 0)
-      const salesAmount = deliveredItems.reduce((sum, d) => sum + d.data.totalAmount, 0)
+      const salesLiters = deliveredItems.reduce((sum, d) => sum + Number(d.data.quantity), 0)
+      const salesAmount = deliveredItems.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
 
       const paidToFarmers = payments
         .filter((p) => p.data.type === 'PAID_TO_FARMER')
-        .reduce((sum, p) => sum + p.data.amount, 0)
+        .reduce((sum, p) => sum + Number(p.data.amount), 0)
 
       const receivedFromCustomers = payments
         .filter((p) => p.data.type === 'RECEIVED_FROM_CUSTOMER')
-        .reduce((sum, p) => sum + p.data.amount, 0)
+        .reduce((sum, p) => sum + Number(p.data.amount), 0)
 
       const profit = salesAmount - collectionAmount
 

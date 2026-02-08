@@ -96,6 +96,11 @@ export function RegisterPage() {
         result.data.refreshToken
       )
 
+      // Store subscription info
+      if (result.data.subscription) {
+        useAuthStore.getState().setSubscription(result.data.subscription)
+      }
+
       navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed')
