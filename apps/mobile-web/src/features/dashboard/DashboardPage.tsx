@@ -3,7 +3,6 @@ import { Milk, Truck, CreditCard, Plus, Crown, AlertTriangle } from 'lucide-reac
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout'
 import { Card, Badge } from '@/components/ui'
-import { ShiftToggle } from '@/components/common'
 import { useAppStore, useAuthStore } from '@/store'
 import { useCollections, useDeliveries, useFarmers, useCustomers } from '@/hooks'
 import { formatCurrency } from '@/utils'
@@ -11,8 +10,6 @@ import { formatCurrency } from '@/utils'
 export function DashboardPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const currentShift = useAppStore((state) => state.currentShift)
-  const setCurrentShift = useAppStore((state) => state.setCurrentShift)
   const user = useAuthStore((state) => state.user)
   const subscription = useAuthStore((state) => state.subscription)
 
@@ -156,14 +153,6 @@ export function DashboardPage() {
             </div>
           </div>
         )}
-
-        {/* Shift Toggle */}
-        <ShiftToggle
-          value={currentShift}
-          onChange={setCurrentShift}
-          fullWidth
-          size="lg"
-        />
 
         {/* Stats with AM/PM breakdown */}
         <div className="space-y-3">
