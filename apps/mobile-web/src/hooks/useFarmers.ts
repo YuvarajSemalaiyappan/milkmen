@@ -26,6 +26,8 @@ export function useFarmers() {
       phone?: string
       village?: string
       defaultRate: number
+      collectAM?: boolean
+      collectPM?: boolean
     }) => {
       const localId = generateLocalId()
       const timestamp = now()
@@ -41,6 +43,8 @@ export function useFarmers() {
           phone: data.phone,
           village: data.village,
           defaultRate: data.defaultRate,
+          collectAM: data.collectAM ?? true,
+          collectPM: data.collectPM ?? false,
           isActive: true,
           balance: 0
         }
@@ -69,6 +73,8 @@ export function useFarmers() {
         phone?: string
         village?: string
         defaultRate: number
+        collectAM: boolean
+        collectPM: boolean
         isActive: boolean
       }>
     ) => {

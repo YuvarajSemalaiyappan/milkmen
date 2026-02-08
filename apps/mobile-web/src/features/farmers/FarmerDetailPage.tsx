@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -12,7 +12,9 @@ import {
   IndianRupee,
   TrendingUp,
   Calendar,
-  ChevronRight
+  ChevronRight,
+  Sun,
+  Moon
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
@@ -24,7 +26,9 @@ const farmerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   phone: z.string().optional(),
   village: z.string().optional(),
-  defaultRate: z.number().min(1, 'Rate must be greater than 0')
+  defaultRate: z.number().min(1, 'Rate must be greater than 0'),
+  collectAM: z.boolean(),
+  collectPM: z.boolean()
 })
 
 type FarmerFormData = z.infer<typeof farmerSchema>
@@ -47,10 +51,15 @@ export function FarmerDetailPage() {
     register,
     handleSubmit,
     reset,
+    control,
+    setValue,
     formState: { errors }
   } = useForm<FarmerFormData>({
     resolver: zodResolver(farmerSchema)
   })
+
+  const collectAM = useWatch({ control, name: 'collectAM' })
+  const collectPM = useWatch({ control, name: 'collectPM' })
 
   useEffect(() => {
     if (id) {
@@ -68,7 +77,9 @@ export function FarmerDetailPage() {
         name: data.data.name,
         phone: data.data.phone || '',
         village: data.data.village || '',
-        defaultRate: data.data.defaultRate
+        defaultRate: data.data.defaultRate,
+        collectAM: data.data.collectAM ?? true,
+        collectPM: data.data.collectPM ?? false
       })
     }
   }
@@ -87,7 +98,9 @@ export function FarmerDetailPage() {
         name: data.name,
         phone: data.phone || undefined,
         village: data.village || undefined,
-        defaultRate: data.defaultRate
+        defaultRate: data.defaultRate,
+        collectAM: data.collectAM,
+        collectPM: data.collectPM
       })
       setIsEditing(false)
       loadFarmer()
@@ -183,6 +196,35 @@ export function FarmerDetailPage() {
                 {...register('defaultRate', { valueAsNumber: true })}
               />
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                  {t('farmer.collectionShift')}
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 text-primary-600 rounded"
+                      checked={collectAM}
+                      onChange={(e) => setValue('collectAM', e.target.checked)}
+                    />
+                    <Sun className="w-5 h-5 text-yellow-500" />
+                    <span>{t('common.morning')} (AM)</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 text-primary-600 rounded"
+                      checked={collectPM}
+                      onChange={(e) => setValue('collectPM', e.target.checked)}
+                    />
+                    <Moon className="w-5 h-5 text-blue-500" />
+                    <span>{t('common.evening')} (PM)</span>
+                  </label>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-4">
                 <Button
                   type="button"
@@ -236,6 +278,21 @@ export function FarmerDetailPage() {
                   <span>
                     {t('farmer.defaultRate')}: {formatCurrency(farmer.data.defaultRate)}/L
                   </span>
+                </div>
+
+                <div className="flex items-center gap-2 text-gray-600">
+                  {farmer.data.collectAM && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      <Sun className="w-3 h-3" />
+                      {t('common.morning')}
+                    </span>
+                  )}
+                  {farmer.data.collectPM && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <Moon className="w-3 h-3" />
+                      {t('common.evening')}
+                    </span>
+                  )}
                 </div>
               </div>
             </Card>

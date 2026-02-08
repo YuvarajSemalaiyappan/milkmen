@@ -135,6 +135,8 @@ router.post('/push', authenticateToken, async (req: AuthRequest, res: Response) 
               phone: (data.phone as string) || null,
               village: (data.village as string) || null,
               defaultRate: data.defaultRate as number,
+              collectAM: (data.collectAM as boolean) ?? true,
+              collectPM: (data.collectPM as boolean) ?? false,
             }
           })
         } else if (operation === 'update') {
@@ -154,6 +156,8 @@ router.post('/push', authenticateToken, async (req: AuthRequest, res: Response) 
           if (data.phone !== undefined) updateData.phone = data.phone
           if (data.village !== undefined) updateData.village = data.village
           if (data.defaultRate !== undefined) updateData.defaultRate = data.defaultRate
+          if (data.collectAM !== undefined) updateData.collectAM = data.collectAM
+          if (data.collectPM !== undefined) updateData.collectPM = data.collectPM
           if (data.isActive !== undefined) updateData.isActive = data.isActive
 
           result = await prisma.farmer.update({

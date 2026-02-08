@@ -26,8 +26,7 @@ interface FarmerSummary {
 export function CollectionsReportPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { activeFarmers, inactiveFarmers } = useFarmers()
-  const allFarmers = [...activeFarmers, ...inactiveFarmers]
+  const { farmers: allFarmers } = useFarmers()
   const { getCollectionsByDateRange } = useCollections()
 
   const [startDate, setStartDate] = useState(() => {

@@ -26,8 +26,7 @@ interface CustomerSummary {
 export function DeliveriesReportPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { activeCustomers, inactiveCustomers } = useCustomers()
-  const allCustomers = [...activeCustomers, ...inactiveCustomers]
+  const { customers: allCustomers } = useCustomers()
   const { getDeliveriesByDateRange } = useDeliveries()
 
   const [startDate, setStartDate] = useState(() => {

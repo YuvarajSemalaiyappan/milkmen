@@ -347,6 +347,8 @@ class SyncService {
             phone: record.phone as string | undefined,
             village: record.village as string | undefined,
             defaultRate: record.defaultRate as number,
+            collectAM: (record.collectAM as boolean) ?? true,
+            collectPM: (record.collectPM as boolean) ?? false,
             isActive: record.isActive as boolean,
             balance: serverBalance
           }

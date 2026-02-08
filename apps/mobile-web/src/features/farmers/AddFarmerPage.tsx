@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
 import { useFarmers } from '@/hooks'
@@ -12,7 +13,9 @@ const farmerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   phone: z.string().optional(),
   village: z.string().optional(),
-  defaultRate: z.number().min(1, 'Rate must be greater than 0')
+  defaultRate: z.number().min(1, 'Rate must be greater than 0'),
+  collectAM: z.boolean(),
+  collectPM: z.boolean()
 })
 
 type FarmerFormData = z.infer<typeof farmerSchema>
@@ -26,6 +29,8 @@ export function AddFarmerPage() {
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors }
   } = useForm<FarmerFormData>({
     resolver: zodResolver(farmerSchema),
@@ -33,9 +38,14 @@ export function AddFarmerPage() {
       name: '',
       phone: '',
       village: '',
-      defaultRate: 42 // Default rate
+      defaultRate: 42, // Default rate
+      collectAM: true,
+      collectPM: false
     }
   })
+
+  const collectAM = useWatch({ control, name: 'collectAM' })
+  const collectPM = useWatch({ control, name: 'collectPM' })
 
   const onSubmit = async (data: FarmerFormData) => {
     try {
@@ -44,7 +54,9 @@ export function AddFarmerPage() {
         name: data.name,
         phone: data.phone || undefined,
         village: data.village || undefined,
-        defaultRate: data.defaultRate
+        defaultRate: data.defaultRate,
+        collectAM: data.collectAM,
+        collectPM: data.collectPM
       })
       navigate('/farmers')
     } catch (error) {
@@ -89,6 +101,35 @@ export function AddFarmerPage() {
               error={errors.defaultRate?.message}
               {...register('defaultRate', { valueAsNumber: true })}
             />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                {t('farmer.collectionShift')}
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 text-primary-600 rounded"
+                    checked={collectAM}
+                    onChange={(e) => setValue('collectAM', e.target.checked)}
+                  />
+                  <Sun className="w-5 h-5 text-yellow-500" />
+                  <span>{t('common.morning')} (AM)</span>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 text-primary-600 rounded"
+                    checked={collectPM}
+                    onChange={(e) => setValue('collectPM', e.target.checked)}
+                  />
+                  <Moon className="w-5 h-5 text-blue-500" />
+                  <span>{t('common.evening')} (PM)</span>
+                </label>
+              </div>
+            </div>
 
             <div className="flex gap-3 pt-4">
               <Button

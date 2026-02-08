@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -29,55 +29,49 @@ export function TodayDeliveriesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { currentShift, setCurrentShift } = useAppStore()
-  const { getSubscribedCustomers, activeCustomers } = useCustomers()
-  const { todayDeliveries, addDelivery, updateDelivery } = useDeliveries()
+  const { activeCustomers, isLoading: customersLoading } = useCustomers()
+  const { todayDeliveries, addDelivery, updateDelivery, isLoading: deliveriesLoading } = useDeliveries()
   const { addPayment } = usePayments()
 
-  const [deliveryItems, setDeliveryItems] = useState<DeliveryItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadDeliveryItems()
-  }, [currentShift, todayDeliveries, activeCustomers])
+  const isLoading = customersLoading || deliveriesLoading
 
-  const loadDeliveryItems = async () => {
-    setIsLoading(true)
-    try {
-      // Get subscribed customers for current shift
-      const subscribedCustomers = await getSubscribedCustomers(currentShift)
+  const deliveryItems = useMemo(() => {
+    // Filter subscribed customers for current shift
+    const subscribedCustomers = activeCustomers.filter((c) => {
+      if (!c.data.subscriptionQty) return false
+      if (currentShift === 'MORNING') return c.data.subscriptionAM
+      if (currentShift === 'EVENING') return c.data.subscriptionPM
+      return false
+    })
 
-      // Map customers to delivery items
-      const items: DeliveryItem[] = subscribedCustomers.map((customer) => {
-        const existingDelivery = todayDeliveries.find(
-          (d) =>
-            d.data.customerId === customer.id && d.data.shift === currentShift
-        )
+    // Map customers to delivery items
+    const items: DeliveryItem[] = subscribedCustomers.map((customer) => {
+      const existingDelivery = todayDeliveries.find(
+        (d) =>
+          d.data.customerId === customer.id && d.data.shift === currentShift
+      )
 
-        return {
-          customer,
-          delivery: existingDelivery,
-          status: existingDelivery
-            ? existingDelivery.data.status === 'DELIVERED'
-              ? 'delivered'
-              : 'skipped'
-            : 'pending'
-        }
-      })
+      return {
+        customer,
+        delivery: existingDelivery,
+        status: existingDelivery
+          ? existingDelivery.data.status === 'DELIVERED'
+            ? 'delivered'
+            : 'skipped'
+          : 'pending'
+      }
+    })
 
-      // Sort: pending first, then delivered, then skipped
-      items.sort((a, b) => {
-        const order = { pending: 0, delivered: 1, skipped: 2 }
-        return order[a.status] - order[b.status]
-      })
+    // Sort: pending first, then delivered, then skipped
+    items.sort((a, b) => {
+      const order = { pending: 0, delivered: 1, skipped: 2 }
+      return order[a.status] - order[b.status]
+    })
 
-      setDeliveryItems(items)
-    } catch (error) {
-      console.error('Error loading delivery items:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    return items
+  }, [activeCustomers, todayDeliveries, currentShift])
 
   const handleMarkDelivered = async (item: DeliveryItem) => {
     if (!item.customer.data.subscriptionQty) return
