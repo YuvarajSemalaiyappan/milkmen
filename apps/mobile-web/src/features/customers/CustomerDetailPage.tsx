@@ -127,6 +127,19 @@ export function CustomerDetailPage() {
     }
   }
 
+  const handleActivate = async () => {
+    if (!id) return
+    try {
+      setIsDeleting(true)
+      await updateCustomer(id, { isActive: true })
+      loadCustomer()
+    } catch (error) {
+      console.error('Failed to activate customer:', error)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (!customer) {
     return (
       <AppShell title={t('customer.details')} showBack>
@@ -434,9 +447,17 @@ export function CustomerDetailPage() {
               </Button>
             </div>
 
-            {/* Delete Button */}
+            {/* Delete / Activate Button */}
             <div className="pt-4">
-              {showDeleteConfirm ? (
+              {!customer.data.isActive ? (
+                <Button
+                  onClick={handleActivate}
+                  isLoading={isDeleting}
+                  fullWidth
+                >
+                  {t('common.activate')}
+                </Button>
+              ) : showDeleteConfirm ? (
                 <Card className="bg-red-50 border-red-200">
                   <p className="text-sm text-red-700 mb-3">
                     {t('customer.deleteConfirm')}

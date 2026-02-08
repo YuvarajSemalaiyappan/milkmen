@@ -124,6 +124,19 @@ export function FarmerDetailPage() {
     }
   }
 
+  const handleActivate = async () => {
+    if (!id) return
+    try {
+      setIsDeleting(true)
+      await updateFarmer(id, { isActive: true })
+      loadFarmer()
+    } catch (error) {
+      console.error('Failed to activate farmer:', error)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (!farmer) {
     return (
       <AppShell title={t('farmer.details')} showBack>
@@ -397,9 +410,17 @@ export function FarmerDetailPage() {
               </Button>
             </div>
 
-            {/* Delete Button */}
+            {/* Delete / Activate Button */}
             <div className="pt-4">
-              {showDeleteConfirm ? (
+              {!farmer.data.isActive ? (
+                <Button
+                  onClick={handleActivate}
+                  isLoading={isDeleting}
+                  fullWidth
+                >
+                  {t('common.activate')}
+                </Button>
+              ) : showDeleteConfirm ? (
                 <Card className="bg-red-50 border-red-200">
                   <p className="text-sm text-red-700 mb-3">
                     {t('farmer.deleteConfirm')}
