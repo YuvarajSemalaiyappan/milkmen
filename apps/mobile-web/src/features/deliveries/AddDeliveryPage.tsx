@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Search, User } from 'lucide-react'
+import { Search, User, Check } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Input, Card } from '@/components/ui'
+import { Button, Input, Card, Badge } from '@/components/ui'
 import { ShiftToggle, NumberPad } from '@/components/common'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useDeliveries } from '@/hooks/useDeliveries'
@@ -23,7 +23,7 @@ export function AddDeliveryPage() {
   const setCurrentShift = useAppStore((state) => state.setCurrentShift)
 
   const { activeCustomers, searchCustomers } = useCustomers()
-  const { addDelivery } = useDeliveries()
+  const { addDelivery, todayDeliveries } = useDeliveries()
 
   const [step, setStep] = useState<Step>('select-customer')
   const [searchQuery, setSearchQuery] = useState('')
@@ -33,6 +33,27 @@ export function AddDeliveryPage() {
   const [rate, setRate] = useState('')
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Set of customerIds that already have a DELIVERED delivery for today + current shift
+  const deliveredSet = useMemo(() => {
+    const set = new Set<string>()
+    if (!todayDeliveries) return set
+    for (const d of todayDeliveries) {
+      if (d.data.shift === currentShift && d.data.status === 'DELIVERED') {
+        set.add(d.data.customerId)
+      }
+    }
+    return set
+  }, [todayDeliveries, currentShift])
+
+  // Sort customers: undelivered first, delivered last
+  const sortedCustomers = useMemo(() => {
+    return [...filteredCustomers].sort((a, b) => {
+      const aDelivered = deliveredSet.has(a.id) ? 1 : 0
+      const bDelivered = deliveredSet.has(b.id) ? 1 : 0
+      return aDelivered - bDelivered
+    })
+  }, [filteredCustomers, deliveredSet])
 
   // Check if customer is pre-selected
   useEffect(() => {
@@ -116,38 +137,52 @@ export function AddDeliveryPage() {
             {/* Customer List */}
             <Card padding="none">
               <ul className="divide-y divide-gray-100 dark:divide-gray-700">
-                {filteredCustomers.map((customer) => (
-                  <li key={customer.id}>
-                    <button
-                      onClick={() => selectCustomer(customer)}
-                      className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
-                        <User className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {customer.data.name}
-                        </p>
-                        {customer.data.address && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {customer.data.address}
-                          </p>
+                {sortedCustomers.map((customer) => {
+                  const isDelivered = deliveredSet.has(customer.id)
+                  return (
+                    <li key={customer.id}>
+                      <button
+                        onClick={() => selectCustomer(customer)}
+                        className={`w-full flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${isDelivered ? 'opacity-60' : ''}`}
+                      >
+                        {isDelivered ? (
+                          <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                            <Check className="w-5 h-5 text-white" />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
+                            <User className="w-5 h-5 text-green-600 dark:text-green-400" />
+                          </div>
                         )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {formatRate(customer.data.defaultRate)}
-                        </p>
-                        {customer.data.subscriptionQty && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {customer.data.subscriptionQty}L daily
+                        <div className="flex-1 text-left">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {customer.data.name}
+                            </p>
+                            {isDelivered && (
+                              <Badge variant="success" size="sm">{t('delivery.delivered')}</Badge>
+                            )}
+                          </div>
+                          {customer.data.address && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {customer.data.address}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {formatRate(customer.data.defaultRate)}
                           </p>
-                        )}
-                      </div>
-                    </button>
-                  </li>
-                ))}
+                          {customer.data.subscriptionQty && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {customer.data.subscriptionQty}L daily
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             </Card>
           </>
