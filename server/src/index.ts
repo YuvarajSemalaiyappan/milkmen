@@ -21,7 +21,7 @@ import syncRoutes from './routes/app/sync.js'
 import settingsRoutes from './routes/app/settings.js'
 import ratesRoutes from './routes/app/rates.js'
 import routesRoutes from './routes/app/routes.js'
-import areaRoutes from './routes/app/areas.js'
+import areasRoutes from './routes/app/areas.js'
 import adminAuthRoutes from './routes/admin/auth.js'
 import adminDashboardRoutes from './routes/admin/dashboard.js'
 import adminBusinessesRoutes from './routes/admin/businesses.js'
@@ -58,7 +58,7 @@ app.use('/api/sync', syncRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/rates', ratesRoutes)
 app.use('/api/routes', routesRoutes)
-app.use('/api/areas', areaRoutes)
+app.use('/api/areas', areasRoutes)
 
 // Admin Routes
 app.use('/api/admin/auth', adminAuthRoutes)
@@ -73,8 +73,8 @@ if (process.env.NODE_ENV === 'production') {
   // Admin panel — served under /admin
   const adminDist = path.join(__dirname, '../../apps/admin-panel/dist')
   app.use('/admin', express.static(adminDist))
-  // Admin SPA fallback — serve admin index.html for /admin/* routes
-  app.use('/admin/{*splat}', (_req, res) => {
+  // Admin SPA fallback — serve admin index.html for /admin/* non-API routes
+  app.use('/admin/*', (_req, res) => {
     res.sendFile('index.html', { root: adminDist })
   })
 

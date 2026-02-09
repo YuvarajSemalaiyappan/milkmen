@@ -277,10 +277,11 @@ export const reportsApi = {
 
 // Areas API
 export const areasApi = {
-  list: (routeId: string) => api.get(`/areas?routeId=${routeId}`),
-  create: (data: { routeId: string; name: string; description?: string }) =>
+  list: (routeId: string) =>
+    api.get(`/areas?routeId=${routeId}`),
+  create: (data: { routeId: string; name: string }) =>
     api.post('/areas', data),
-  update: (id: string, data: Partial<{ name: string; description?: string; sortOrder: number; isActive: boolean }>) =>
+  update: (id: string, data: Partial<{ name: string; isActive: boolean }>) =>
     api.put(`/areas/${id}`, data),
   delete: (id: string) => api.delete(`/areas/${id}`)
 }
@@ -299,18 +300,14 @@ export const routesApi = {
     api.post(`/routes/${routeId}/users`, { userIds }),
   removeUser: (routeId: string, userId: string) =>
     api.delete(`/routes/${routeId}/users/${userId}`),
-  assignFarmers: (routeId: string, farmerIds: string[], sortOrders?: Record<string, number>, areaId?: string) =>
-    api.post(`/routes/${routeId}/farmers`, { farmerIds, sortOrders, areaId }),
+  assignFarmers: (routeId: string, farmerIds: string[], sortOrders?: Record<string, number>, areaIds?: Record<string, string>) =>
+    api.post(`/routes/${routeId}/farmers`, { farmerIds, sortOrders, areaIds }),
   removeFarmer: (routeId: string, farmerId: string) =>
     api.delete(`/routes/${routeId}/farmers/${farmerId}`),
-  assignCustomers: (routeId: string, customerIds: string[], sortOrders?: Record<string, number>, areaId?: string) =>
-    api.post(`/routes/${routeId}/customers`, { customerIds, sortOrders, areaId }),
+  assignCustomers: (routeId: string, customerIds: string[], sortOrders?: Record<string, number>, areaIds?: Record<string, string>) =>
+    api.post(`/routes/${routeId}/customers`, { customerIds, sortOrders, areaIds }),
   removeCustomer: (routeId: string, customerId: string) =>
-    api.delete(`/routes/${routeId}/customers/${customerId}`),
-  getCustomerIds: (routeId: string, areaId?: string) =>
-    api.get(`/routes/${routeId}/customer-ids${areaId ? `?areaId=${areaId}` : ''}`),
-  getFarmerIds: (routeId: string, areaId?: string) =>
-    api.get(`/routes/${routeId}/farmer-ids${areaId ? `?areaId=${areaId}` : ''}`)
+    api.delete(`/routes/${routeId}/customers/${customerId}`)
 }
 
 // Subscription API

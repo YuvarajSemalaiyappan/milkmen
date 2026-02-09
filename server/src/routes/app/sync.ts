@@ -201,9 +201,8 @@ router.post('/push', authenticateToken, async (req: AuthRequest, res: Response) 
               phone: (data.phone as string) || null,
               address: (data.address as string) || null,
               defaultRate: data.defaultRate as number,
-              subscriptionQty: data.subscriptionQty != null ? (data.subscriptionQty as number) : null,
-              subscriptionAM: (data.subscriptionAM as boolean) ?? true,
-              subscriptionPM: (data.subscriptionPM as boolean) ?? false,
+              subscriptionQtyAM: data.subscriptionQtyAM != null ? (data.subscriptionQtyAM as number) : null,
+              subscriptionQtyPM: data.subscriptionQtyPM != null ? (data.subscriptionQtyPM as number) : null,
             }
           })
         } else if (operation === 'update') {
@@ -223,9 +222,8 @@ router.post('/push', authenticateToken, async (req: AuthRequest, res: Response) 
           if (data.phone !== undefined) updateData.phone = data.phone
           if (data.address !== undefined) updateData.address = data.address
           if (data.defaultRate !== undefined) updateData.defaultRate = data.defaultRate
-          if (data.subscriptionQty !== undefined) updateData.subscriptionQty = data.subscriptionQty
-          if (data.subscriptionAM !== undefined) updateData.subscriptionAM = data.subscriptionAM
-          if (data.subscriptionPM !== undefined) updateData.subscriptionPM = data.subscriptionPM
+          if (data.subscriptionQtyAM !== undefined) updateData.subscriptionQtyAM = data.subscriptionQtyAM
+          if (data.subscriptionQtyPM !== undefined) updateData.subscriptionQtyPM = data.subscriptionQtyPM
           if (data.isActive !== undefined) updateData.isActive = data.isActive
 
           result = await prisma.customer.update({

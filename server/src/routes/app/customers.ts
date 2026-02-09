@@ -11,9 +11,8 @@ const createCustomerSchema = z.object({
   phone: z.string().min(10).max(15).optional(),
   address: z.string().max(200).optional(),
   defaultRate: z.number().positive(),
-  subscriptionQty: z.number().positive().optional(),
-  subscriptionAM: z.boolean().optional(),
-  subscriptionPM: z.boolean().optional()
+  subscriptionQtyAM: z.number().positive().optional(),
+  subscriptionQtyPM: z.number().positive().optional()
 })
 
 const updateCustomerSchema = z.object({
@@ -21,9 +20,8 @@ const updateCustomerSchema = z.object({
   phone: z.string().min(10).max(15).optional().nullable(),
   address: z.string().max(200).optional().nullable(),
   defaultRate: z.number().positive().optional(),
-  subscriptionQty: z.number().positive().optional().nullable(),
-  subscriptionAM: z.boolean().optional(),
-  subscriptionPM: z.boolean().optional(),
+  subscriptionQtyAM: z.number().positive().optional().nullable(),
+  subscriptionQtyPM: z.number().positive().optional().nullable(),
   isActive: z.boolean().optional()
 })
 
@@ -42,7 +40,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     }
 
     if (subscribed === 'true') {
-      where.subscriptionQty = { not: null }
+      where.OR = [
+        { subscriptionQtyAM: { not: null } },
+        { subscriptionQtyPM: { not: null } }
+      ]
     }
 
     if (search && typeof search === 'string') {
@@ -91,14 +92,18 @@ router.get('/subscribed', authenticateToken, async (req: AuthRequest, res: Respo
 
     const where: Record<string, unknown> = {
       businessId,
-      isActive: true,
-      subscriptionQty: { not: null }
+      isActive: true
     }
 
     if (shift === 'MORNING') {
-      where.subscriptionAM = true
+      where.subscriptionQtyAM = { not: null }
     } else if (shift === 'EVENING') {
-      where.subscriptionPM = true
+      where.subscriptionQtyPM = { not: null }
+    } else {
+      where.OR = [
+        { subscriptionQtyAM: { not: null } },
+        { subscriptionQtyPM: { not: null } }
+      ]
     }
 
     const customers = await prisma.customer.findMany({
@@ -173,7 +178,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { name, phone, address, defaultRate, subscriptionQty, subscriptionAM, subscriptionPM } = validation.data
+    const { name, phone, address, defaultRate, subscriptionQtyAM, subscriptionQtyPM } = validation.data
 
     // Check for duplicate phone within business
     if (phone) {
@@ -195,9 +200,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         phone,
         address,
         defaultRate,
-        subscriptionQty,
-        subscriptionAM: subscriptionAM ?? true,
-        subscriptionPM: subscriptionPM ?? false
+        subscriptionQtyAM,
+        subscriptionQtyPM
       }
     })
 

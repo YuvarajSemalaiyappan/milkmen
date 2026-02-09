@@ -14,9 +14,8 @@ const customerSchema = z.object({
   phone: z.string().optional(),
   address: z.string().optional(),
   defaultRate: z.number().min(1, 'Rate must be greater than 0'),
-  subscriptionQty: z.number().optional(),
-  subscriptionAM: z.boolean(),
-  subscriptionPM: z.boolean()
+  subscriptionQtyAM: z.number().optional(),
+  subscriptionQtyPM: z.number().optional()
 })
 
 type CustomerFormData = z.infer<typeof customerSchema>
@@ -43,13 +42,10 @@ export function AddCustomerPage() {
       phone: '',
       address: '',
       defaultRate: 45,
-      subscriptionQty: undefined,
-      subscriptionAM: true,
-      subscriptionPM: false
+      subscriptionQtyAM: undefined,
+      subscriptionQtyPM: undefined
     }
   })
-
-  const subscriptionQty = watch('subscriptionQty')
 
   const onSubmit = async (data: CustomerFormData) => {
     try {
@@ -59,9 +55,8 @@ export function AddCustomerPage() {
         phone: data.phone || undefined,
         address: data.address || undefined,
         defaultRate: data.defaultRate,
-        subscriptionQty: data.subscriptionQty || undefined,
-        subscriptionAM: data.subscriptionAM,
-        subscriptionPM: data.subscriptionPM
+        subscriptionQtyAM: data.subscriptionQtyAM || undefined,
+        subscriptionQtyPM: data.subscriptionQtyPM || undefined
       })
 
       // Assign to route if selected and customer has a server ID
@@ -162,40 +157,25 @@ export function AddCustomerPage() {
                 {t('customer.subscription')}
               </h3>
 
-              <Input
-                label={t('customer.dailyQty')}
-                type="number"
-                step="0.1"
-                placeholder="Daily quantity (optional)"
-                error={errors.subscriptionQty?.message}
-                {...register('subscriptionQty', { valueAsNumber: true })}
-              />
+              <div className="space-y-4">
+                <Input
+                  label={t('customer.morningQty')}
+                  type="number"
+                  step="0.1"
+                  placeholder="Morning quantity (optional)"
+                  error={errors.subscriptionQtyAM?.message}
+                  {...register('subscriptionQtyAM', { valueAsNumber: true })}
+                />
 
-              {subscriptionQty && subscriptionQty > 0 && (
-                <div className="mt-4 space-y-3">
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                      {...register('subscriptionAM')}
-                    />
-                    <span className="text-gray-700 dark:text-gray-200">
-                      {t('customer.morningDelivery')}
-                    </span>
-                  </label>
-
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                      {...register('subscriptionPM')}
-                    />
-                    <span className="text-gray-700 dark:text-gray-200">
-                      {t('customer.eveningDelivery')}
-                    </span>
-                  </label>
-                </div>
-              )}
+                <Input
+                  label={t('customer.eveningQty')}
+                  type="number"
+                  step="0.1"
+                  placeholder="Evening quantity (optional)"
+                  error={errors.subscriptionQtyPM?.message}
+                  {...register('subscriptionQtyPM', { valueAsNumber: true })}
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 pt-4">

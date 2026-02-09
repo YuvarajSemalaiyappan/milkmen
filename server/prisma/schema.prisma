@@ -25,6 +25,7 @@ model Business {
   payments            Payment[]
   rates               Rate[]
   routes              Route[]
+  areas               Area[]
   subscription        Subscription?
   subscriptionPayments SubscriptionPayment[]
 }
@@ -68,8 +69,6 @@ model Farmer {
   phone       String?
   village     String?
   defaultRate Decimal  @db.Decimal(6, 2) // Default rate per liter
-  collectAM   Boolean  @default(true)    // Morning collection
-  collectPM   Boolean  @default(false)   // Evening collection
   isActive    Boolean  @default(true)
   balance     Decimal  @default(0) @db.Decimal(10, 2) // Positive = we owe them
   createdAt   DateTime @default(now())
@@ -108,10 +107,9 @@ model Customer {
   address         String?
   defaultRate     Decimal  @db.Decimal(6, 2) // Default rate per liter
 
-  // Subscription (optional)
-  subscriptionQty Decimal? @db.Decimal(5, 2) // Default daily quantity
-  subscriptionAM  Boolean  @default(true)    // Morning delivery
-  subscriptionPM  Boolean  @default(false)   // Evening delivery
+  // Subscription quantities (optional) - separate for morning and evening
+  subscriptionQtyAM Decimal? @db.Decimal(5, 2) // Morning delivery quantity
+  subscriptionQtyPM Decimal? @db.Decimal(5, 2) // Evening delivery quantity
 
   isActive  Boolean  @default(true)
   balance   Decimal  @default(0) @db.Decimal(10, 2) // Positive = they owe us
@@ -324,24 +322,6 @@ model Route {
   @@index([businessId, isActive])
 }
 
-model Area {
-  id          String   @id @default(cuid())
-  routeId     String
-  route       Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  routeCustomers RouteCustomer[]
-  routeFarmers   RouteFarmer[]
-
-  @@unique([routeId, name])
-  @@index([routeId, sortOrder])
-}
-
 model UserRoute {
   id        String   @id @default(cuid())
   userId    String
@@ -385,6 +365,24 @@ model RouteCustomer {
   @@unique([routeId, customerId])
   @@index([routeId, sortOrder])
   @@index([areaId])
+}
+
+model Area {
+  id          String   @id @default(cuid())
+  routeId     String
+  route       Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  name        String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  routeFarmers   RouteFarmer[]
+  routeCustomers RouteCustomer[]
+
+  @@unique([routeId, name])
+  @@index([routeId, isActive])
 }
 
 // ============================================
@@ -446,19 +444,10 @@ model SubscriptionPayment {
 }
 
 enum SubscriptionPlan {
-  FREE        // 30 days free trial
   MONTHLY     // 30 days
   QUARTERLY   // 90 days
   HALF_YEARLY // 180 days
   ANNUAL      // 365 days
-}
-
-// Admin-configurable plan pricing
-model PlanPricing {
-  id        String           @id @default(cuid())
-  plan      SubscriptionPlan @unique
-  amount    Decimal          @db.Decimal(10, 2)
-  updatedAt DateTime         @updatedAt
 }
 
 enum SubscriptionStatus {

@@ -5,6 +5,15 @@ export type DeliveryStatus = 'DELIVERED' | 'SKIPPED' | 'CANCELLED'
 export type PaymentType = 'PAID_TO_FARMER' | 'RECEIVED_FROM_CUSTOMER' | 'ADVANCE_TO_FARMER' | 'ADVANCE_FROM_CUSTOMER'
 export type PaymentMethod = 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'OTHER'
 export type SyncStatus = 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED'
+export type SubscriptionPlan = 'FREE' | 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'ANNUAL'
+
+export interface SubscriptionInfo {
+  plan: SubscriptionPlan
+  status: 'INACTIVE' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED'
+  active: boolean
+  endDate: string | null
+  daysRemaining: number
+}
 
 // Base entity with sync support
 export interface SyncableEntity {
@@ -45,8 +54,6 @@ export interface Farmer {
   phone?: string
   village?: string
   defaultRate: number
-  collectAM: boolean
-  collectPM: boolean
   isActive: boolean
   balance: number
   createdAt: string
@@ -59,8 +66,6 @@ export interface LocalFarmer extends SyncableEntity {
     phone?: string
     village?: string
     defaultRate: number
-    collectAM: boolean
-    collectPM: boolean
     isActive: boolean
     balance: number
   }
@@ -74,9 +79,8 @@ export interface Customer {
   phone?: string
   address?: string
   defaultRate: number
-  subscriptionQty?: number
-  subscriptionAM: boolean
-  subscriptionPM: boolean
+  subscriptionQtyAM?: number
+  subscriptionQtyPM?: number
   isActive: boolean
   balance: number
   createdAt: string
@@ -89,9 +93,8 @@ export interface LocalCustomer extends SyncableEntity {
     phone?: string
     address?: string
     defaultRate: number
-    subscriptionQty?: number
-    subscriptionAM: boolean
-    subscriptionPM: boolean
+    subscriptionQtyAM?: number
+    subscriptionQtyPM?: number
     isActive: boolean
     balance: number
   }
@@ -260,12 +263,12 @@ export interface RouteCustomer {
   sortOrder: number
 }
 
+// Area
 export interface Area {
   id: string
   routeId: string
+  businessId: string
   name: string
-  description?: string
-  sortOrder: number
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -273,15 +276,15 @@ export interface Area {
 
 export interface AreaWithCounts extends Area {
   _count: {
-    routeCustomers: number
     routeFarmers: number
+    routeCustomers: number
   }
 }
 
 // User sort orders
 export interface UserFarmerOrder {
   id: string
-  localId: string
+  odlocalId: string
   userId: string
   farmerId: string
   sortOrder: number
@@ -306,18 +309,6 @@ export interface SyncQueueItem {
   status: 'pending' | 'processing' | 'failed'
   retryCount: number
   createdAt: number
-}
-
-// Subscription types
-export type SubscriptionPlan = 'FREE' | 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'ANNUAL'
-export type SubscriptionStatus = 'INACTIVE' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED'
-
-export interface SubscriptionInfo {
-  plan: SubscriptionPlan
-  status: SubscriptionStatus
-  active: boolean
-  endDate: string | null
-  daysRemaining: number
 }
 
 // Auth types

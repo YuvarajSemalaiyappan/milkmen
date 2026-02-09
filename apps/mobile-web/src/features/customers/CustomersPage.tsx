@@ -110,11 +110,14 @@ export function CustomersPage() {
 
                     <div className="flex items-center gap-3 mt-2">
                       {/* Subscription Info */}
-                      {customer.data.subscriptionQty && (
+                      {customer.data.subscriptionQtyAM && (
+                        <Badge variant="warning" className="flex items-center gap-1">
+                          <Sun className="w-3 h-3" /> {customer.data.subscriptionQtyAM}L
+                        </Badge>
+                      )}
+                      {customer.data.subscriptionQtyPM && (
                         <Badge variant="info" className="flex items-center gap-1">
-                          {customer.data.subscriptionQty}L/day
-                          {customer.data.subscriptionAM && <Sun className="w-3 h-3 ml-1" />}
-                          {customer.data.subscriptionPM && <Moon className="w-3 h-3 ml-1" />}
+                          <Moon className="w-3 h-3" /> {customer.data.subscriptionQtyPM}L
                         </Badge>
                       )}
 

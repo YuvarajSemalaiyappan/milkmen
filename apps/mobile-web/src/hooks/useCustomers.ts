@@ -26,9 +26,8 @@ export function useCustomers() {
       phone?: string
       address?: string
       defaultRate: number
-      subscriptionQty?: number
-      subscriptionAM?: boolean
-      subscriptionPM?: boolean
+      subscriptionQtyAM?: number
+      subscriptionQtyPM?: number
     }) => {
       const localId = generateLocalId()
       const timestamp = now()
@@ -44,9 +43,8 @@ export function useCustomers() {
           phone: data.phone,
           address: data.address,
           defaultRate: data.defaultRate,
-          subscriptionQty: data.subscriptionQty,
-          subscriptionAM: data.subscriptionAM ?? true,
-          subscriptionPM: data.subscriptionPM ?? false,
+          subscriptionQtyAM: data.subscriptionQtyAM,
+          subscriptionQtyPM: data.subscriptionQtyPM,
           isActive: true,
           balance: 0
         }
@@ -75,9 +73,8 @@ export function useCustomers() {
         phone?: string
         address?: string
         defaultRate: number
-        subscriptionQty?: number
-        subscriptionAM?: boolean
-        subscriptionPM?: boolean
+        subscriptionQtyAM?: number
+        subscriptionQtyPM?: number
         isActive: boolean
       }>
     ) => {
@@ -145,10 +142,10 @@ export function useCustomers() {
     async (shift?: 'MORNING' | 'EVENING') => {
       return db.customers
         .filter((c) => {
-          if (!c.data.isActive || !c.data.subscriptionQty) return false
-          if (shift === 'MORNING') return c.data.subscriptionAM
-          if (shift === 'EVENING') return c.data.subscriptionPM
-          return c.data.subscriptionAM || c.data.subscriptionPM
+          if (!c.data.isActive) return false
+          if (shift === 'MORNING') return !!c.data.subscriptionQtyAM
+          if (shift === 'EVENING') return !!c.data.subscriptionQtyPM
+          return !!c.data.subscriptionQtyAM || !!c.data.subscriptionQtyPM
         })
         .toArray()
     },

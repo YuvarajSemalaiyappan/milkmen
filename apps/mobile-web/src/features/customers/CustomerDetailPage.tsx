@@ -27,9 +27,8 @@ const customerSchema = z.object({
   phone: z.string().optional(),
   address: z.string().optional(),
   defaultRate: z.number().min(1, 'Rate must be greater than 0'),
-  subscriptionQty: z.number().optional(),
-  subscriptionAM: z.boolean(),
-  subscriptionPM: z.boolean()
+  subscriptionQtyAM: z.number().optional(),
+  subscriptionQtyPM: z.number().optional()
 })
 
 type CustomerFormData = z.infer<typeof customerSchema>
@@ -59,8 +58,6 @@ export function CustomerDetailPage() {
     resolver: zodResolver(customerSchema)
   })
 
-  const subscriptionAM = watch('subscriptionAM')
-  const subscriptionPM = watch('subscriptionPM')
 
   useEffect(() => {
     if (id) {
@@ -79,9 +76,8 @@ export function CustomerDetailPage() {
         phone: data.data.phone || '',
         address: data.data.address || '',
         defaultRate: data.data.defaultRate,
-        subscriptionQty: data.data.subscriptionQty || undefined,
-        subscriptionAM: data.data.subscriptionAM,
-        subscriptionPM: data.data.subscriptionPM
+        subscriptionQtyAM: data.data.subscriptionQtyAM || undefined,
+        subscriptionQtyPM: data.data.subscriptionQtyPM || undefined
       })
     }
   }
@@ -101,9 +97,8 @@ export function CustomerDetailPage() {
         phone: data.phone || undefined,
         address: data.address || undefined,
         defaultRate: data.defaultRate,
-        subscriptionQty: data.subscriptionQty,
-        subscriptionAM: data.subscriptionAM,
-        subscriptionPM: data.subscriptionPM
+        subscriptionQtyAM: data.subscriptionQtyAM,
+        subscriptionQtyPM: data.subscriptionQtyPM
       })
       setIsEditing(false)
       loadCustomer()
@@ -229,37 +224,32 @@ export function CustomerDetailPage() {
               <div className="border-t pt-4 mt-4">
                 <h3 className="font-semibold mb-3">{t('customer.subscription')}</h3>
 
-                <Input
-                  label={t('customer.dailyQty')}
-                  type="number"
-                  step="0.5"
-                  placeholder="Daily quantity (liters)"
-                  error={errors.subscriptionQty?.message}
-                  {...register('subscriptionQty', { valueAsNumber: true })}
-                />
-
-                <div className="mt-3 space-y-2">
-                  <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 text-primary-600 rounded"
-                      checked={subscriptionAM}
-                      onChange={(e) => setValue('subscriptionAM', e.target.checked)}
-                    />
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-3 border rounded-lg">
                     <Sun className="w-5 h-5 text-yellow-500" />
-                    <span>{t('common.morning')} (AM)</span>
-                  </label>
-
-                  <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 text-primary-600 rounded"
-                      checked={subscriptionPM}
-                      onChange={(e) => setValue('subscriptionPM', e.target.checked)}
+                    <Input
+                      label={t('customer.morningQty')}
+                      type="number"
+                      step="0.5"
+                      placeholder="Morning quantity (liters)"
+                      error={errors.subscriptionQtyAM?.message}
+                      {...register('subscriptionQtyAM', { valueAsNumber: true })}
+                      className="flex-1"
                     />
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 border rounded-lg">
                     <Moon className="w-5 h-5 text-blue-500" />
-                    <span>{t('common.evening')} (PM)</span>
-                  </label>
+                    <Input
+                      label={t('customer.eveningQty')}
+                      type="number"
+                      step="0.5"
+                      placeholder="Evening quantity (liters)"
+                      error={errors.subscriptionQtyPM?.message}
+                      {...register('subscriptionQtyPM', { valueAsNumber: true })}
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -321,27 +311,30 @@ export function CustomerDetailPage() {
             </Card>
 
             {/* Subscription Card */}
-            {customer.data.subscriptionQty && (
+            {(customer.data.subscriptionQtyAM || customer.data.subscriptionQtyPM) && (
               <Card className="bg-blue-50 border-blue-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">{t('customer.subscription')}</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {customer.data.subscriptionQty}L / {t('common.day')}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    {customer.data.subscriptionAM && (
+                <p className="text-sm text-gray-600 mb-2">{t('customer.subscription')}</p>
+                <div className="flex flex-wrap gap-3">
+                  {customer.data.subscriptionQtyAM && (
+                    <div className="flex items-center gap-2">
                       <Badge variant="warning" className="flex items-center gap-1">
                         <Sun className="w-3 h-3" /> AM
                       </Badge>
-                    )}
-                    {customer.data.subscriptionPM && (
+                      <span className="text-lg font-bold text-blue-600">
+                        {customer.data.subscriptionQtyAM}L
+                      </span>
+                    </div>
+                  )}
+                  {customer.data.subscriptionQtyPM && (
+                    <div className="flex items-center gap-2">
                       <Badge variant="info" className="flex items-center gap-1">
                         <Moon className="w-3 h-3" /> PM
                       </Badge>
-                    )}
-                  </div>
+                      <span className="text-lg font-bold text-blue-600">
+                        {customer.data.subscriptionQtyPM}L
+                      </span>
+                    </div>
+                  )}
                 </div>
               </Card>
             )}

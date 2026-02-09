@@ -37,6 +37,12 @@ import {
   RouteAssignFarmersPage,
   RouteAssignCustomersPage
 } from '@/features/routes'
+import {
+  AreasPage,
+  AddAreaPage,
+  AreaDetailPage,
+  AreaAssignCustomersPage
+} from '@/features/areas'
 import { MorePage } from '@/features/more'
 import { LoginPage, RegisterPage } from '@/features/auth'
 
@@ -267,6 +273,22 @@ export const router = createBrowserRouter([
       {
         path: '/routes/:id/assign-customers',
         element: <RouteAssignCustomersPage />
+      },
+      {
+        path: '/routes/:routeId/areas',
+        element: <AreasPage />
+      },
+      {
+        path: '/routes/:routeId/areas/add',
+        element: <AddAreaPage />
+      },
+      {
+        path: '/routes/:routeId/areas/:areaId',
+        element: <AreaDetailPage />
+      },
+      {
+        path: '/routes/:routeId/areas/:areaId/assign-customers',
+        element: <AreaAssignCustomersPage />
       },
       {
         path: '/more',

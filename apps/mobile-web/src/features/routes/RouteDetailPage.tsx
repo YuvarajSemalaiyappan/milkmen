@@ -12,12 +12,11 @@ import {
   UserPlus,
   ChevronRight,
   Phone,
-  X,
-  Plus
+  X
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
-import { useRoutes, useAreas } from '@/hooks'
+import { useRoutes } from '@/hooks'
 import { useAuthStore } from '@/store'
 import { formatCurrency } from '@/utils'
 
@@ -27,6 +26,12 @@ const routeSchema = z.object({
 })
 
 type RouteFormData = z.infer<typeof routeSchema>
+
+interface AreaItem {
+  id: string
+  name: string
+  _count: { routeCustomers: number }
+}
 
 interface RouteDetail {
   id: string
@@ -47,13 +52,7 @@ interface RouteDetail {
     sortOrder: number
     customer: { id: string; name: string; phone?: string; address?: string; defaultRate: number; isActive: boolean; balance: number }
   }>
-  areas: Array<{
-    id: string
-    name: string
-    description?: string
-    sortOrder: number
-    _count: { routeCustomers: number; routeFarmers: number }
-  }>
+  areas?: AreaItem[]
 }
 
 export function RouteDetailPage() {
@@ -71,10 +70,6 @@ export function RouteDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [newAreaName, setNewAreaName] = useState('')
-  const [isAddingArea, setIsAddingArea] = useState(false)
-
-  const { createArea, deleteArea } = useAreas(id || null)
 
   const {
     register,
@@ -147,29 +142,6 @@ export function RouteDetailPage() {
     if (!id) return
     await removeCustomer(id, customerId)
     loadRoute()
-  }
-
-  const handleAddArea = async () => {
-    if (!id || !newAreaName.trim()) return
-    try {
-      setIsAddingArea(true)
-      await createArea({ routeId: id, name: newAreaName.trim() })
-      setNewAreaName('')
-      loadRoute()
-    } catch {
-      // Toast already shown by hook
-    } finally {
-      setIsAddingArea(false)
-    }
-  }
-
-  const handleDeleteArea = async (areaId: string) => {
-    try {
-      await deleteArea(areaId)
-      loadRoute()
-    } catch {
-      // Toast already shown by hook
-    }
   }
 
   if (!route) {
@@ -253,50 +225,37 @@ export function RouteDetailPage() {
                   <MapPin className="w-4 h-4" />
                   {t('areas.title')} ({route.areas?.length || 0})
                 </h3>
+                {isManager && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => navigate(`/routes/${id}/areas`)}
+                  >
+                    {t('areas.manageAreas')}
+                  </Button>
+                )}
               </div>
-
-              {route.areas && route.areas.length > 0 && (
-                <div className="space-y-2 mb-3">
+              {(!route.areas || route.areas.length === 0) ? (
+                <p className="text-sm text-gray-500 text-center py-2">
+                  {t('areas.noAreas')}
+                </p>
+              ) : (
+                <div className="space-y-2">
                   {route.areas.map((area) => (
-                    <div key={area.id} className="flex items-center justify-between py-2 border-b last:border-0 dark:border-gray-700">
+                    <div
+                      key={area.id}
+                      className="flex items-center justify-between py-2 border-b last:border-0 dark:border-gray-700 cursor-pointer"
+                      onClick={() => navigate(`/routes/${id}/areas/${area.id}`)}
+                    >
                       <div>
                         <p className="font-medium text-gray-900 dark:text-white">{area.name}</p>
                         <p className="text-sm text-gray-500">
-                          {area._count.routeFarmers} {t('areas.farmers')} &middot; {area._count.routeCustomers} {t('areas.customers')}
+                          {area._count.routeCustomers} {t('customer.title').toLowerCase()}
                         </p>
                       </div>
-                      {isManager && (
-                        <button
-                          onClick={() => handleDeleteArea(area.id)}
-                          className="p-1 text-gray-400 hover:text-red-500"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
                     </div>
                   ))}
-                </div>
-              )}
-
-              {isManager && (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newAreaName}
-                    onChange={(e) => setNewAreaName(e.target.value)}
-                    placeholder={t('areas.enterName')}
-                    className="flex-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white"
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddArea() }}
-                  />
-                  <Button
-                    size="sm"
-                    onClick={handleAddArea}
-                    isLoading={isAddingArea}
-                    disabled={!newAreaName.trim()}
-                    leftIcon={<Plus className="w-4 h-4" />}
-                  >
-                    {t('common.add')}
-                  </Button>
                 </div>
               )}
             </Card>

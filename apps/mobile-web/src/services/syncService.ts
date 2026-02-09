@@ -5,7 +5,6 @@ import type { SyncQueueItem, SyncStatus } from '@/types'
 
 class SyncService {
   private isProcessing = false
-  private isSyncing = false
 
   constructor() {
     // Listen for online/offline events
@@ -215,18 +214,8 @@ class SyncService {
 
   // Full sync - process queue and pull changes
   async sync(): Promise<void> {
-    // Prevent concurrent syncs
-    if (this.isSyncing) return
-    this.isSyncing = true
-
-    try {
-      // Save lastSyncAt BEFORE processing, so pullChanges uses the correct timestamp
-      const lastSyncAt = useSyncStore.getState().lastSyncAt || 0
-      await this.processQueue()
-      await this.pullChanges(lastSyncAt)
-    } finally {
-      this.isSyncing = false
-    }
+    await this.processQueue()
+    await this.pullChanges()
   }
 
   // Retry failed items
@@ -247,11 +236,11 @@ class SyncService {
   }
 
   // Pull changes from server
-  async pullChanges(overrideLastSync?: number): Promise<void> {
+  async pullChanges(): Promise<void> {
     if (!navigator.onLine) return
 
     try {
-      const lastSync = overrideLastSync ?? useSyncStore.getState().lastSyncAt ?? 0
+      const lastSync = useSyncStore.getState().lastSyncAt || 0
       const response = await syncApi.pull(lastSync) as {
         success: boolean
         data?: {
@@ -273,9 +262,6 @@ class SyncService {
         if (collections) await this.mergeCollections(collections)
         if (deliveries) await this.mergeDeliveries(deliveries)
         if (payments) await this.mergePayments(payments)
-
-        // Update lastSyncAt after successful pull
-        useSyncStore.getState().finishSync(true)
       }
     } catch (error) {
       console.error('Pull changes error:', error)
@@ -289,29 +275,12 @@ class SyncService {
     return Date.now()
   }
 
-  // Helper to normalize date to YYYY-MM-DD format (local time)
+  // Normalize a date value to YYYY-MM-DD format.
+  // Server sends ISO datetime strings (e.g. "2025-02-09T00:00:00.000Z")
+  // but frontend filters compare against plain date strings ("2025-02-09").
   private toDateString(value: unknown): string {
-    if (typeof value === 'string') {
-      // If already in YYYY-MM-DD format, return as is
-      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        return value
-      }
-      // Otherwise parse and convert to local date
-      const d = new Date(value)
-      const year = d.getFullYear()
-      const month = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
-    }
-    if (value instanceof Date) {
-      const year = value.getFullYear()
-      const month = String(value.getMonth() + 1).padStart(2, '0')
-      const day = String(value.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
-    }
-    // Default to today
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    if (typeof value === 'string') return value.slice(0, 10)
+    return new Date().toISOString().slice(0, 10)
   }
 
   // Merge methods for each table type
@@ -332,9 +301,6 @@ class SyncService {
         }
       }
 
-      // Server balance is always the source of truth
-      const serverBalance = (record.balance as number) || 0
-
       if (!local || updatedAt > local.updatedAt) {
         await db.farmers.put({
           id,
@@ -347,15 +313,10 @@ class SyncService {
             phone: record.phone as string | undefined,
             village: record.village as string | undefined,
             defaultRate: record.defaultRate as number,
-            collectAM: (record.collectAM as boolean) ?? true,
-            collectPM: (record.collectPM as boolean) ?? false,
             isActive: record.isActive as boolean,
-            balance: serverBalance
+            balance: (record.balance as number) || 0
           }
         })
-      } else if (local.data.balance !== serverBalance) {
-        // Even if local record is newer, always correct balance from server
-        await db.farmers.update(id, { 'data.balance': serverBalance })
       }
     }
   }
@@ -377,9 +338,6 @@ class SyncService {
         }
       }
 
-      // Server balance is always the source of truth
-      const serverBalance = (record.balance as number) || 0
-
       if (!local || updatedAt > local.updatedAt) {
         await db.customers.put({
           id,
@@ -396,12 +354,9 @@ class SyncService {
             subscriptionAM: (record.subscriptionAM as boolean) || false,
             subscriptionPM: (record.subscriptionPM as boolean) || false,
             isActive: record.isActive as boolean,
-            balance: serverBalance
+            balance: (record.balance as number) || 0
           }
         })
-      } else if (local.data.balance !== serverBalance) {
-        // Even if local record is newer, always correct balance from server
-        await db.customers.update(id, { 'data.balance': serverBalance })
       }
     }
   }

@@ -3,7 +3,7 @@ import { areasApi } from '@/services/api'
 import { useAppStore } from '@/store'
 import type { ApiResponse, AreaWithCounts } from '@/types'
 
-export function useAreas(routeId: string | null) {
+export function useAreas(routeId?: string | null) {
   const addToast = useAppStore((state) => state.addToast)
   const [areas, setAreas] = useState<AreaWithCounts[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -30,7 +30,7 @@ export function useAreas(routeId: string | null) {
     fetchAreas()
   }, [fetchAreas])
 
-  const createArea = useCallback(async (data: { routeId: string; name: string; description?: string }) => {
+  const createArea = useCallback(async (data: { routeId: string; name: string }) => {
     try {
       const response = await areasApi.create(data) as ApiResponse<AreaWithCounts>
       if (response.success) {
@@ -45,7 +45,7 @@ export function useAreas(routeId: string | null) {
     }
   }, [addToast, fetchAreas])
 
-  const updateArea = useCallback(async (id: string, data: Partial<{ name: string; description?: string; sortOrder: number; isActive: boolean }>) => {
+  const updateArea = useCallback(async (id: string, data: Partial<{ name: string; isActive: boolean }>) => {
     try {
       const response = await areasApi.update(id, data) as ApiResponse<AreaWithCounts>
       if (response.success) {
@@ -77,9 +77,11 @@ export function useAreas(routeId: string | null) {
   return {
     areas,
     isLoading,
-    fetchAreas,
     createArea,
     updateArea,
-    deleteArea
+    deleteArea,
+    fetchAreas
   }
 }
+
+export default useAreas
