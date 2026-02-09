@@ -69,6 +69,8 @@ model Farmer {
   phone       String?
   village     String?
   defaultRate Decimal  @db.Decimal(6, 2) // Default rate per liter
+  collectAM   Boolean  @default(true)  // Collect in morning shift
+  collectPM   Boolean  @default(false) // Collect in evening shift
   isActive    Boolean  @default(true)
   balance     Decimal  @default(0) @db.Decimal(10, 2) // Positive = we owe them
   createdAt   DateTime @default(now())
@@ -444,10 +446,20 @@ model SubscriptionPayment {
 }
 
 enum SubscriptionPlan {
+  FREE        // 30 days trial
   MONTHLY     // 30 days
   QUARTERLY   // 90 days
   HALF_YEARLY // 180 days
   ANNUAL      // 365 days
+}
+
+// Plan pricing (admin-managed)
+model PlanPricing {
+  id        String           @id @default(cuid())
+  plan      SubscriptionPlan @unique
+  amount    Decimal          @db.Decimal(10, 2)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 }
 
 enum SubscriptionStatus {
