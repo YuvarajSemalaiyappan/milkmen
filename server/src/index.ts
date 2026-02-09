@@ -74,7 +74,7 @@ if (process.env.NODE_ENV === 'production') {
   const adminDist = path.join(__dirname, '../../apps/admin-panel/dist')
   app.use('/admin', express.static(adminDist))
   // Admin SPA fallback — serve admin index.html for /admin/* non-API routes
-  app.use('/admin/*', (_req, res) => {
+  app.use('/admin/*splat', (_req, res) => {
     res.sendFile('index.html', { root: adminDist })
   })
 
