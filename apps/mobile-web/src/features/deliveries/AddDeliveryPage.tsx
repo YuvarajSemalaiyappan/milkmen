@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Search, User } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
-import { ShiftToggle, NumberPad } from '@/components/common'
+import { ShiftToggle, QuickPad } from '@/components/common'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useDeliveries } from '@/hooks/useDeliveries'
 import { useAppStore } from '@/store'
@@ -233,12 +233,9 @@ export function AddDeliveryPage() {
                   {quantity || '0'} <span className="text-xl">L</span>
                 </p>
               </div>
-              <NumberPad
+              <QuickPad
                 value={quantity}
                 onChange={setQuantity}
-                maxLength={6}
-                allowDecimal
-                decimalPlaces={1}
               />
             </Card>
 

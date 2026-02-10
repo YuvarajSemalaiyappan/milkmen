@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Search, User } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
-import { ShiftToggle, NumberPad, RouteFilter, SortableList } from '@/components/common'
+import { ShiftToggle, QuickPad, RouteFilter, SortableList } from '@/components/common'
 import { useFarmers, useCollections, useRouteFarmerIds, useSortOrder } from '@/hooks'
 import { useAppStore, useRouteStore } from '@/store'
 import { farmersApi } from '@/services/api'
@@ -263,12 +263,9 @@ export function AddCollectionPage() {
                   {quantity || '0'} <span className="text-lg">L</span>
                 </p>
               </div>
-              <NumberPad
+              <QuickPad
                 value={quantity}
                 onChange={setQuantity}
-                maxLength={6}
-                allowDecimal
-                decimalPlaces={2}
               />
             </Card>
 

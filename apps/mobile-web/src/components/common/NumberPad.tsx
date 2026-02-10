@@ -1,5 +1,94 @@
+import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Delete } from 'lucide-react'
+import { Delete, Hash, Grid3X3 } from 'lucide-react'
+
+export interface QuickPadProps {
+  value: string
+  onChange: (value: string) => void
+  className?: string
+}
+
+export function QuickPad({ value, onChange, className }: QuickPadProps) {
+  const [showFullPad, setShowFullPad] = useState(false)
+
+  const currentValue = parseFloat(value) || 0
+
+  const handleQuickAdd = (amount: number) => {
+    const newValue = currentValue + amount
+    // Round to 2 decimal places to avoid floating point issues
+    const rounded = Math.round(newValue * 100) / 100
+    onChange(rounded.toString())
+  }
+
+  const handleClear = () => {
+    onChange('')
+  }
+
+  if (showFullPad) {
+    return (
+      <div className={className}>
+        <NumberPad
+          value={value}
+          onChange={onChange}
+          maxLength={6}
+          allowDecimal
+          decimalPlaces={2}
+        />
+        <button
+          type="button"
+          onClick={() => setShowFullPad(false)}
+          className="mt-2 w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl font-medium text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 active:bg-gray-300 dark:active:bg-gray-500 transition-colors"
+        >
+          <Grid3X3 className="w-4 h-4" />
+          Quick Pad
+        </button>
+      </div>
+    )
+  }
+
+  const quickKeys = [
+    { label: '1', value: 1 },
+    { label: '2', value: 2 },
+    { label: '3', value: 3 },
+    { label: '4', value: 4 },
+    { label: '5', value: 5 },
+    { label: '.25', value: 0.25 },
+    { label: '.50', value: 0.50 },
+    { label: '.75', value: 0.75 },
+  ]
+
+  return (
+    <div className={clsx('grid grid-cols-3 gap-2', className)}>
+      {quickKeys.map((key) => (
+        <button
+          key={key.label}
+          type="button"
+          onClick={() => handleQuickAdd(key.value)}
+          className="flex items-center justify-center min-h-[56px] rounded-xl font-semibold text-xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white active:bg-gray-200 dark:active:bg-gray-600 active:scale-95 transform transition-colors duration-150"
+        >
+          +{key.label}
+        </button>
+      ))}
+      {/* Clear */}
+      <button
+        type="button"
+        onClick={handleClear}
+        className="flex items-center justify-center min-h-[56px] rounded-xl font-semibold text-lg bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 active:bg-red-200 dark:active:bg-red-900/70 active:scale-95 transform transition-colors duration-150"
+      >
+        C
+      </button>
+      {/* 123 toggle */}
+      <button
+        type="button"
+        onClick={() => setShowFullPad(true)}
+        className="flex items-center justify-center gap-1.5 min-h-[56px] rounded-xl font-semibold text-lg bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 active:bg-blue-200 dark:active:bg-blue-900/70 active:scale-95 transform transition-colors duration-150"
+      >
+        <Hash className="w-5 h-5" />
+        123
+      </button>
+    </div>
+  )
+}
 
 export interface NumberPadProps {
   value: string
