@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/localDb'
 import { useAuthStore } from '@/store'
+import { farmersApi, customersApi } from '@/services/api'
 import type { Shift } from '@/types'
 
 type OrderType = 'customer' | 'farmer'
@@ -54,6 +55,7 @@ export function useSortOrder(type: OrderType, shift?: Shift) {
   const saveSortOrder = useCallback(async (orderedIds: string[]) => {
     if (!userId) return
 
+    // Save locally first (offline-first)
     await db.transaction('rw', type === 'customer' ? db.customerOrders : db.farmerOrders, async () => {
       if (type === 'customer' && shift) {
         // Clear existing orders for this user+shift
@@ -92,6 +94,21 @@ export function useSortOrder(type: OrderType, shift?: Shift) {
         )
       }
     })
+
+    // Sync to server in background
+    try {
+      if (type === 'customer') {
+        await customersApi.updateSortOrder(
+          orderedIds.map((id, index) => ({ customerId: id, shift, sortOrder: index }))
+        )
+      } else {
+        await farmersApi.updateSortOrder(
+          orderedIds.map((id, index) => ({ farmerId: id, sortOrder: index }))
+        )
+      }
+    } catch (error) {
+      console.error('Failed to sync sort order to server:', error)
+    }
   }, [userId, type, shift])
 
   return { applySortOrder, saveSortOrder, isLoaded: orders !== undefined }
