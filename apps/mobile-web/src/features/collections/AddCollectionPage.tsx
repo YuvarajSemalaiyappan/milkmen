@@ -7,9 +7,10 @@ import { Button, Input, Card } from '@/components/ui'
 import { ShiftToggle, NumberPad, RouteFilter, SortableList } from '@/components/common'
 import { useFarmers, useCollections, useRouteFarmerIds, useSortOrder } from '@/hooks'
 import { useAppStore, useRouteStore } from '@/store'
+import { farmersApi } from '@/services/api'
 import { formatCurrency, formatRate } from '@/utils/format'
 import { calculateTotal } from '@/utils/calculate'
-import type { LocalFarmer } from '@/types'
+import type { LocalFarmer, ApiResponse, Farmer } from '@/types'
 
 type Step = 'select-farmer' | 'enter-quantity'
 
@@ -21,7 +22,7 @@ export function AddCollectionPage() {
   const currentShift = useAppStore((state) => state.currentShift)
   const setCurrentShift = useAppStore((state) => state.setCurrentShift)
 
-  const { activeFarmers, searchFarmers } = useFarmers()
+  const { activeFarmers, searchFarmers, isLoading } = useFarmers()
   const { addCollection } = useCollections()
   const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
   const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
@@ -40,13 +41,45 @@ export function AddCollectionPage() {
   // Check if farmer is pre-selected
   useEffect(() => {
     const farmerId = searchParams.get('farmerId')
-    if (farmerId) {
-      const farmer = activeFarmers.find((f) => f.id === farmerId)
-      if (farmer) {
-        selectFarmer(farmer)
+    if (!farmerId || selectedFarmer) return
+
+    // Try local DB first
+    const farmer = activeFarmers.find((f) => f.id === farmerId)
+    if (farmer) {
+      selectFarmer(farmer)
+      return
+    }
+
+    // Fall back to server API if not found locally
+    if (activeFarmers.length > 0 || isLoading) return
+    const fetchFarmer = async () => {
+      try {
+        const response = await farmersApi.get(farmerId) as ApiResponse<Farmer>
+        if (response.success && response.data) {
+          const f = response.data
+          const local: LocalFarmer = {
+            id: f.id,
+            localId: f.id,
+            syncStatus: 'SYNCED',
+            createdAt: new Date(f.createdAt).getTime(),
+            updatedAt: new Date(f.updatedAt).getTime(),
+            data: {
+              name: f.name,
+              phone: f.phone,
+              village: f.village,
+              defaultRate: f.defaultRate,
+              isActive: f.isActive,
+              balance: f.balance,
+            },
+          }
+          selectFarmer(local)
+        }
+      } catch (error) {
+        console.error('Failed to fetch farmer:', error)
       }
     }
-  }, [searchParams, activeFarmers])
+    fetchFarmer()
+  }, [searchParams, activeFarmers, isLoading, selectedFarmer])
 
   // Filter farmers on search
   useEffect(() => {

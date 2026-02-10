@@ -8,9 +8,10 @@ import { ShiftToggle, NumberPad } from '@/components/common'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useDeliveries } from '@/hooks/useDeliveries'
 import { useAppStore } from '@/store'
+import { customersApi } from '@/services/api'
 import { formatCurrency, formatRate } from '@/utils/format'
 import { calculateTotal } from '@/utils/calculate'
-import type { LocalCustomer } from '@/types'
+import type { LocalCustomer, ApiResponse, Customer } from '@/types'
 
 type Step = 'select-customer' | 'enter-quantity'
 
@@ -22,7 +23,7 @@ export function AddDeliveryPage() {
   const currentShift = useAppStore((state) => state.currentShift)
   const setCurrentShift = useAppStore((state) => state.setCurrentShift)
 
-  const { activeCustomers, searchCustomers } = useCustomers()
+  const { activeCustomers, searchCustomers, isLoading } = useCustomers()
   const { addDelivery } = useDeliveries()
 
   const [step, setStep] = useState<Step>('select-customer')
@@ -37,13 +38,47 @@ export function AddDeliveryPage() {
   // Check if customer is pre-selected
   useEffect(() => {
     const customerId = searchParams.get('customerId')
-    if (customerId) {
-      const customer = activeCustomers.find((c) => c.id === customerId)
-      if (customer) {
-        selectCustomer(customer)
+    if (!customerId || selectedCustomer) return
+
+    // Try local DB first
+    const customer = activeCustomers.find((c) => c.id === customerId)
+    if (customer) {
+      selectCustomer(customer)
+      return
+    }
+
+    // Fall back to server API if not found locally
+    if (activeCustomers.length > 0 || isLoading) return
+    const fetchCustomer = async () => {
+      try {
+        const response = await customersApi.get(customerId) as ApiResponse<Customer>
+        if (response.success && response.data) {
+          const c = response.data
+          const local: LocalCustomer = {
+            id: c.id,
+            localId: c.id,
+            syncStatus: 'SYNCED',
+            createdAt: new Date(c.createdAt).getTime(),
+            updatedAt: new Date(c.updatedAt).getTime(),
+            data: {
+              name: c.name,
+              phone: c.phone,
+              address: c.address,
+              defaultRate: c.defaultRate,
+              subscriptionQtyAM: c.subscriptionQtyAM,
+              subscriptionQtyPM: c.subscriptionQtyPM,
+              isActive: c.isActive,
+              balance: c.balance,
+            },
+          }
+          selectCustomer(local)
+        }
+      } catch (error) {
+        console.error('Failed to fetch customer:', error)
       }
     }
-  }, [searchParams, activeCustomers])
+    fetchCustomer()
+  }, [searchParams, activeCustomers, isLoading, selectedCustomer])
 
   // Filter customers on search
   useEffect(() => {
