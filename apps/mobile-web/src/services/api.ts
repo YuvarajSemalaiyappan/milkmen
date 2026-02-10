@@ -146,9 +146,9 @@ export const authApi = {
 export const farmersApi = {
   list: () => api.get('/farmers'),
   get: (id: string) => api.get(`/farmers/${id}`),
-  create: (data: { name: string; phone?: string; village?: string; defaultRate: number }) =>
+  create: (data: { name: string; phone?: string; village?: string; defaultRate: number; collectAM?: boolean; collectPM?: boolean }) =>
     api.post('/farmers', data),
-  update: (id: string, data: Partial<{ name: string; phone?: string; village?: string; defaultRate: number; isActive: boolean }>) =>
+  update: (id: string, data: Partial<{ name: string; phone?: string; village?: string; defaultRate: number; collectAM: boolean; collectPM: boolean; isActive: boolean }>) =>
     api.put(`/farmers/${id}`, data),
   delete: (id: string) => api.delete(`/farmers/${id}`),
   updateSortOrder: (orders: { farmerId: string; sortOrder: number }[]) =>
@@ -164,18 +164,16 @@ export const customersApi = {
     phone?: string
     address?: string
     defaultRate: number
-    subscriptionQty?: number
-    subscriptionAM?: boolean
-    subscriptionPM?: boolean
+    subscriptionQtyAM?: number
+    subscriptionQtyPM?: number
   }) => api.post('/customers', data),
   update: (id: string, data: Partial<{
     name: string
     phone?: string
     address?: string
     defaultRate: number
-    subscriptionQty?: number
-    subscriptionAM?: boolean
-    subscriptionPM?: boolean
+    subscriptionQtyAM?: number
+    subscriptionQtyPM?: number
     isActive: boolean
   }>) => api.put(`/customers/${id}`, data),
   delete: (id: string) => api.delete(`/customers/${id}`),

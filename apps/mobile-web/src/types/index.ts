@@ -54,6 +54,8 @@ export interface Farmer {
   phone?: string
   village?: string
   defaultRate: number
+  collectAM?: boolean
+  collectPM?: boolean
   isActive: boolean
   balance: number
   createdAt: string
@@ -66,6 +68,8 @@ export interface LocalFarmer extends SyncableEntity {
     phone?: string
     village?: string
     defaultRate: number
+    collectAM?: boolean
+    collectPM?: boolean
     isActive: boolean
     balance: number
   }
