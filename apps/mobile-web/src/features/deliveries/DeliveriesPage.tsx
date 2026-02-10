@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Phone, MapPin, ChevronRight, Users } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
-import { ShiftToggle, RouteFilter } from '@/components/common'
+import { ShiftToggle, RouteFilter, SortableList } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
+import { useSortOrder } from '@/hooks/useSortOrder'
 import { routesApi } from '@/services/api'
 import type { ApiResponse } from '@/types'
 
@@ -39,6 +40,7 @@ export function DeliveriesPage() {
 
   const [customers, setCustomers] = useState<RouteCustomerItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const { applySortOrder, saveSortOrder } = useSortOrder('customer', currentShift)
 
   useEffect(() => {
     if (!selectedRouteId) {
@@ -66,6 +68,21 @@ export function DeliveriesPage() {
   const filteredCustomers = selectedAreaId
     ? customers.filter((rc) => rc.areaId === selectedAreaId)
     : customers
+
+  const customerMap = useMemo(() => {
+    const map = new Map<string, RouteCustomerItem>()
+    filteredCustomers.forEach((rc) => map.set(rc.customer.id, rc))
+    return map
+  }, [filteredCustomers])
+
+  const sortedCustomerIds = useMemo(() => {
+    const items = filteredCustomers.map((rc) => ({ id: rc.customer.id }))
+    return applySortOrder(items).map((i) => i.id)
+  }, [filteredCustomers, applySortOrder])
+
+  const handleReorder = useCallback((newIds: string[]) => {
+    saveSortOrder(newIds)
+  }, [saveSortOrder])
 
   return (
     <AppShell title={t('delivery.title')}>
@@ -107,36 +124,43 @@ export function DeliveriesPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {filteredCustomers.length} {t('customer.customersFound')}
             </p>
-            {filteredCustomers.map((rc) => (
-              <Card
-                key={rc.id}
-                className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
-                onClick={() => navigate(`/deliver/add?customerId=${rc.customer.id}`)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 dark:text-white truncate">
-                      {rc.customer.name}
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                      {rc.customer.phone && (
-                        <span className="flex items-center gap-1">
-                          <Phone className="w-3 h-3" />
-                          {rc.customer.phone}
-                        </span>
-                      )}
-                      {rc.customer.address && (
-                        <span className="flex items-center gap-1 truncate">
-                          <MapPin className="w-3 h-3 flex-shrink-0" />
-                          {rc.customer.address}
-                        </span>
-                      )}
+            <SortableList
+              items={sortedCustomerIds}
+              onReorder={handleReorder}
+              renderItem={(id) => {
+                const rc = customerMap.get(id)
+                if (!rc) return null
+                return (
+                  <Card
+                    className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
+                    onClick={() => navigate(`/deliver/add?customerId=${rc.customer.id}`)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white truncate">
+                          {rc.customer.name}
+                        </p>
+                        <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                          {rc.customer.phone && (
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {rc.customer.phone}
+                            </span>
+                          )}
+                          {rc.customer.address && (
+                            <span className="flex items-center gap-1 truncate">
+                              <MapPin className="w-3 h-3 flex-shrink-0" />
+                              {rc.customer.address}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
                     </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
-                </div>
-              </Card>
-            ))}
+                  </Card>
+                )
+              }}
+            />
           </div>
         )}
       </div>

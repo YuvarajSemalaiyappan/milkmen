@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Phone, MapPin, ChevronRight, Users } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
-import { ShiftToggle, RouteFilter } from '@/components/common'
+import { ShiftToggle, RouteFilter, SortableList } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
+import { useSortOrder } from '@/hooks/useSortOrder'
 import { routesApi } from '@/services/api'
 import type { ApiResponse } from '@/types'
 
@@ -39,6 +40,7 @@ export function CollectionsPage() {
 
   const [farmers, setFarmers] = useState<RouteFarmerItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const { applySortOrder, saveSortOrder } = useSortOrder('farmer')
 
   useEffect(() => {
     if (!selectedRouteId) {
@@ -66,6 +68,21 @@ export function CollectionsPage() {
   const filteredFarmers = selectedAreaId
     ? farmers.filter((rf) => rf.areaId === selectedAreaId)
     : farmers
+
+  const farmerMap = useMemo(() => {
+    const map = new Map<string, RouteFarmerItem>()
+    filteredFarmers.forEach((rf) => map.set(rf.farmer.id, rf))
+    return map
+  }, [filteredFarmers])
+
+  const sortedFarmerIds = useMemo(() => {
+    const items = filteredFarmers.map((rf) => ({ id: rf.farmer.id }))
+    return applySortOrder(items).map((i) => i.id)
+  }, [filteredFarmers, applySortOrder])
+
+  const handleReorder = useCallback((newIds: string[]) => {
+    saveSortOrder(newIds)
+  }, [saveSortOrder])
 
   return (
     <AppShell title={t('collection.title')}>
@@ -107,36 +124,43 @@ export function CollectionsPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {filteredFarmers.length} {t('farmer.farmersFound')}
             </p>
-            {filteredFarmers.map((rf) => (
-              <Card
-                key={rf.id}
-                className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
-                onClick={() => navigate(`/collect/add?farmerId=${rf.farmer.id}`)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 dark:text-white truncate">
-                      {rf.farmer.name}
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                      {rf.farmer.phone && (
-                        <span className="flex items-center gap-1">
-                          <Phone className="w-3 h-3" />
-                          {rf.farmer.phone}
-                        </span>
-                      )}
-                      {rf.farmer.village && (
-                        <span className="flex items-center gap-1 truncate">
-                          <MapPin className="w-3 h-3 flex-shrink-0" />
-                          {rf.farmer.village}
-                        </span>
-                      )}
+            <SortableList
+              items={sortedFarmerIds}
+              onReorder={handleReorder}
+              renderItem={(id) => {
+                const rf = farmerMap.get(id)
+                if (!rf) return null
+                return (
+                  <Card
+                    className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
+                    onClick={() => navigate(`/collect/add?farmerId=${rf.farmer.id}`)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white truncate">
+                          {rf.farmer.name}
+                        </p>
+                        <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                          {rf.farmer.phone && (
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {rf.farmer.phone}
+                            </span>
+                          )}
+                          {rf.farmer.village && (
+                            <span className="flex items-center gap-1 truncate">
+                              <MapPin className="w-3 h-3 flex-shrink-0" />
+                              {rf.farmer.village}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
                     </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
-                </div>
-              </Card>
-            ))}
+                  </Card>
+                )
+              }}
+            />
           </div>
         )}
       </div>
