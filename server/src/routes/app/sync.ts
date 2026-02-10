@@ -96,7 +96,8 @@ router.get('/pull', authenticateToken, async (req: AuthRequest, res: Response) =
     console.error('Sync pull error:', error)
     return res.status(500).json({
       success: false,
-      error: 'Failed to pull sync data'
+      error: 'Failed to pull sync data',
+      detail: error instanceof Error ? error.message : String(error)
     })
   }
 })

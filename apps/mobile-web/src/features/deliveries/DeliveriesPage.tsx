@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Phone, MapPin, ChevronRight, Users } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
-import { ShiftToggle, RouteFilter, AreaFilter } from '@/components/common'
+import { ShiftToggle, RouteFilter } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
 import { routesApi } from '@/services/api'
 import type { ApiResponse } from '@/types'
@@ -77,11 +77,8 @@ export function DeliveriesPage() {
           fullWidth
         />
 
-        {/* Route Filter */}
+        {/* Route Filter (includes Area Filter) */}
         <RouteFilter />
-
-        {/* Area Filter */}
-        <AreaFilter />
 
         {/* Customer List */}
         {!selectedRouteId ? (
