@@ -484,18 +484,24 @@ router.post('/:id/farmers', authenticateToken, requireOwnerOrManager, async (req
       })
     }
 
-    // Replace all farmer assignments
-    await prisma.$transaction([
-      prisma.routeFarmer.deleteMany({ where: { routeId } }),
-      prisma.routeFarmer.createMany({
-        data: farmerIds.map((farmerId, index) => ({
-          routeId,
-          farmerId,
-          sortOrder: sortOrders?.[farmerId] ?? index,
-          areaId: areaIds?.[farmerId] ?? null
-        }))
-      })
-    ])
+    // Upsert farmer assignments (add or update without removing existing)
+    await prisma.$transaction(
+      farmerIds.map((farmerId, index) =>
+        prisma.routeFarmer.upsert({
+          where: { routeId_farmerId: { routeId, farmerId } },
+          create: {
+            routeId,
+            farmerId,
+            sortOrder: sortOrders?.[farmerId] ?? index,
+            areaId: areaIds?.[farmerId] ?? null
+          },
+          update: {
+            sortOrder: sortOrders?.[farmerId] ?? undefined,
+            areaId: areaIds?.[farmerId] ?? undefined
+          }
+        })
+      )
+    )
 
     return res.json({
       success: true,
@@ -584,18 +590,24 @@ router.post('/:id/customers', authenticateToken, requireOwnerOrManager, async (r
       })
     }
 
-    // Replace all customer assignments
-    await prisma.$transaction([
-      prisma.routeCustomer.deleteMany({ where: { routeId } }),
-      prisma.routeCustomer.createMany({
-        data: customerIds.map((customerId, index) => ({
-          routeId,
-          customerId,
-          sortOrder: sortOrders?.[customerId] ?? index,
-          areaId: areaIds?.[customerId] ?? null
-        }))
-      })
-    ])
+    // Upsert customer assignments (add or update without removing existing)
+    await prisma.$transaction(
+      customerIds.map((customerId, index) =>
+        prisma.routeCustomer.upsert({
+          where: { routeId_customerId: { routeId, customerId } },
+          create: {
+            routeId,
+            customerId,
+            sortOrder: sortOrders?.[customerId] ?? index,
+            areaId: areaIds?.[customerId] ?? null
+          },
+          update: {
+            sortOrder: sortOrders?.[customerId] ?? undefined,
+            areaId: areaIds?.[customerId] ?? undefined
+          }
+        })
+      )
+    )
 
     return res.json({
       success: true,
