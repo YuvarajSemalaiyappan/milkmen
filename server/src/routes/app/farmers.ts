@@ -113,6 +113,51 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   }
 })
 
+// PUT /api/farmers/sort-order - Bulk update sort order for farmers
+// NOTE: Must be before /:id routes to avoid "sort-order" matching as an ID
+router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, businessId } = req.user!
+    const { orders } = req.body
+
+    if (!Array.isArray(orders) || orders.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'orders must be a non-empty array'
+      })
+    }
+
+    // Verify all farmers belong to business
+    const farmerIds = orders.map((o: { farmerId: string }) => o.farmerId)
+    const farmers = await prisma.farmer.findMany({
+      where: { id: { in: farmerIds }, businessId },
+      select: { id: true }
+    })
+    const validIds = new Set(farmers.map((f) => f.id))
+
+    // Upsert sort orders in a transaction
+    await prisma.$transaction(
+      orders
+        .filter((o: { farmerId: string }) => validIds.has(o.farmerId))
+        .map((o: { farmerId: string; sortOrder: number }) =>
+          prisma.userFarmerOrder.upsert({
+            where: { userId_farmerId: { userId, farmerId: o.farmerId } },
+            update: { sortOrder: o.sortOrder },
+            create: { userId, farmerId: o.farmerId, sortOrder: o.sortOrder }
+          })
+        )
+    )
+
+    return res.json({ success: true, message: 'Sort orders updated' })
+  } catch (error) {
+    console.error('Bulk update sort order error:', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update sort orders'
+    })
+  }
+})
+
 // POST /api/farmers - Create a new farmer
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -257,50 +302,6 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
     return res.status(500).json({
       success: false,
       error: 'Failed to delete farmer'
-    })
-  }
-})
-
-// PUT /api/farmers/sort-order - Bulk update sort order for farmers
-router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Response) => {
-  try {
-    const { userId, businessId } = req.user!
-    const { orders } = req.body
-
-    if (!Array.isArray(orders) || orders.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'orders must be a non-empty array'
-      })
-    }
-
-    // Verify all farmers belong to business
-    const farmerIds = orders.map((o: { farmerId: string }) => o.farmerId)
-    const farmers = await prisma.farmer.findMany({
-      where: { id: { in: farmerIds }, businessId },
-      select: { id: true }
-    })
-    const validIds = new Set(farmers.map((f) => f.id))
-
-    // Upsert sort orders in a transaction
-    await prisma.$transaction(
-      orders
-        .filter((o: { farmerId: string }) => validIds.has(o.farmerId))
-        .map((o: { farmerId: string; sortOrder: number }) =>
-          prisma.userFarmerOrder.upsert({
-            where: { userId_farmerId: { userId, farmerId: o.farmerId } },
-            update: { sortOrder: o.sortOrder },
-            create: { userId, farmerId: o.farmerId, sortOrder: o.sortOrder }
-          })
-        )
-    )
-
-    return res.json({ success: true, message: 'Sort orders updated' })
-  } catch (error) {
-    console.error('Bulk update sort order error:', error)
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to update sort orders'
     })
   }
 })

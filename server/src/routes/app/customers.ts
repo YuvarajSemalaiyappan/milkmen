@@ -164,6 +164,54 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   }
 })
 
+// PUT /api/customers/sort-order - Bulk update sort order for customers
+// NOTE: Must be before /:id routes to avoid "sort-order" matching as an ID
+router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, businessId } = req.user!
+    const { orders } = req.body
+
+    if (!Array.isArray(orders) || orders.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'orders must be a non-empty array'
+      })
+    }
+
+    // Verify all customers belong to business
+    const customerIds = orders.map((o: { customerId: string }) => o.customerId)
+    const customers = await prisma.customer.findMany({
+      where: { id: { in: customerIds }, businessId },
+      select: { id: true }
+    })
+    const validIds = new Set(customers.map((c) => c.id))
+
+    // Upsert sort orders in a transaction
+    await prisma.$transaction(
+      orders
+        .filter((o: { customerId: string }) => validIds.has(o.customerId))
+        .map((o: { customerId: string; sortOrder: number; shift?: string }) => {
+          const shiftValue = (o.shift as 'MORNING' | 'EVENING') || null
+          return prisma.userCustomerOrder.upsert({
+            where: {
+              userId_customerId_shift: { userId, customerId: o.customerId, shift: shiftValue }
+            },
+            update: { sortOrder: o.sortOrder },
+            create: { userId, customerId: o.customerId, sortOrder: o.sortOrder, shift: shiftValue }
+          })
+        })
+    )
+
+    return res.json({ success: true, message: 'Sort orders updated' })
+  } catch (error) {
+    console.error('Bulk update sort order error:', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update sort orders'
+    })
+  }
+})
+
 // POST /api/customers - Create a new customer
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -310,54 +358,6 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
     return res.status(500).json({
       success: false,
       error: 'Failed to delete customer'
-    })
-  }
-})
-
-// PUT /api/customers/sort-order - Bulk update sort order for customers
-router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Response) => {
-  try {
-    const { userId, businessId } = req.user!
-    const { orders } = req.body
-
-    if (!Array.isArray(orders) || orders.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'orders must be a non-empty array'
-      })
-    }
-
-    // Verify all customers belong to business
-    const customerIds = orders.map((o: { customerId: string }) => o.customerId)
-    const customers = await prisma.customer.findMany({
-      where: { id: { in: customerIds }, businessId },
-      select: { id: true }
-    })
-    const validIds = new Set(customers.map((c) => c.id))
-
-    // Upsert sort orders in a transaction
-    await prisma.$transaction(
-      orders
-        .filter((o: { customerId: string }) => validIds.has(o.customerId))
-        .map((o: { customerId: string; sortOrder: number; shift?: string }) => {
-          const shiftValue = (o.shift as 'MORNING' | 'EVENING') || null
-          return prisma.userCustomerOrder.upsert({
-            where: {
-              userId_customerId_shift: { userId, customerId: o.customerId, shift: shiftValue }
-            },
-            update: { sortOrder: o.sortOrder },
-            create: { userId, customerId: o.customerId, sortOrder: o.sortOrder, shift: shiftValue }
-          })
-        }
-        )
-    )
-
-    return res.json({ success: true, message: 'Sort orders updated' })
-  } catch (error) {
-    console.error('Bulk update sort order error:', error)
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to update sort orders'
     })
   }
 })
