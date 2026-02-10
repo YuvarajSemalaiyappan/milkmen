@@ -14,7 +14,7 @@ type SyncOperation = typeof VALID_OPERATIONS[number]
 // GET /api/sync/pull - Pull changes from server since last sync
 router.get('/pull', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const { businessId } = req.user!
+    const { userId, businessId } = req.user!
     const { since } = req.query
 
     const sinceTimestamp = since && typeof since === 'string' ? Number(since) : 0
@@ -79,6 +79,12 @@ router.get('/pull', authenticateToken, async (req: AuthRequest, res: Response) =
       })
     ])
 
+    // Fetch user sort orders (always send all, they're small)
+    const [farmerOrders, customerOrders] = await Promise.all([
+      prisma.userFarmerOrder.findMany({ where: { userId } }),
+      prisma.userCustomerOrder.findMany({ where: { userId } })
+    ])
+
     const serverTime = new Date().toISOString()
 
     return res.json({
@@ -89,6 +95,8 @@ router.get('/pull', authenticateToken, async (req: AuthRequest, res: Response) =
         collections,
         deliveries,
         payments,
+        farmerOrders,
+        customerOrders,
         serverTime
       }
     })

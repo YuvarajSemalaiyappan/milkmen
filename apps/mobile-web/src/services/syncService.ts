@@ -254,19 +254,23 @@ class SyncService {
           collections?: unknown[]
           deliveries?: unknown[]
           payments?: unknown[]
+          farmerOrders?: unknown[]
+          customerOrders?: unknown[]
         }
       }
 
       if (response.success && response.data) {
         // Merge server data with local data
         // This is a simple implementation - you may need conflict resolution
-        const { farmers, customers, collections, deliveries, payments } = response.data
+        const { farmers, customers, collections, deliveries, payments, farmerOrders, customerOrders } = response.data
 
         if (farmers) await this.mergeFarmers(farmers)
         if (customers) await this.mergeCustomers(customers)
         if (collections) await this.mergeCollections(collections)
         if (deliveries) await this.mergeDeliveries(deliveries)
         if (payments) await this.mergePayments(payments)
+        if (farmerOrders) await this.mergeFarmerOrders(farmerOrders)
+        if (customerOrders) await this.mergeCustomerOrders(customerOrders)
       }
     } catch (error) {
       console.error('Pull changes error:', error)
@@ -422,6 +426,51 @@ class SyncService {
         })
       }
     }
+  }
+
+  private async mergeFarmerOrders(records: unknown[]): Promise<void> {
+    const typedRecords = records as Array<Record<string, unknown>>
+    if (typedRecords.length === 0) return
+
+    const userId = typedRecords[0].userId as string
+
+    // Replace all farmer orders for this user with server data
+    const existing = await db.farmerOrders.where('[userId]').equals([userId]).toArray()
+    await db.farmerOrders.bulkDelete(existing.map((e) => e.id))
+
+    await db.farmerOrders.bulkAdd(
+      typedRecords.map((record) => ({
+        id: record.id as string,
+        localId: record.id as string,
+        userId: record.userId as string,
+        farmerId: record.farmerId as string,
+        sortOrder: record.sortOrder as number
+      }))
+    )
+  }
+
+  private async mergeCustomerOrders(records: unknown[]): Promise<void> {
+    const typedRecords = records as Array<Record<string, unknown>>
+    if (typedRecords.length === 0) return
+
+    const userId = typedRecords[0].userId as string
+
+    // Replace all customer orders for this user with server data
+    const existing = await db.customerOrders.where('[userId+shift]').above([userId]).toArray()
+    // Filter to only this user's records
+    const userRecords = existing.filter((e) => e.userId === userId)
+    await db.customerOrders.bulkDelete(userRecords.map((e) => e.id))
+
+    await db.customerOrders.bulkAdd(
+      typedRecords.map((record) => ({
+        id: record.id as string,
+        localId: record.id as string,
+        userId: record.userId as string,
+        customerId: record.customerId as string,
+        shift: record.shift as string | undefined,
+        sortOrder: record.sortOrder as number
+      }))
+    )
   }
 
   private async mergePayments(records: unknown[]): Promise<void> {
