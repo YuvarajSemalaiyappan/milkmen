@@ -214,8 +214,13 @@ class SyncService {
 
   // Full sync - process queue and pull changes
   async sync(): Promise<void> {
+    // Capture lastSyncAt BEFORE processQueue, because processQueue calls
+    // finishSync(true) which sets lastSyncAt to Date.now(). If we read it
+    // after, pullChanges would ask the server for records updated after NOW,
+    // which returns nothing.
+    const lastSyncAt = useSyncStore.getState().lastSyncAt || 0
     await this.processQueue()
-    await this.pullChanges()
+    await this.pullChanges(lastSyncAt)
   }
 
   // Retry failed items
@@ -236,11 +241,11 @@ class SyncService {
   }
 
   // Pull changes from server
-  async pullChanges(): Promise<void> {
+  async pullChanges(sinceOverride?: number): Promise<void> {
     if (!navigator.onLine) return
 
     try {
-      const lastSync = useSyncStore.getState().lastSyncAt || 0
+      const lastSync = sinceOverride ?? (useSyncStore.getState().lastSyncAt || 0)
       const response = await syncApi.pull(lastSync) as {
         success: boolean
         data?: {
@@ -312,9 +317,9 @@ class SyncService {
             name: record.name as string,
             phone: record.phone as string | undefined,
             village: record.village as string | undefined,
-            defaultRate: record.defaultRate as number,
+            defaultRate: Number(record.defaultRate) || 0,
             isActive: record.isActive as boolean,
-            balance: (record.balance as number) || 0
+            balance: Number(record.balance) || 0
           }
         })
       }
@@ -349,12 +354,11 @@ class SyncService {
             name: record.name as string,
             phone: record.phone as string | undefined,
             address: record.address as string | undefined,
-            defaultRate: record.defaultRate as number,
-            subscriptionQty: record.subscriptionQty as number | undefined,
-            subscriptionAM: (record.subscriptionAM as boolean) || false,
-            subscriptionPM: (record.subscriptionPM as boolean) || false,
+            defaultRate: Number(record.defaultRate) || 0,
+            subscriptionQtyAM: record.subscriptionQtyAM != null ? Number(record.subscriptionQtyAM) : undefined,
+            subscriptionQtyPM: record.subscriptionQtyPM != null ? Number(record.subscriptionQtyPM) : undefined,
             isActive: record.isActive as boolean,
-            balance: (record.balance as number) || 0
+            balance: Number(record.balance) || 0
           }
         })
       }
@@ -377,12 +381,12 @@ class SyncService {
             farmerId: record.farmerId as string,
             date: this.toDateString(record.date),
             shift: record.shift as 'MORNING' | 'EVENING',
-            quantity: record.quantity as number,
-            fatContent: record.fatContent as number | undefined,
-            ratePerLiter: record.ratePerLiter as number,
-            totalAmount: record.totalAmount as number,
+            quantity: Number(record.quantity) || 0,
+            fatContent: record.fatContent != null ? Number(record.fatContent) : undefined,
+            ratePerLiter: Number(record.ratePerLiter) || 0,
+            totalAmount: Number(record.totalAmount) || 0,
             rateEditedAt: record.rateEditedAt as string | undefined,
-            originalRate: record.originalRate as number | undefined,
+            originalRate: record.originalRate != null ? Number(record.originalRate) : undefined,
             notes: record.notes as string | undefined
           }
         })
@@ -406,11 +410,11 @@ class SyncService {
             customerId: record.customerId as string,
             date: this.toDateString(record.date),
             shift: record.shift as 'MORNING' | 'EVENING',
-            quantity: record.quantity as number,
-            ratePerLiter: record.ratePerLiter as number,
-            totalAmount: record.totalAmount as number,
+            quantity: Number(record.quantity) || 0,
+            ratePerLiter: Number(record.ratePerLiter) || 0,
+            totalAmount: Number(record.totalAmount) || 0,
             rateEditedAt: record.rateEditedAt as string | undefined,
-            originalRate: record.originalRate as number | undefined,
+            originalRate: record.originalRate != null ? Number(record.originalRate) : undefined,
             isSubscription: (record.isSubscription as boolean) || false,
             status: (record.status as 'DELIVERED' | 'SKIPPED' | 'CANCELLED') || 'DELIVERED',
             notes: record.notes as string | undefined
@@ -436,7 +440,7 @@ class SyncService {
             farmerId: record.farmerId as string | undefined,
             customerId: record.customerId as string | undefined,
             date: this.toDateString(record.date),
-            amount: record.amount as number,
+            amount: Number(record.amount) || 0,
             type: record.type as 'PAID_TO_FARMER' | 'RECEIVED_FROM_CUSTOMER' | 'ADVANCE_TO_FARMER' | 'ADVANCE_FROM_CUSTOMER',
             method: (record.method as 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'OTHER') || 'CASH',
             notes: record.notes as string | undefined
