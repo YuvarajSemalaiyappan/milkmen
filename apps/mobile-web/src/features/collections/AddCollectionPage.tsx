@@ -204,7 +204,7 @@ export function AddCollectionPage() {
         )}
 
         {step === 'enter-quantity' && selectedFarmer && (
-          <div className="flex flex-col" style={{ height: 'calc(100dvh - 160px)' }}>
+          <div className="flex flex-col">
             {/* Farmer Info + Rate/Fat/Notes */}
             <Card>
               <div className="flex items-center gap-3 mb-3">
@@ -257,21 +257,19 @@ export function AddCollectionPage() {
             </Card>
 
             {/* Quantity Entry */}
-            <Card className="flex-1 flex flex-col mt-3">
+            <Card className="mt-3">
               <div className="text-center mb-2">
                 <p className="text-3xl font-bold text-gray-900 dark:text-white">
                   {quantity || '0'} <span className="text-lg">L</span>
                 </p>
               </div>
-              <div className="flex-1 flex flex-col justify-center">
-                <NumberPad
-                  value={quantity}
-                  onChange={setQuantity}
-                  maxLength={6}
-                  allowDecimal
-                  decimalPlaces={2}
-                />
-              </div>
+              <NumberPad
+                value={quantity}
+                onChange={setQuantity}
+                maxLength={6}
+                allowDecimal
+                decimalPlaces={2}
+              />
             </Card>
 
             {/* Total + Submit */}
