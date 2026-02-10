@@ -194,18 +194,18 @@ export function AddDeliveryPage() {
         )}
 
         {step === 'enter-quantity' && selectedCustomer && (
-          <>
-            {/* Selected Customer */}
+          <div className="flex flex-col">
+            {/* Customer Info + Rate/Notes */}
             <Card>
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
-                  <User className="w-6 h-6 text-green-600 dark:text-green-400" />
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center shrink-0">
+                  <User className="w-5 h-5 text-green-600 dark:text-green-400" />
                 </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900 dark:text-white">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 dark:text-white truncate">
                     {selectedCustomer.data.name}
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                     {selectedCustomer.data.address}
                   </p>
                 </div>
@@ -221,16 +221,28 @@ export function AddDeliveryPage() {
                   {t('common.edit')}
                 </Button>
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  label={t('delivery.ratePerLiter')}
+                  type="number"
+                  step="0.01"
+                  value={rate}
+                  onChange={(e) => setRate(e.target.value)}
+                />
+                <Input
+                  label={t('common.notes')}
+                  placeholder="--"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
             </Card>
 
             {/* Quantity Entry */}
-            <Card>
-              <div className="text-center mb-4">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                  {t('delivery.quantity')}
-                </p>
-                <p className="text-4xl font-bold text-gray-900 dark:text-white">
-                  {quantity || '0'} <span className="text-xl">L</span>
+            <Card className="mt-3">
+              <div className="text-center mb-2">
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                  {quantity || '0'} <span className="text-lg">L</span>
                 </p>
               </div>
               <QuickPad
@@ -239,47 +251,25 @@ export function AddDeliveryPage() {
               />
             </Card>
 
-            {/* Rate */}
-            <Card>
-              <Input
-                label={t('delivery.ratePerLiter')}
-                type="number"
-                step="0.01"
-                value={rate}
-                onChange={(e) => setRate(e.target.value)}
-              />
-              <Input
-                label={t('common.notes')}
-                placeholder="Optional notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="mt-4"
-              />
-            </Card>
-
-            {/* Total */}
-            <Card className="bg-green-50 border-green-200">
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-medium text-green-900">
-                  {t('delivery.totalAmount')}
-                </span>
-                <span className="text-2xl font-bold text-green-900">
+            {/* Total + Submit */}
+            <div className="mt-3 flex items-center gap-3">
+              <div className="flex-1 bg-green-50 dark:bg-green-900/30 rounded-xl px-4 py-3">
+                <p className="text-xs text-green-600 dark:text-green-400">{t('delivery.totalAmount')}</p>
+                <p className="text-xl font-bold text-green-900 dark:text-green-100">
                   {formatCurrency(total)}
-                </span>
+                </p>
               </div>
-            </Card>
-
-            {/* Submit */}
-            <Button
-              onClick={handleSubmit}
-              isLoading={isSubmitting}
-              disabled={!quantity || parseFloat(quantity) <= 0}
-              fullWidth
-              size="lg"
-            >
-              {t('common.save')}
-            </Button>
-          </>
+              <Button
+                onClick={handleSubmit}
+                isLoading={isSubmitting}
+                disabled={!quantity || parseFloat(quantity) <= 0}
+                size="lg"
+                className="h-full px-8"
+              >
+                {t('common.save')}
+              </Button>
+            </div>
+          </div>
         )}
       </div>
     </AppShell>

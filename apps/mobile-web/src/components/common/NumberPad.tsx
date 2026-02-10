@@ -66,7 +66,7 @@ export function QuickPad({ value, onChange, className }: QuickPadProps) {
           onClick={() => handleQuickAdd(key.value)}
           className="flex items-center justify-center min-h-[56px] rounded-xl font-semibold text-xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white active:bg-gray-200 dark:active:bg-gray-600 active:scale-95 transform transition-colors duration-150"
         >
-          +{key.label}
+          {key.label}
         </button>
       ))}
       {/* Clear */}
