@@ -111,7 +111,7 @@ export function DeliveriesPage() {
               <Card
                 key={rc.id}
                 className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
-                onClick={() => navigate(`/customers/${rc.customer.id}`)}
+                onClick={() => navigate(`/deliver/add?customerId=${rc.customer.id}`)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">

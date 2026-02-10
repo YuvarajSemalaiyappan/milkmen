@@ -111,7 +111,7 @@ export function CollectionsPage() {
               <Card
                 key={rf.id}
                 className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
-                onClick={() => navigate(`/farmers/${rf.farmer.id}`)}
+                onClick={() => navigate(`/collect/add?farmerId=${rf.farmer.id}`)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
