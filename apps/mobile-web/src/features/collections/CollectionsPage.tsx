@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { Phone, MapPin, ChevronRight, Users } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
@@ -8,6 +9,8 @@ import { ShiftToggle, RouteFilter, SortableList } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
 import { useSortOrder } from '@/hooks/useSortOrder'
 import { routesApi } from '@/services/api'
+import { db } from '@/db/localDb'
+import { getToday } from '@/utils/format'
 import type { ApiResponse } from '@/types'
 
 interface RouteFarmerItem {
@@ -42,6 +45,15 @@ export function CollectionsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const { applySortOrder, saveSortOrder } = useSortOrder('farmer')
 
+  // Track which farmers already have a collection today for the current shift
+  const completedFarmerIds = useLiveQuery(async () => {
+    const today = getToday()
+    const todayCollections = await db.collections
+      .filter((c) => c.data.date === today && c.data.shift === currentShift)
+      .toArray()
+    return new Set(todayCollections.map((c) => c.data.farmerId))
+  }, [currentShift])
+
   useEffect(() => {
     if (!selectedRouteId) {
       setFarmers([])
@@ -65,9 +77,14 @@ export function CollectionsPage() {
     fetchRouteFarmers()
   }, [selectedRouteId])
 
-  const filteredFarmers = selectedAreaId
+  const areaFilteredFarmers = selectedAreaId
     ? farmers.filter((rf) => rf.areaId === selectedAreaId)
     : farmers
+
+  // Only show farmers who are pending (no collection yet today for this shift)
+  const filteredFarmers = areaFilteredFarmers.filter(
+    (rf) => !completedFarmerIds?.has(rf.farmer.id)
+  )
 
   const farmerMap = useMemo(() => {
     const map = new Map<string, RouteFarmerItem>()
@@ -116,13 +133,15 @@ export function CollectionsPage() {
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 dark:text-gray-400">
-              {selectedAreaId ? t('areas.noFarmersAssigned') : t('routes.noFarmersAssigned')}
+              {areaFilteredFarmers.length > 0
+                ? t('collection.allCompleted')
+                : selectedAreaId ? t('areas.noFarmersAssigned') : t('routes.noFarmersAssigned')}
             </p>
           </div>
         ) : (
           <div className="space-y-2">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {filteredFarmers.length} {t('farmer.farmersFound')}
+              {filteredFarmers.length} {t('common.pending')} / {areaFilteredFarmers.length} {t('farmer.farmersFound')}
             </p>
             <SortableList
               items={sortedFarmerIds}

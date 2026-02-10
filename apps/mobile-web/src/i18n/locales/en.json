@@ -28,6 +28,7 @@
     "yesterday": "Yesterday",
     "all": "All",
     "none": "None",
+    "pending": "pending",
     "total": "Total",
     "balance": "Balance",
     "amount": "Amount",
@@ -222,7 +223,8 @@
     "originalRate": "Original rate",
     "editedOn": "Edited on",
     "addNew": "Add Collection",
-    "selectRouteHint": "Select a route to see farmers"
+    "selectRouteHint": "Select a route to see farmers",
+    "allCompleted": "All collections completed for this shift!"
   },
   "delivery": {
     "title": "Deliveries",
@@ -256,7 +258,8 @@
     "todayTitle": "Today's Deliveries",
     "noSubscriptions": "No subscriptions found",
     "addSubscriptionHint": "Add customers with subscriptions first",
-    "selectRouteHint": "Select a route to see customers"
+    "selectRouteHint": "Select a route to see customers",
+    "allCompleted": "All deliveries completed for this shift!"
   },
   "payment": {
     "title": "Payments",

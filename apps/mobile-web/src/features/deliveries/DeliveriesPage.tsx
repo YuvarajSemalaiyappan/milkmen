@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { Phone, MapPin, ChevronRight, Users } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
@@ -8,6 +9,8 @@ import { ShiftToggle, RouteFilter, SortableList } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
 import { useSortOrder } from '@/hooks/useSortOrder'
 import { routesApi } from '@/services/api'
+import { db } from '@/db/localDb'
+import { getToday } from '@/utils/format'
 import type { ApiResponse } from '@/types'
 
 interface RouteCustomerItem {
@@ -42,6 +45,15 @@ export function DeliveriesPage() {
   const [isLoading, setIsLoading] = useState(false)
   const { applySortOrder, saveSortOrder } = useSortOrder('customer', currentShift)
 
+  // Track which customers already have a delivery today for the current shift
+  const completedCustomerIds = useLiveQuery(async () => {
+    const today = getToday()
+    const todayDeliveries = await db.deliveries
+      .filter((d) => d.data.date === today && d.data.shift === currentShift)
+      .toArray()
+    return new Set(todayDeliveries.map((d) => d.data.customerId))
+  }, [currentShift])
+
   useEffect(() => {
     if (!selectedRouteId) {
       setCustomers([])
@@ -65,9 +77,14 @@ export function DeliveriesPage() {
     fetchRouteCustomers()
   }, [selectedRouteId])
 
-  const filteredCustomers = selectedAreaId
+  const areaFilteredCustomers = selectedAreaId
     ? customers.filter((rc) => rc.areaId === selectedAreaId)
     : customers
+
+  // Only show customers who are pending (no delivery yet today for this shift)
+  const filteredCustomers = areaFilteredCustomers.filter(
+    (rc) => !completedCustomerIds?.has(rc.customer.id)
+  )
 
   const customerMap = useMemo(() => {
     const map = new Map<string, RouteCustomerItem>()
@@ -116,13 +133,15 @@ export function DeliveriesPage() {
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 dark:text-gray-400">
-              {selectedAreaId ? t('areas.noCustomersAssigned') : t('routes.noCustomersAssigned')}
+              {areaFilteredCustomers.length > 0
+                ? t('delivery.allCompleted')
+                : selectedAreaId ? t('areas.noCustomersAssigned') : t('routes.noCustomersAssigned')}
             </p>
           </div>
         ) : (
           <div className="space-y-2">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {filteredCustomers.length} {t('customer.customersFound')}
+              {filteredCustomers.length} {t('common.pending')} / {areaFilteredCustomers.length} {t('customer.customersFound')}
             </p>
             <SortableList
               items={sortedCustomerIds}
