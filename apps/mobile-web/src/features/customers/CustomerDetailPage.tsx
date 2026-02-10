@@ -109,7 +109,7 @@ export function CustomerDetailPage() {
       // Update route assignment if changed
       if (selectedRouteId && !id.startsWith('local_')) {
         try {
-          await routesApi.assignCustomers(selectedRouteId, [id], undefined, selectedAreaId || undefined)
+          await routesApi.assignCustomers(selectedRouteId, [id], undefined, selectedAreaId ? { [id]: selectedAreaId } : undefined)
         } catch {
           // Non-critical
         }

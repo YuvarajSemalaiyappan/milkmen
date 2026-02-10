@@ -62,7 +62,7 @@ export function AddCustomerPage() {
       // Assign to route if selected and customer has a server ID
       if (selectedRouteId && result && !result.id.startsWith('local_')) {
         try {
-          await routesApi.assignCustomers(selectedRouteId, [result.id], undefined, selectedAreaId || undefined)
+          await routesApi.assignCustomers(selectedRouteId, [result.id], undefined, selectedAreaId ? { [result.id]: selectedAreaId } : undefined)
         } catch {
           // Non-critical: customer created but route assignment failed
         }

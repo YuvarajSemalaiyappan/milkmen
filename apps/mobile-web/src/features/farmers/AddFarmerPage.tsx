@@ -67,7 +67,7 @@ export function AddFarmerPage() {
       // Assign to route if selected and farmer has a server ID
       if (selectedRouteId && result && !result.id.startsWith('local_')) {
         try {
-          await routesApi.assignFarmers(selectedRouteId, [result.id], undefined, selectedAreaId || undefined)
+          await routesApi.assignFarmers(selectedRouteId, [result.id], undefined, selectedAreaId ? { [result.id]: selectedAreaId } : undefined)
         } catch {
           // Non-critical: farmer created but route assignment failed
         }

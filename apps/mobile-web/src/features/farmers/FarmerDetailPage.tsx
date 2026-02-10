@@ -111,7 +111,7 @@ export function FarmerDetailPage() {
       // Update route assignment if changed
       if (selectedRouteId && !id.startsWith('local_')) {
         try {
-          await routesApi.assignFarmers(selectedRouteId, [id], undefined, selectedAreaId || undefined)
+          await routesApi.assignFarmers(selectedRouteId, [id], undefined, selectedAreaId ? { [id]: selectedAreaId } : undefined)
         } catch {
           // Non-critical
         }
