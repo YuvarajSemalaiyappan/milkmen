@@ -8,6 +8,8 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
 import { useCustomers, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
+import { syncService } from '@/services/syncService'
+import { db } from '@/db/localDb'
 
 const customerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -59,10 +61,15 @@ export function AddCustomerPage() {
         subscriptionQtyPM: data.subscriptionQtyPM || undefined
       })
 
-      // Assign to route if selected and customer has a server ID
-      if (selectedRouteId && result && !result.id.startsWith('local_')) {
+      // Assign to route if selected - wait for sync to get server ID
+      if (selectedRouteId && result) {
         try {
-          await routesApi.assignCustomers(selectedRouteId, [result.id], undefined, selectedAreaId ? { [result.id]: selectedAreaId } : undefined)
+          await syncService.waitForProcessing()
+          const synced = await db.customers.where('localId').equals(result.localId).first()
+          const serverId = synced?.id
+          if (serverId && !serverId.startsWith('local_')) {
+            await routesApi.assignCustomers(selectedRouteId, [serverId], undefined, selectedAreaId ? { [serverId]: selectedAreaId } : undefined)
+          }
         } catch {
           // Non-critical: customer created but route assignment failed
         }

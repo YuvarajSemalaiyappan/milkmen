@@ -5,6 +5,7 @@ import type { SyncQueueItem, SyncStatus } from '@/types'
 
 class SyncService {
   private isProcessing = false
+  private processingPromise: Promise<void> | null = null
 
   constructor() {
     // Listen for online/offline events
@@ -39,6 +40,13 @@ class SyncService {
     }
   }
 
+  // Wait for any in-flight queue processing to complete
+  async waitForProcessing(): Promise<void> {
+    if (this.processingPromise) {
+      await this.processingPromise
+    }
+  }
+
   // Process pending items in queue
   async processQueue(): Promise<void> {
     if (this.isProcessing || !navigator.onLine) return
@@ -46,57 +54,62 @@ class SyncService {
     this.isProcessing = true
     useSyncStore.getState().startSync()
 
-    try {
-      const pendingItems = await db.syncQueue
-        .where('status')
-        .equals('pending')
-        .sortBy('createdAt')
+    this.processingPromise = (async () => {
+      try {
+        const pendingItems = await db.syncQueue
+          .where('status')
+          .equals('pending')
+          .sortBy('createdAt')
 
-      const total = pendingItems.length
-      let processed = 0
+        const total = pendingItems.length
+        let processed = 0
 
-      for (const item of pendingItems) {
-        try {
-          useSyncStore.getState().updateProgress(item.table, processed, total)
+        for (const item of pendingItems) {
+          try {
+            useSyncStore.getState().updateProgress(item.table, processed, total)
 
-          // Mark as processing
-          await db.syncQueue.update(item.id!, { status: 'processing' })
+            // Mark as processing
+            await db.syncQueue.update(item.id!, { status: 'processing' })
 
-          // Sync item
-          await this.syncItem(item)
+            // Sync item
+            await this.syncItem(item)
 
-          // Remove from queue on success
-          await db.syncQueue.delete(item.id!)
-          processed++
-        } catch (error) {
-          console.error('Sync error for item:', item, error)
+            // Remove from queue on success
+            await db.syncQueue.delete(item.id!)
+            processed++
+          } catch (error) {
+            console.error('Sync error for item:', item, error)
 
-          const newRetryCount = item.retryCount + 1
-          if (newRetryCount >= 3) {
-            await db.syncQueue.update(item.id!, {
-              status: 'failed',
-              retryCount: newRetryCount
-            })
-            useSyncStore.getState().setFailedCount(
-              useSyncStore.getState().failedCount + 1
-            )
-          } else {
-            await db.syncQueue.update(item.id!, {
-              status: 'pending',
-              retryCount: newRetryCount
-            })
+            const newRetryCount = item.retryCount + 1
+            if (newRetryCount >= 3) {
+              await db.syncQueue.update(item.id!, {
+                status: 'failed',
+                retryCount: newRetryCount
+              })
+              useSyncStore.getState().setFailedCount(
+                useSyncStore.getState().failedCount + 1
+              )
+            } else {
+              await db.syncQueue.update(item.id!, {
+                status: 'pending',
+                retryCount: newRetryCount
+              })
+            }
           }
         }
-      }
 
-      useSyncStore.getState().finishSync(true)
-    } catch (error) {
-      console.error('Queue processing error:', error)
-      useSyncStore.getState().finishSync(false, String(error))
-    } finally {
-      this.isProcessing = false
-      await this.updatePendingCount()
-    }
+        useSyncStore.getState().finishSync(true)
+      } catch (error) {
+        console.error('Queue processing error:', error)
+        useSyncStore.getState().finishSync(false, String(error))
+      } finally {
+        this.isProcessing = false
+        this.processingPromise = null
+        await this.updatePendingCount()
+      }
+    })()
+
+    await this.processingPromise
   }
 
   // Sync a single item
