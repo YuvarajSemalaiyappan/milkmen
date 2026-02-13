@@ -65,7 +65,7 @@ export function CollectionsPage() {
       try {
         const response = await routesApi.get(selectedRouteId) as ApiResponse<RouteDetailData>
         if (response.success && response.data) {
-          setFarmers(response.data.routeFarmers)
+          setFarmers(response.data.routeFarmers.filter(rf => rf.farmer.isActive))
         }
       } catch (error) {
         console.error('Failed to fetch route farmers:', error)

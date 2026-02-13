@@ -65,7 +65,7 @@ export function DeliveriesPage() {
       try {
         const response = await routesApi.get(selectedRouteId) as ApiResponse<RouteDetailData>
         if (response.success && response.data) {
-          setCustomers(response.data.routeCustomers)
+          setCustomers(response.data.routeCustomers.filter(rc => rc.customer.isActive))
         }
       } catch (error) {
         console.error('Failed to fetch route customers:', error)
