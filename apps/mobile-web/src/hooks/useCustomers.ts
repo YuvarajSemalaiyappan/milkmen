@@ -122,14 +122,17 @@ export function useCustomers() {
   }, [])
 
   // Search customers
-  const searchCustomers = useCallback(async (query: string) => {
-    if (!query) return db.customers.filter((c) => !!c.data.isActive).toArray()
+  const searchCustomers = useCallback(async (query: string, activeOnly = true) => {
+    if (!query) {
+      if (activeOnly) return db.customers.filter((c) => !!c.data.isActive).toArray()
+      return db.customers.orderBy('updatedAt').reverse().toArray()
+    }
 
     const lowerQuery = query.toLowerCase()
     return db.customers
       .filter(
         (c) =>
-          !!c.data.isActive &&
+          (!activeOnly || !!c.data.isActive) &&
           (c.data.name.toLowerCase().includes(lowerQuery) ||
             !!c.data.phone?.toLowerCase().includes(lowerQuery) ||
             !!c.data.address?.toLowerCase().includes(lowerQuery))

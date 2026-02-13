@@ -124,14 +124,17 @@ export function useFarmers() {
   }, [])
 
   // Search farmers
-  const searchFarmers = useCallback(async (query: string) => {
-    if (!query) return db.farmers.filter((f) => f.data.isActive).toArray()
+  const searchFarmers = useCallback(async (query: string, activeOnly = true) => {
+    if (!query) {
+      if (activeOnly) return db.farmers.filter((f) => f.data.isActive).toArray()
+      return db.farmers.orderBy('updatedAt').reverse().toArray()
+    }
 
     const lowerQuery = query.toLowerCase()
     return db.farmers
       .filter(
         (f) =>
-          !!f.data.isActive &&
+          (!activeOnly || !!f.data.isActive) &&
           (f.data.name.toLowerCase().includes(lowerQuery) ||
             !!f.data.phone?.toLowerCase().includes(lowerQuery) ||
             !!f.data.village?.toLowerCase().includes(lowerQuery))

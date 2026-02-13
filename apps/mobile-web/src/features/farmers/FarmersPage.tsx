@@ -1,34 +1,80 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, Search, Users, Phone, MapPin, ChevronRight } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
-import { EmptyState } from '@/components/common'
+import { EmptyState, RouteFilter } from '@/components/common'
 import { useFarmers } from '@/hooks'
+import { useRouteStore } from '@/store'
+import { db } from '@/db/localDb'
 import { formatCurrency } from '@/utils'
 import type { LocalFarmer } from '@/types'
+
+type StatusFilter = 'all' | 'active' | 'inactive'
 
 export function FarmersPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { activeFarmers, searchFarmers, isLoading } = useFarmers()
+  const { farmers: allFarmers, activeFarmers, searchFarmers, isLoading } = useFarmers()
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredFarmers, setFilteredFarmers] = useState<LocalFarmer[]>([])
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
+
+  const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
+  const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
+
+  // Live query for route-farmer assignments
+  const routeFarmers = useLiveQuery(
+    () => selectedRouteId
+      ? db.routeFarmers.where('routeId').equals(selectedRouteId).toArray()
+      : undefined,
+    [selectedRouteId]
+  )
+
+  // Get the base list based on status filter
+  const baseFarmers = statusFilter === 'active'
+    ? activeFarmers
+    : statusFilter === 'inactive'
+      ? allFarmers.filter((f) => !f.data.isActive)
+      : allFarmers
 
   useEffect(() => {
     const doSearch = async () => {
       if (searchQuery) {
-        const results = await searchFarmers(searchQuery)
-        setFilteredFarmers(results)
+        const results = await searchFarmers(searchQuery, statusFilter === 'active')
+        if (statusFilter === 'inactive') {
+          setFilteredFarmers(results.filter((f) => !f.data.isActive))
+        } else {
+          setFilteredFarmers(results)
+        }
       } else {
-        setFilteredFarmers(activeFarmers)
+        setFilteredFarmers(baseFarmers)
       }
     }
     doSearch()
-  }, [searchQuery, activeFarmers, searchFarmers])
+  }, [searchQuery, baseFarmers, searchFarmers, statusFilter])
 
-  const farmers = searchQuery ? filteredFarmers : activeFarmers
+  // Apply route/area filter
+  const farmers = useMemo(() => {
+    const list = searchQuery ? filteredFarmers : baseFarmers
+    if (!selectedRouteId || !routeFarmers) return list
+
+    const assignedIds = new Set(
+      (selectedAreaId
+        ? routeFarmers.filter((rf) => rf.areaId === selectedAreaId)
+        : routeFarmers
+      ).map((rf) => rf.farmerId)
+    )
+    return list.filter((f) => assignedIds.has(f.id))
+  }, [searchQuery, filteredFarmers, baseFarmers, selectedRouteId, selectedAreaId, routeFarmers])
+
+  const statusChips: { key: StatusFilter; label: string }[] = [
+    { key: 'all', label: t('common.all') },
+    { key: 'active', label: t('common.active') },
+    { key: 'inactive', label: t('common.inactive') }
+  ]
 
   return (
     <AppShell
@@ -51,6 +97,26 @@ export function FarmersPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           leftIcon={<Search className="w-5 h-5" />}
         />
+
+        {/* Route Filter */}
+        <RouteFilter />
+
+        {/* Status Filter Chips */}
+        <div className="flex gap-2">
+          {statusChips.map((chip) => (
+            <button
+              key={chip.key}
+              onClick={() => setStatusFilter(chip.key)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                statusFilter === chip.key
+                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
 
         {/* Loading State */}
         {isLoading && (
@@ -79,7 +145,9 @@ export function FarmersPage() {
             {farmers.map((farmer) => (
               <Card
                 key={farmer.id}
-                className="cursor-pointer hover:shadow-md transition-shadow"
+                className={`cursor-pointer hover:shadow-md transition-shadow ${
+                  !farmer.data.isActive ? 'opacity-60' : ''
+                }`}
                 onClick={() => navigate(`/farmers/${farmer.id}`)}
               >
                 <div className="flex items-center justify-between">
@@ -88,6 +156,9 @@ export function FarmersPage() {
                       <h3 className="font-semibold text-gray-900 dark:text-white truncate">
                         {farmer.data.name}
                       </h3>
+                      {!farmer.data.isActive && (
+                        <Badge size="sm" variant="default">{t('common.inactive')}</Badge>
+                      )}
                       {farmer.syncStatus === 'PENDING' && (
                         <Badge size="sm" variant="warning">Pending</Badge>
                       )}

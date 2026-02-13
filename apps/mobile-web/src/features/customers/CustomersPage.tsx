@@ -1,34 +1,80 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, Search, UserCircle, Phone, MapPin, ChevronRight, Sun, Moon } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
-import { EmptyState } from '@/components/common'
+import { EmptyState, RouteFilter } from '@/components/common'
 import { useCustomers } from '@/hooks'
+import { useRouteStore } from '@/store'
+import { db } from '@/db/localDb'
 import { formatCurrency } from '@/utils'
 import type { LocalCustomer } from '@/types'
+
+type StatusFilter = 'all' | 'active' | 'inactive'
 
 export function CustomersPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { activeCustomers, searchCustomers, isLoading } = useCustomers()
+  const { customers: allCustomers, activeCustomers, searchCustomers, isLoading } = useCustomers()
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredCustomers, setFilteredCustomers] = useState<LocalCustomer[]>([])
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
+
+  const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
+  const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
+
+  // Live query for route-customer assignments
+  const routeCustomers = useLiveQuery(
+    () => selectedRouteId
+      ? db.routeCustomers.where('routeId').equals(selectedRouteId).toArray()
+      : undefined,
+    [selectedRouteId]
+  )
+
+  // Get the base list based on status filter
+  const baseCustomers = statusFilter === 'active'
+    ? activeCustomers
+    : statusFilter === 'inactive'
+      ? allCustomers.filter((c) => !c.data.isActive)
+      : allCustomers
 
   useEffect(() => {
     const doSearch = async () => {
       if (searchQuery) {
-        const results = await searchCustomers(searchQuery)
-        setFilteredCustomers(results)
+        const results = await searchCustomers(searchQuery, statusFilter === 'active')
+        if (statusFilter === 'inactive') {
+          setFilteredCustomers(results.filter((c) => !c.data.isActive))
+        } else {
+          setFilteredCustomers(results)
+        }
       } else {
-        setFilteredCustomers(activeCustomers)
+        setFilteredCustomers(baseCustomers)
       }
     }
     doSearch()
-  }, [searchQuery, activeCustomers, searchCustomers])
+  }, [searchQuery, baseCustomers, searchCustomers, statusFilter])
 
-  const customers = searchQuery ? filteredCustomers : activeCustomers
+  // Apply route/area filter
+  const customers = useMemo(() => {
+    const list = searchQuery ? filteredCustomers : baseCustomers
+    if (!selectedRouteId || !routeCustomers) return list
+
+    const assignedIds = new Set(
+      (selectedAreaId
+        ? routeCustomers.filter((rc) => rc.areaId === selectedAreaId)
+        : routeCustomers
+      ).map((rc) => rc.customerId)
+    )
+    return list.filter((c) => assignedIds.has(c.id))
+  }, [searchQuery, filteredCustomers, baseCustomers, selectedRouteId, selectedAreaId, routeCustomers])
+
+  const statusChips: { key: StatusFilter; label: string }[] = [
+    { key: 'all', label: t('common.all') },
+    { key: 'active', label: t('common.active') },
+    { key: 'inactive', label: t('common.inactive') }
+  ]
 
   return (
     <AppShell
@@ -51,6 +97,26 @@ export function CustomersPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           leftIcon={<Search className="w-5 h-5" />}
         />
+
+        {/* Route Filter */}
+        <RouteFilter />
+
+        {/* Status Filter Chips */}
+        <div className="flex gap-2">
+          {statusChips.map((chip) => (
+            <button
+              key={chip.key}
+              onClick={() => setStatusFilter(chip.key)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                statusFilter === chip.key
+                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
 
         {/* Loading State */}
         {isLoading && (
@@ -79,7 +145,9 @@ export function CustomersPage() {
             {customers.map((customer) => (
               <Card
                 key={customer.id}
-                className="cursor-pointer hover:shadow-md transition-shadow"
+                className={`cursor-pointer hover:shadow-md transition-shadow ${
+                  !customer.data.isActive ? 'opacity-60' : ''
+                }`}
                 onClick={() => navigate(`/customers/${customer.id}`)}
               >
                 <div className="flex items-center justify-between">
@@ -88,6 +156,9 @@ export function CustomersPage() {
                       <h3 className="font-semibold text-gray-900 dark:text-white truncate">
                         {customer.data.name}
                       </h3>
+                      {!customer.data.isActive && (
+                        <Badge size="sm" variant="default">{t('common.inactive')}</Badge>
+                      )}
                       {customer.syncStatus === 'PENDING' && (
                         <Badge size="sm" variant="warning">Pending</Badge>
                       )}
