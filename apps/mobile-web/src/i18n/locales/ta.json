@@ -53,6 +53,7 @@
     "sell": "விற்பனை",
     "active": "செயலில்",
     "inactive": "செயலற்றது",
+    "activate": "செயல்படுத்து",
     "unknown": "தெரியாது",
     "viewAll": "அனைத்தையும் காண்க",
     "morning": "காலை",
@@ -354,7 +355,10 @@
     "bought": "வாங்கியது",
     "amount": "தொகை",
     "received": "பெற்றது",
-    "totalDelivered": "மொத்த விநியோகம்"
+    "totalDelivered": "மொத்த விநியோகம்",
+    "exportExcel": "எக்செல் ஏற்றுமதி",
+    "loadMore": "மேலும் ஏற்று",
+    "showingCount": "{{total}} இல் {{count}} காட்டப்படுகிறது"
   },
   "settings": {
     "title": "அமைப்புகள்",

@@ -99,8 +99,8 @@ export function FarmerDetailPage() {
 
   const loadCollections = async () => {
     if (!id) return
-    const data = await getCollectionsByFarmer(id)
-    setCollections(data.slice(0, 10)) // Last 10 collections
+    const data = await getCollectionsByFarmer(id, undefined, undefined, 10)
+    setCollections(data)
   }
 
   const onSubmit = async (data: FarmerFormData) => {

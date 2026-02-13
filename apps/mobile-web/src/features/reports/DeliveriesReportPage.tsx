@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useMemo } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Truck, Calendar, UserCircle, ChevronRight, Filter } from 'lucide-react'
+import { Truck, Calendar, UserCircle, ChevronRight, Filter, Download } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useCustomers, useDeliveries } from '@/hooks'
-import { formatCurrency, formatDate, getToday } from '@/utils'
+import { formatCurrency, formatDate, getToday, exportToExcel } from '@/utils'
 import type { LocalCustomer, LocalDelivery } from '@/types'
 
 interface DeliveryWithCustomer extends LocalDelivery {
@@ -23,9 +23,13 @@ interface CustomerSummary {
   count: number
 }
 
+const PAGE_SIZE = 50
+
 export function DeliveriesReportPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const customerIdParam = searchParams.get('customerId')
   const { customers: allCustomers } = useCustomers()
   const { getDeliveriesByDateRange } = useDeliveries()
 
@@ -35,11 +39,20 @@ export function DeliveriesReportPage() {
     return date.toISOString().split('T')[0]
   })
   const [endDate, setEndDate] = useState(getToday())
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customerIdParam || '')
   const [deliveries, setDeliveries] = useState<DeliveryWithCustomer[]>([])
   const [customerSummaries, setCustomerSummaries] = useState<CustomerSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'list' | 'summary'>('summary')
+  const [viewMode, setViewMode] = useState<'list' | 'summary'>(customerIdParam ? 'list' : 'summary')
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  const isPersonMode = !!customerIdParam
+
+  const personName = useMemo(() => {
+    if (!customerIdParam) return ''
+    const customer = allCustomers.find(c => c.id === customerIdParam)
+    return customer?.data.name || ''
+  }, [customerIdParam, allCustomers])
 
   const getCustomerMap = () => {
     const map = new Map<string, LocalCustomer>()
@@ -51,13 +64,19 @@ export function DeliveriesReportPage() {
     loadDeliveries()
   }, [startDate, endDate, selectedCustomerId, allCustomers.length])
 
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [startDate, endDate, selectedCustomerId])
+
   const loadDeliveries = async () => {
     setIsLoading(true)
     try {
       let allDeliveries = await getDeliveriesByDateRange(startDate, endDate)
 
-      // Filter to only delivered items
-      allDeliveries = allDeliveries.filter(d => d.data.status === 'DELIVERED')
+      // In person mode, show all statuses; otherwise only DELIVERED
+      if (!isPersonMode) {
+        allDeliveries = allDeliveries.filter(d => d.data.status === 'DELIVERED')
+      }
 
       // Filter by customer if selected
       if (selectedCustomerId) {
@@ -114,15 +133,63 @@ export function DeliveriesReportPage() {
   const totalAmount = deliveries.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
   const avgRate = totalLiters > 0 ? totalAmount / totalLiters : 0
 
+  const visibleDeliveries = deliveries.slice(0, visibleCount)
+  const hasMore = visibleCount < deliveries.length
+
+  const handleExport = () => {
+    const rows = deliveries.map(d => ({
+      Date: formatDate(d.data.date),
+      Shift: d.data.shift,
+      Customer: d.customerName,
+      'Quantity (L)': Number(d.data.quantity),
+      'Rate/L': Number(d.data.ratePerLiter),
+      Total: Number(d.data.totalAmount),
+      Status: d.data.status,
+      Notes: d.data.notes || ''
+    }))
+    const name = personName || 'Deliveries'
+    exportToExcel(rows, `${name}_${startDate}_${endDate}`)
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'DELIVERED':
+        return <Badge size="sm" variant="success">{t('delivery.delivered')}</Badge>
+      case 'SKIPPED':
+        return <Badge size="sm" variant="warning">{t('delivery.skipped')}</Badge>
+      case 'CANCELLED':
+        return <Badge size="sm" variant="error">{t('delivery.cancelled')}</Badge>
+      case 'PENDING':
+        return <Badge size="sm" variant="default">{t('delivery.pending')}</Badge>
+      default:
+        return null
+    }
+  }
+
+  const title = isPersonMode && personName
+    ? `${personName} - ${t('reports.deliveries')}`
+    : t('reports.deliveries')
+
   return (
-    <AppShell title={t('reports.deliveries')} showBack>
+    <AppShell title={title} showBack>
       <div className="px-4 pt-5 pb-4 space-y-4">
-        {/* Date Range */}
+        {/* Date Range + Export */}
         <Card>
-          <h3 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            {t('reports.dateRange')}
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              {t('reports.dateRange')}
+            </h3>
+            {deliveries.length > 0 && (
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-1 text-sm text-pink-600 font-medium"
+              >
+                <Download className="w-4 h-4" />
+                {t('reports.exportExcel')}
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Input
               type="date"
@@ -139,25 +206,27 @@ export function DeliveriesReportPage() {
           </div>
         </Card>
 
-        {/* Customer Filter */}
-        <Card>
-          <div className="flex items-center gap-2 mb-3">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <span className="font-semibold text-gray-700">{t('reports.filterByCustomer')}</span>
-          </div>
-          <select
-            className="w-full p-3 border rounded-lg bg-white"
-            value={selectedCustomerId}
-            onChange={(e) => setSelectedCustomerId(e.target.value)}
-          >
-            <option value="">{t('reports.allCustomers')}</option>
-            {allCustomers.map(customer => (
-              <option key={customer.id} value={customer.id}>
-                {customer.data.name} {customer.data.address ? `(${customer.data.address})` : ''}
-              </option>
-            ))}
-          </select>
-        </Card>
+        {/* Customer Filter - hidden in person mode */}
+        {!isPersonMode && (
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <span className="font-semibold text-gray-700">{t('reports.filterByCustomer')}</span>
+            </div>
+            <select
+              className="w-full p-3 border rounded-lg bg-white"
+              value={selectedCustomerId}
+              onChange={(e) => setSelectedCustomerId(e.target.value)}
+            >
+              <option value="">{t('reports.allCustomers')}</option>
+              {allCustomers.map(customer => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.data.name} {customer.data.address ? `(${customer.data.address})` : ''}
+                </option>
+              ))}
+            </select>
+          </Card>
+        )}
 
         {/* Summary */}
         <div className="grid grid-cols-3 gap-3">
@@ -175,29 +244,31 @@ export function DeliveriesReportPage() {
           </Card>
         </div>
 
-        {/* View Toggle */}
-        <div className="flex gap-2">
-          <button
-            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-              viewMode === 'summary'
-                ? 'bg-pink-600 text-white'
-                : 'bg-gray-100 text-gray-700'
-            }`}
-            onClick={() => setViewMode('summary')}
-          >
-            {t('reports.byCustomer')}
-          </button>
-          <button
-            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-              viewMode === 'list'
-                ? 'bg-pink-600 text-white'
-                : 'bg-gray-100 text-gray-700'
-            }`}
-            onClick={() => setViewMode('list')}
-          >
-            {t('reports.allEntries')}
-          </button>
-        </div>
+        {/* View Toggle - hidden in person mode */}
+        {!isPersonMode && (
+          <div className="flex gap-2">
+            <button
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                viewMode === 'summary'
+                  ? 'bg-pink-600 text-white'
+                  : 'bg-gray-100 text-gray-700'
+              }`}
+              onClick={() => setViewMode('summary')}
+            >
+              {t('reports.byCustomer')}
+            </button>
+            <button
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-pink-600 text-white'
+                  : 'bg-gray-100 text-gray-700'
+              }`}
+              onClick={() => setViewMode('list')}
+            >
+              {t('reports.allEntries')}
+            </button>
+          </div>
+        )}
 
         {/* Loading */}
         {isLoading && (
@@ -247,8 +318,12 @@ export function DeliveriesReportPage() {
           </div>
         ) : !isLoading ? (
           <div className="space-y-3">
-            {deliveries.map((delivery) => (
-              <Card key={delivery.id}>
+            {visibleDeliveries.map((delivery) => (
+              <Card
+                key={delivery.id}
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => navigate(`/deliver/${delivery.id}`)}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-pink-100 rounded-lg">
@@ -259,21 +334,42 @@ export function DeliveriesReportPage() {
                       <p className="text-sm text-gray-500">
                         {formatDate(delivery.data.date)} - {t(`shifts.${delivery.data.shift.toLowerCase()}`)}
                       </p>
-                      {delivery.data.isSubscription && (
-                        <Badge variant="info" size="sm">{t('delivery.subscriptionDelivery')}</Badge>
-                      )}
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {isPersonMode && getStatusBadge(delivery.data.status)}
+                        {delivery.data.isSubscription && (
+                          <Badge variant="info" size="sm">{t('delivery.subscriptionDelivery')}</Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-gray-900">{Number(delivery.data.quantity).toFixed(1)}L</p>
-                    <p className="text-sm text-gray-500">
-                      @ {formatCurrency(delivery.data.ratePerLiter)}/L
-                    </p>
-                    <p className="font-semibold text-green-600">{formatCurrency(delivery.data.totalAmount)}</p>
+                  <div className="text-right flex items-center gap-2">
+                    <div>
+                      <p className="font-bold text-gray-900">{Number(delivery.data.quantity).toFixed(1)}L</p>
+                      <p className="text-sm text-gray-500">
+                        @ {formatCurrency(delivery.data.ratePerLiter)}/L
+                      </p>
+                      <p className="font-semibold text-green-600">{formatCurrency(delivery.data.totalAmount)}</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400" />
                   </div>
                 </div>
               </Card>
             ))}
+
+            {/* Pagination */}
+            {hasMore && (
+              <div className="text-center pt-2">
+                <p className="text-sm text-gray-500 mb-2">
+                  {t('reports.showingCount', { count: visibleCount, total: deliveries.length })}
+                </p>
+                <button
+                  onClick={() => setVisibleCount(prev => prev + PAGE_SIZE)}
+                  className="px-6 py-2 bg-pink-100 text-pink-700 rounded-lg font-medium"
+                >
+                  {t('reports.loadMore')}
+                </button>
+              </div>
+            )}
           </div>
         ) : null}
       </div>

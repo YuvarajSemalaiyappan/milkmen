@@ -97,8 +97,8 @@ export function CustomerDetailPage() {
 
   const loadDeliveries = async () => {
     if (!id) return
-    const data = await getDeliveriesByCustomer(id)
-    setDeliveries(data.slice(0, 10)) // Last 10 deliveries
+    const data = await getDeliveriesByCustomer(id, undefined, undefined, 10)
+    setDeliveries(data)
   }
 
   const onSubmit = async (data: CustomerFormData) => {

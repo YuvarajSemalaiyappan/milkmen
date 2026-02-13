@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import Dexie from 'dexie'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, generateLocalId, now } from '@/db/localDb'
 import { syncService } from '@/services/syncService'
@@ -178,15 +179,20 @@ export function useDeliveries() {
 
   // Get deliveries by customer
   const getDeliveriesByCustomer = useCallback(
-    async (customerId: string, from?: string, to?: string) => {
-      return db.deliveries
-        .filter((d) => {
-          if (d.data.customerId !== customerId) return false
-          if (from && d.data.date < from) return false
-          if (to && d.data.date > to) return false
-          return true
-        })
-        .toArray()
+    async (customerId: string, from?: string, to?: string, limit?: number) => {
+      let query = db.deliveries
+        .where('[data.customerId+data.date]')
+        .between(
+          [customerId, from || Dexie.minKey],
+          [customerId, to || Dexie.maxKey],
+          true,
+          true
+        )
+        .reverse()
+      if (limit) {
+        query = query.limit(limit)
+      }
+      return query.toArray()
     },
     []
   )

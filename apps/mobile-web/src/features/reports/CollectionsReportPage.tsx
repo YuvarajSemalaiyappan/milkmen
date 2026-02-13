@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useMemo } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Milk, Calendar, User, ChevronRight, Filter } from 'lucide-react'
+import { Milk, Calendar, User, ChevronRight, Filter, Download } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useFarmers, useCollections } from '@/hooks'
-import { formatCurrency, formatDate, getToday } from '@/utils'
+import { formatCurrency, formatDate, getToday, exportToExcel } from '@/utils'
 import type { LocalFarmer, LocalCollection } from '@/types'
 
 interface CollectionWithFarmer extends LocalCollection {
@@ -23,9 +23,13 @@ interface FarmerSummary {
   count: number
 }
 
+const PAGE_SIZE = 50
+
 export function CollectionsReportPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const farmerIdParam = searchParams.get('farmerId')
   const { farmers: allFarmers } = useFarmers()
   const { getCollectionsByDateRange } = useCollections()
 
@@ -35,11 +39,20 @@ export function CollectionsReportPage() {
     return date.toISOString().split('T')[0]
   })
   const [endDate, setEndDate] = useState(getToday())
-  const [selectedFarmerId, setSelectedFarmerId] = useState<string>('')
+  const [selectedFarmerId, setSelectedFarmerId] = useState<string>(farmerIdParam || '')
   const [collections, setCollections] = useState<CollectionWithFarmer[]>([])
   const [farmerSummaries, setFarmerSummaries] = useState<FarmerSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'list' | 'summary'>('summary')
+  const [viewMode, setViewMode] = useState<'list' | 'summary'>(farmerIdParam ? 'list' : 'summary')
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  const isPersonMode = !!farmerIdParam
+
+  const personName = useMemo(() => {
+    if (!farmerIdParam) return ''
+    const farmer = allFarmers.find(f => f.id === farmerIdParam)
+    return farmer?.data.name || ''
+  }, [farmerIdParam, allFarmers])
 
   const getFarmerMap = () => {
     const map = new Map<string, LocalFarmer>()
@@ -50,6 +63,10 @@ export function CollectionsReportPage() {
   useEffect(() => {
     loadCollections()
   }, [startDate, endDate, selectedFarmerId, allFarmers.length])
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [startDate, endDate, selectedFarmerId])
 
   const loadCollections = async () => {
     setIsLoading(true)
@@ -111,15 +128,48 @@ export function CollectionsReportPage() {
   const totalAmount = collections.reduce((sum, c) => sum + Number(c.data.totalAmount), 0)
   const avgRate = totalLiters > 0 ? totalAmount / totalLiters : 0
 
+  const visibleCollections = collections.slice(0, visibleCount)
+  const hasMore = visibleCount < collections.length
+
+  const handleExport = () => {
+    const rows = collections.map(c => ({
+      Date: formatDate(c.data.date),
+      Shift: c.data.shift,
+      Farmer: c.farmerName,
+      'Quantity (L)': Number(c.data.quantity),
+      'Rate/L': Number(c.data.ratePerLiter),
+      Total: Number(c.data.totalAmount),
+      'Fat %': c.data.fatPercentage ? Number(c.data.fatPercentage) : '',
+      Notes: c.data.notes || ''
+    }))
+    const name = personName || 'Collections'
+    exportToExcel(rows, `${name}_${startDate}_${endDate}`)
+  }
+
+  const title = isPersonMode && personName
+    ? `${personName} - ${t('reports.collections')}`
+    : t('reports.collections')
+
   return (
-    <AppShell title={t('reports.collections')} showBack>
+    <AppShell title={title} showBack>
       <div className="px-4 pt-5 pb-4 space-y-4">
-        {/* Date Range */}
+        {/* Date Range + Export */}
         <Card>
-          <h3 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            {t('reports.dateRange')}
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              {t('reports.dateRange')}
+            </h3>
+            {collections.length > 0 && (
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-1 text-sm text-purple-600 font-medium"
+              >
+                <Download className="w-4 h-4" />
+                {t('reports.exportExcel')}
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Input
               type="date"
@@ -136,25 +186,27 @@ export function CollectionsReportPage() {
           </div>
         </Card>
 
-        {/* Farmer Filter */}
-        <Card>
-          <div className="flex items-center gap-2 mb-3">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <span className="font-semibold text-gray-700">{t('reports.filterByFarmer')}</span>
-          </div>
-          <select
-            className="w-full p-3 border rounded-lg bg-white"
-            value={selectedFarmerId}
-            onChange={(e) => setSelectedFarmerId(e.target.value)}
-          >
-            <option value="">{t('reports.allFarmers')}</option>
-            {allFarmers.map(farmer => (
-              <option key={farmer.id} value={farmer.id}>
-                {farmer.data.name} {farmer.data.village ? `(${farmer.data.village})` : ''}
-              </option>
-            ))}
-          </select>
-        </Card>
+        {/* Farmer Filter - hidden in person mode */}
+        {!isPersonMode && (
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <span className="font-semibold text-gray-700">{t('reports.filterByFarmer')}</span>
+            </div>
+            <select
+              className="w-full p-3 border rounded-lg bg-white"
+              value={selectedFarmerId}
+              onChange={(e) => setSelectedFarmerId(e.target.value)}
+            >
+              <option value="">{t('reports.allFarmers')}</option>
+              {allFarmers.map(farmer => (
+                <option key={farmer.id} value={farmer.id}>
+                  {farmer.data.name} {farmer.data.village ? `(${farmer.data.village})` : ''}
+                </option>
+              ))}
+            </select>
+          </Card>
+        )}
 
         {/* Summary */}
         <div className="grid grid-cols-3 gap-3">
@@ -172,29 +224,31 @@ export function CollectionsReportPage() {
           </Card>
         </div>
 
-        {/* View Toggle */}
-        <div className="flex gap-2">
-          <button
-            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-              viewMode === 'summary'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-700'
-            }`}
-            onClick={() => setViewMode('summary')}
-          >
-            {t('reports.byFarmer')}
-          </button>
-          <button
-            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-              viewMode === 'list'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-700'
-            }`}
-            onClick={() => setViewMode('list')}
-          >
-            {t('reports.allEntries')}
-          </button>
-        </div>
+        {/* View Toggle - hidden in person mode */}
+        {!isPersonMode && (
+          <div className="flex gap-2">
+            <button
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                viewMode === 'summary'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-700'
+              }`}
+              onClick={() => setViewMode('summary')}
+            >
+              {t('reports.byFarmer')}
+            </button>
+            <button
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-700'
+              }`}
+              onClick={() => setViewMode('list')}
+            >
+              {t('reports.allEntries')}
+            </button>
+          </div>
+        )}
 
         {/* Loading */}
         {isLoading && (
@@ -244,8 +298,12 @@ export function CollectionsReportPage() {
           </div>
         ) : !isLoading ? (
           <div className="space-y-3">
-            {collections.map((collection) => (
-              <Card key={collection.id}>
+            {visibleCollections.map((collection) => (
+              <Card
+                key={collection.id}
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => navigate(`/collect/${collection.id}`)}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-purple-100 rounded-lg">
@@ -258,16 +316,34 @@ export function CollectionsReportPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-gray-900">{Number(collection.data.quantity).toFixed(1)}L</p>
-                    <p className="text-sm text-gray-500">
-                      @ {formatCurrency(collection.data.ratePerLiter)}/L
-                    </p>
-                    <p className="font-semibold text-green-600">{formatCurrency(collection.data.totalAmount)}</p>
+                  <div className="text-right flex items-center gap-2">
+                    <div>
+                      <p className="font-bold text-gray-900">{Number(collection.data.quantity).toFixed(1)}L</p>
+                      <p className="text-sm text-gray-500">
+                        @ {formatCurrency(collection.data.ratePerLiter)}/L
+                      </p>
+                      <p className="font-semibold text-green-600">{formatCurrency(collection.data.totalAmount)}</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400" />
                   </div>
                 </div>
               </Card>
             ))}
+
+            {/* Pagination */}
+            {hasMore && (
+              <div className="text-center pt-2">
+                <p className="text-sm text-gray-500 mb-2">
+                  {t('reports.showingCount', { count: visibleCount, total: collections.length })}
+                </p>
+                <button
+                  onClick={() => setVisibleCount(prev => prev + PAGE_SIZE)}
+                  className="px-6 py-2 bg-purple-100 text-purple-700 rounded-lg font-medium"
+                >
+                  {t('reports.loadMore')}
+                </button>
+              </div>
+            )}
           </div>
         ) : null}
       </div>

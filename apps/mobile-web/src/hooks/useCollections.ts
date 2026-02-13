@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import Dexie from 'dexie'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, generateLocalId, now } from '@/db/localDb'
 import { syncService } from '@/services/syncService'
@@ -176,15 +177,20 @@ export function useCollections() {
 
   // Get collections by farmer
   const getCollectionsByFarmer = useCallback(
-    async (farmerId: string, from?: string, to?: string) => {
-      return db.collections
-        .filter((c) => {
-          if (c.data.farmerId !== farmerId) return false
-          if (from && c.data.date < from) return false
-          if (to && c.data.date > to) return false
-          return true
-        })
-        .toArray()
+    async (farmerId: string, from?: string, to?: string, limit?: number) => {
+      let query = db.collections
+        .where('[data.farmerId+data.date]')
+        .between(
+          [farmerId, from || Dexie.minKey],
+          [farmerId, to || Dexie.maxKey],
+          true,
+          true
+        )
+        .reverse()
+      if (limit) {
+        query = query.limit(limit)
+      }
+      return query.toArray()
     },
     []
   )

@@ -53,6 +53,7 @@
     "sell": "Sell",
     "active": "Active",
     "inactive": "Inactive",
+    "activate": "Activate",
     "unknown": "Unknown",
     "viewAll": "View All",
     "morning": "Morning",
@@ -354,7 +355,10 @@
     "bought": "Bought",
     "amount": "Amount",
     "received": "Received",
-    "totalDelivered": "Total Delivered"
+    "totalDelivered": "Total Delivered",
+    "exportExcel": "Export Excel",
+    "loadMore": "Load More",
+    "showingCount": "Showing {{count}} of {{total}}"
   },
   "settings": {
     "title": "Settings",
