@@ -53,8 +53,9 @@ class ApiService {
         }
         return retryResponse.json()
       } else {
-        // Refresh failed, logout
+        // Refresh failed, logout and redirect to login
         useAuthStore.getState().logout()
+        window.location.href = '/login'
         throw new Error('Session expired')
       }
     }
