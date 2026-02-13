@@ -447,6 +447,69 @@ export function CustomerDetailPage() {
               </Card>
             </div>
 
+            {/* Quick Actions */}
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                onClick={() => navigate(`/deliver/add?customerId=${id}`)}
+                fullWidth
+              >
+                {t('delivery.addNew')}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/payments/add?customerId=${id}`)}
+                fullWidth
+              >
+                {t('payment.receivePayment')}
+              </Button>
+            </div>
+
+            {/* Delete / Activate Button */}
+            <div>
+              {!customer.data.isActive ? (
+                <Button
+                  onClick={handleActivate}
+                  isLoading={isDeleting}
+                  fullWidth
+                >
+                  {t('common.activate')}
+                </Button>
+              ) : showDeleteConfirm ? (
+                <Card className="bg-red-50 border-red-200">
+                  <p className="text-sm text-red-700 mb-3">
+                    {t('customer.deleteConfirm')}
+                  </p>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      fullWidth
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={handleDelete}
+                      isLoading={isDeleting}
+                      fullWidth
+                    >
+                      {t('common.delete')}
+                    </Button>
+                  </div>
+                </Card>
+              ) : (
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  leftIcon={<Trash2 className="w-4 h-4" />}
+                  className="text-red-600 hover:bg-red-50"
+                  fullWidth
+                >
+                  {t('customer.delete')}
+                </Button>
+              )}
+            </div>
+
             {/* Recent Deliveries */}
             <Card>
               <div className="flex items-center justify-between mb-3">
@@ -496,68 +559,6 @@ export function CustomerDetailPage() {
               )}
             </Card>
 
-            {/* Quick Actions */}
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                onClick={() => navigate(`/deliver/add?customerId=${id}`)}
-                fullWidth
-              >
-                {t('delivery.addNew')}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => navigate(`/payments/add?customerId=${id}`)}
-                fullWidth
-              >
-                {t('payment.receivePayment')}
-              </Button>
-            </div>
-
-            {/* Delete / Activate Button */}
-            <div className="pt-4">
-              {!customer.data.isActive ? (
-                <Button
-                  onClick={handleActivate}
-                  isLoading={isDeleting}
-                  fullWidth
-                >
-                  {t('common.activate')}
-                </Button>
-              ) : showDeleteConfirm ? (
-                <Card className="bg-red-50 border-red-200">
-                  <p className="text-sm text-red-700 mb-3">
-                    {t('customer.deleteConfirm')}
-                  </p>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      fullWidth
-                    >
-                      {t('common.cancel')}
-                    </Button>
-                    <Button
-                      variant="danger"
-                      onClick={handleDelete}
-                      isLoading={isDeleting}
-                      fullWidth
-                    >
-                      {t('common.delete')}
-                    </Button>
-                  </div>
-                </Card>
-              ) : (
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  leftIcon={<Trash2 className="w-4 h-4" />}
-                  className="text-red-600 hover:bg-red-50"
-                  fullWidth
-                >
-                  {t('customer.delete')}
-                </Button>
-              )}
-            </div>
           </>
         )}
       </div>
