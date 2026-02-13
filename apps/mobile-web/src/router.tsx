@@ -41,7 +41,8 @@ import {
   AreasPage,
   AddAreaPage,
   AreaDetailPage,
-  AreaAssignCustomersPage
+  AreaAssignCustomersPage,
+  AreaAssignFarmersPage
 } from '@/features/areas'
 import { MorePage } from '@/features/more'
 import { LoginPage, RegisterPage } from '@/features/auth'
@@ -289,6 +290,10 @@ export const router = createBrowserRouter([
       {
         path: '/routes/:routeId/areas/:areaId/assign-customers',
         element: <AreaAssignCustomersPage />
+      },
+      {
+        path: '/routes/:routeId/areas/:areaId/assign-farmers',
+        element: <AreaAssignFarmersPage />
       },
       {
         path: '/more',

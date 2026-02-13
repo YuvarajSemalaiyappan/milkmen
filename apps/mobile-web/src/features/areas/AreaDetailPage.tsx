@@ -25,6 +25,18 @@ const areaSchema = z.object({
 
 type AreaFormData = z.infer<typeof areaSchema>
 
+interface RouteFarmerItem {
+  id: string
+  farmerId: string
+  areaId?: string | null
+  farmer: {
+    id: string
+    name: string
+    phone?: string
+    village?: string
+  }
+}
+
 interface RouteCustomerItem {
   id: string
   customerId: string
@@ -39,6 +51,7 @@ interface RouteCustomerItem {
 
 interface RouteDetailData {
   id: string
+  routeFarmers: RouteFarmerItem[]
   routeCustomers: RouteCustomerItem[]
 }
 
@@ -52,6 +65,7 @@ export function AreaDetailPage() {
   const isManager = user?.role === 'MANAGER' || user?.role === 'OWNER'
 
   const area = areas.find((a) => a.id === areaId)
+  const [assignedFarmers, setAssignedFarmers] = useState<RouteFarmerItem[]>([])
   const [assignedCustomers, setAssignedCustomers] = useState<RouteCustomerItem[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -67,23 +81,26 @@ export function AreaDetailPage() {
     resolver: zodResolver(areaSchema)
   })
 
-  const loadCustomers = useCallback(async () => {
+  const loadMembers = useCallback(async () => {
     if (!routeId) return
     try {
       const response = await routesApi.get(routeId) as ApiResponse<RouteDetailData>
       if (response.success && response.data) {
+        setAssignedFarmers(
+          response.data.routeFarmers.filter((rf) => rf.areaId === areaId)
+        )
         setAssignedCustomers(
           response.data.routeCustomers.filter((rc) => rc.areaId === areaId)
         )
       }
     } catch (error) {
-      console.error('Failed to load customers:', error)
+      console.error('Failed to load members:', error)
     }
   }, [routeId, areaId])
 
   useEffect(() => {
-    loadCustomers()
-  }, [loadCustomers])
+    loadMembers()
+  }, [loadMembers])
 
   useEffect(() => {
     if (area) {
@@ -180,8 +197,55 @@ export function AreaDetailPage() {
                 <h2 className="text-xl font-semibold">{area.name}</h2>
               </div>
               <p className="text-sm text-gray-500">
-                {area._count.routeCustomers} {t('areas.assignedCustomers').toLowerCase()}
+                {area._count.routeFarmers} {t('areas.assignedFarmers').toLowerCase()}, {area._count.routeCustomers} {t('areas.assignedCustomers').toLowerCase()}
               </p>
+            </Card>
+
+            {/* Assigned Farmers */}
+            <Card>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">
+                  {t('areas.assignedFarmers')} ({assignedFarmers.length})
+                </h3>
+                {isManager && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => navigate(`/routes/${routeId}/areas/${areaId}/assign-farmers`)}
+                    leftIcon={<UserPlus className="w-4 h-4" />}
+                  >
+                    {t('areas.assignFarmers')}
+                  </Button>
+                )}
+              </div>
+              {assignedFarmers.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-2">
+                  {t('areas.noFarmersAssigned')}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {assignedFarmers.map((rf) => (
+                    <div
+                      key={rf.id}
+                      className="flex items-center justify-between py-2 border-b last:border-0 dark:border-gray-700 cursor-pointer"
+                      onClick={() => navigate(`/farmers/${rf.farmer.id}`)}
+                    >
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">{rf.farmer.name}</p>
+                        <div className="flex items-center gap-3 text-sm text-gray-500">
+                          {rf.farmer.phone && (
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {rf.farmer.phone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
 
             {/* Assigned Customers */}

@@ -66,7 +66,7 @@ export function AreasPage() {
                     </h3>
                     <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
                       <Users className="w-3 h-3" />
-                      {area._count.routeCustomers} {t('areas.assignedCustomers').toLowerCase()}
+                      {area._count.routeFarmers} {t('areas.assignedFarmers').toLowerCase()}, {area._count.routeCustomers} {t('areas.assignedCustomers').toLowerCase()}
                     </p>
                   </div>
                   <MapPin className="w-5 h-5 text-gray-400" />

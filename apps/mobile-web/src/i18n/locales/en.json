@@ -491,11 +491,13 @@
     "addFirst": "Create areas to subdivide this route",
     "allAreas": "All Areas",
     "assignedCustomers": "Assigned Customers",
+    "assignedFarmers": "Assigned Farmers",
     "noFarmersAssigned": "No farmers assigned to this area",
     "noCustomersAssigned": "No customers assigned to this area",
     "assignCustomers": "Assign Customers",
+    "assignFarmers": "Assign Farmers",
     "deleteArea": "Delete Area",
-    "confirmDelete": "Are you sure? Customer assignments to this area will be removed.",
+    "confirmDelete": "Are you sure? Assignments to this area will be removed.",
     "manageAreas": "Manage Areas"
   },
   "shifts": {
