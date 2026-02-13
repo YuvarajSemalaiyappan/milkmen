@@ -62,10 +62,14 @@ router.get('/subscription', authenticateToken, async (req: AuthRequest, res: Res
       daysRemaining = Math.ceil((subscription.endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     }
 
-    // Fetch available plan pricing
-    const pricing = await prisma.planPricing.findMany({
-      orderBy: { plan: 'asc' }
-    })
+    // Fetch available plan pricing (skip if not set up yet)
+    let pricing: { plan: string; amount: number }[] = []
+    try {
+      const rows = await prisma.planPricing.findMany({ orderBy: { plan: 'asc' } })
+      pricing = rows.map((p) => ({ plan: p.plan, amount: Number(p.amount) }))
+    } catch {
+      // pricing data not available yet — that's okay
+    }
 
     return res.json({
       success: true,
@@ -76,10 +80,7 @@ router.get('/subscription', authenticateToken, async (req: AuthRequest, res: Res
         startDate: subscription.startDate,
         endDate: subscription.endDate,
         daysRemaining,
-        pricing: pricing.map((p) => ({
-          plan: p.plan,
-          amount: Number(p.amount)
-        }))
+        pricing
       }
     })
   } catch (error) {

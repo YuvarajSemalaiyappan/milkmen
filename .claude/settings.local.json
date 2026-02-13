@@ -114,7 +114,9 @@
       "Bash(render logs:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nFix path-to-regexp syntax for Express 4.21+\n\nUse {*splat} instead of bare * for admin SPA fallback route.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git commit:*)",
-      "Bash(npm ci:*)"
+      "Bash(npm ci:*)",
+      "Bash(render services:*)",
+      "Bash(neonctl:*)"
     ]
   }
 }
