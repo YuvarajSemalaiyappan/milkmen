@@ -256,13 +256,15 @@ class SyncService {
           payments?: unknown[]
           farmerOrders?: unknown[]
           customerOrders?: unknown[]
+          routeFarmers?: unknown[]
+          routeCustomers?: unknown[]
         }
       }
 
       if (response.success && response.data) {
         // Merge server data with local data
         // This is a simple implementation - you may need conflict resolution
-        const { farmers, customers, collections, deliveries, payments, farmerOrders, customerOrders } = response.data
+        const { farmers, customers, collections, deliveries, payments, farmerOrders, customerOrders, routeFarmers, routeCustomers } = response.data
 
         if (farmers) await this.mergeFarmers(farmers)
         if (customers) await this.mergeCustomers(customers)
@@ -271,6 +273,8 @@ class SyncService {
         if (payments) await this.mergePayments(payments)
         if (farmerOrders) await this.mergeFarmerOrders(farmerOrders)
         if (customerOrders) await this.mergeCustomerOrders(customerOrders)
+        if (routeFarmers) await this.mergeRouteFarmers(routeFarmers)
+        if (routeCustomers) await this.mergeRouteCustomers(routeCustomers)
       }
     } catch (error) {
       console.error('Pull changes error:', error)
@@ -471,6 +475,40 @@ class SyncService {
         sortOrder: record.sortOrder as number
       }))
     )
+  }
+
+  private async mergeRouteFarmers(records: unknown[]): Promise<void> {
+    const typedRecords = records as Array<Record<string, unknown>>
+    // Replace all route-farmer assignments with server data
+    await db.routeFarmers.clear()
+    if (typedRecords.length > 0) {
+      await db.routeFarmers.bulkAdd(
+        typedRecords.map((record) => ({
+          id: record.id as string,
+          routeId: record.routeId as string,
+          farmerId: record.farmerId as string,
+          areaId: record.areaId as string | undefined,
+          sortOrder: (record.sortOrder as number) || 0
+        }))
+      )
+    }
+  }
+
+  private async mergeRouteCustomers(records: unknown[]): Promise<void> {
+    const typedRecords = records as Array<Record<string, unknown>>
+    // Replace all route-customer assignments with server data
+    await db.routeCustomers.clear()
+    if (typedRecords.length > 0) {
+      await db.routeCustomers.bulkAdd(
+        typedRecords.map((record) => ({
+          id: record.id as string,
+          routeId: record.routeId as string,
+          customerId: record.customerId as string,
+          areaId: record.areaId as string | undefined,
+          sortOrder: (record.sortOrder as number) || 0
+        }))
+      )
+    }
   }
 
   private async mergePayments(records: unknown[]): Promise<void> {

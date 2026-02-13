@@ -20,6 +20,7 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useFarmers, useCollections, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
+import { db } from '@/db/localDb'
 import { formatCurrency, formatDate } from '@/utils'
 import type { LocalFarmer, LocalCollection } from '@/types'
 
@@ -86,6 +87,13 @@ export function FarmerDetailPage() {
         collectAM: data.data.collectAM ?? true,
         collectPM: data.data.collectPM ?? false
       })
+
+      // Load existing route/area assignment
+      const routeFarmer = await db.routeFarmers.where('farmerId').equals(id).first()
+      if (routeFarmer) {
+        setSelectedRouteId(routeFarmer.routeId)
+        setSelectedAreaId(routeFarmer.areaId || null)
+      }
     }
   }
 
@@ -112,6 +120,16 @@ export function FarmerDetailPage() {
       if (selectedRouteId && !id.startsWith('local_')) {
         try {
           await routesApi.assignFarmers(selectedRouteId, [id], undefined, selectedAreaId ? { [id]: selectedAreaId } : undefined)
+          // Update local DB so it shows on next load without sync
+          const existing = await db.routeFarmers.where('farmerId').equals(id).first()
+          if (existing) await db.routeFarmers.delete(existing.id)
+          await db.routeFarmers.add({
+            id: `${selectedRouteId}_${id}`,
+            routeId: selectedRouteId,
+            farmerId: id,
+            areaId: selectedAreaId || undefined,
+            sortOrder: existing?.sortOrder || 0
+          })
         } catch {
           // Non-critical
         }

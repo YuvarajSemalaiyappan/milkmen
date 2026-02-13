@@ -20,6 +20,7 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useCustomers, useDeliveries, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
+import { db } from '@/db/localDb'
 import { formatCurrency, formatDate } from '@/utils'
 import type { LocalCustomer, LocalDelivery } from '@/types'
 
@@ -84,6 +85,13 @@ export function CustomerDetailPage() {
         subscriptionQtyAM: data.data.subscriptionQtyAM || undefined,
         subscriptionQtyPM: data.data.subscriptionQtyPM || undefined
       })
+
+      // Load existing route/area assignment
+      const routeCustomer = await db.routeCustomers.where('customerId').equals(id).first()
+      if (routeCustomer) {
+        setSelectedRouteId(routeCustomer.routeId)
+        setSelectedAreaId(routeCustomer.areaId || null)
+      }
     }
   }
 
@@ -110,6 +118,16 @@ export function CustomerDetailPage() {
       if (selectedRouteId && !id.startsWith('local_')) {
         try {
           await routesApi.assignCustomers(selectedRouteId, [id], undefined, selectedAreaId ? { [id]: selectedAreaId } : undefined)
+          // Update local DB so it shows on next load without sync
+          const existing = await db.routeCustomers.where('customerId').equals(id).first()
+          if (existing) await db.routeCustomers.delete(existing.id)
+          await db.routeCustomers.add({
+            id: `${selectedRouteId}_${id}`,
+            routeId: selectedRouteId,
+            customerId: id,
+            areaId: selectedAreaId || undefined,
+            sortOrder: existing?.sortOrder || 0
+          })
         } catch {
           // Non-critical
         }

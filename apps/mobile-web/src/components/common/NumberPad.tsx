@@ -5,11 +5,12 @@ import { Delete, Hash, Grid3X3 } from 'lucide-react'
 export interface QuickPadProps {
   value: string
   onChange: (value: string) => void
+  defaultFullPad?: boolean
   className?: string
 }
 
-export function QuickPad({ value, onChange, className }: QuickPadProps) {
-  const [showFullPad, setShowFullPad] = useState(false)
+export function QuickPad({ value, onChange, defaultFullPad = false, className }: QuickPadProps) {
+  const [showFullPad, setShowFullPad] = useState(defaultFullPad)
 
   const currentValue = parseFloat(value) || 0
 

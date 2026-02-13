@@ -266,6 +266,7 @@ export function AddCollectionPage() {
               <QuickPad
                 value={quantity}
                 onChange={setQuantity}
+                defaultFullPad
               />
             </Card>
 

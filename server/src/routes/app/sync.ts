@@ -80,9 +80,16 @@ router.get('/pull', authenticateToken, async (req: AuthRequest, res: Response) =
     ])
 
     // Fetch user sort orders (always send all, they're small)
-    const [farmerOrders, customerOrders] = await Promise.all([
+    // Fetch route assignments for this business's routes
+    const [farmerOrders, customerOrders, routeFarmers, routeCustomers] = await Promise.all([
       prisma.userFarmerOrder.findMany({ where: { userId } }),
-      prisma.userCustomerOrder.findMany({ where: { userId } })
+      prisma.userCustomerOrder.findMany({ where: { userId } }),
+      prisma.routeFarmer.findMany({
+        where: { route: { businessId } }
+      }),
+      prisma.routeCustomer.findMany({
+        where: { route: { businessId } }
+      })
     ])
 
     const serverTime = new Date().toISOString()
@@ -97,6 +104,8 @@ router.get('/pull', authenticateToken, async (req: AuthRequest, res: Response) =
         payments,
         farmerOrders,
         customerOrders,
+        routeFarmers,
+        routeCustomers,
         serverTime
       }
     })
