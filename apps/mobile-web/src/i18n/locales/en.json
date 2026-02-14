@@ -287,7 +287,16 @@
     "paidToFarmer": "Paid to Farmer",
     "receivedFromCustomer": "Received from Customer",
     "banktransfer": "Bank Transfer",
-    "receive": "Receive"
+    "receive": "Receive",
+    "dateFilter": "Period Calculator",
+    "fromDate": "From Date",
+    "fromShift": "From Shift",
+    "toDate": "To Date",
+    "toShift": "To Shift",
+    "calculating": "Calculating...",
+    "periodTotal": "Period Total",
+    "entries": "entries",
+    "usePeriodTotal": "Use Period Total"
   },
   "reports": {
     "title": "Reports",

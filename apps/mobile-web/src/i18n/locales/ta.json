@@ -287,7 +287,16 @@
     "paidToFarmer": "விவசாயிக்கு செலுத்தியது",
     "receivedFromCustomer": "வாடிக்கையாளரிடம் பெற்றது",
     "banktransfer": "வங்கி பரிமாற்றம்",
-    "receive": "பெறு"
+    "receive": "பெறு",
+    "dateFilter": "காலக் கணிப்பான்",
+    "fromDate": "தொடக்க தேதி",
+    "fromShift": "தொடக்க ஷிப்ட்",
+    "toDate": "முடிவு தேதி",
+    "toShift": "முடிவு ஷிப்ட்",
+    "calculating": "கணக்கிடுகிறது...",
+    "periodTotal": "கால மொத்தம்",
+    "entries": "பதிவுகள்",
+    "usePeriodTotal": "கால மொத்தத்தை பயன்படுத்து"
   },
   "reports": {
     "title": "அறிக்கைகள்",
