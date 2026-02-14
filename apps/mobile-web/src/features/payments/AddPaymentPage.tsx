@@ -115,8 +115,8 @@ export function AddPaymentPage() {
 
       if (recipientType === 'farmer') {
         const collections = await db.collections
-          .where('data.date')
-          .between(fromDate, toDate, true, true)
+          .where('[data.date]')
+          .between([fromDate], [toDate], true, true)
           .toArray()
 
         for (const c of collections) {
@@ -130,8 +130,8 @@ export function AddPaymentPage() {
         }
       } else {
         const deliveries = await db.deliveries
-          .where('data.date')
-          .between(fromDate, toDate, true, true)
+          .where('[data.date]')
+          .between([fromDate], [toDate], true, true)
           .toArray()
 
         for (const d of deliveries) {
