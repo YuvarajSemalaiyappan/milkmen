@@ -273,7 +273,7 @@ export function AddPaymentPage() {
         {/* Select Recipient */}
         {!selected && (
           <Card padding="none">
-            <ul className="divide-y divide-gray-100 dark:divide-gray-700 max-h-64 overflow-y-auto">
+            <ul className="divide-y divide-gray-100 dark:divide-gray-700 max-h-[70vh] overflow-y-auto">
               {recipients.map((item) => {
                 const data = 'data' in item ? item.data : item
                 const itemBalance = (data as { balance: number }).balance
