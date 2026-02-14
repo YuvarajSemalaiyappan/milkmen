@@ -342,6 +342,7 @@
     "due": "Due",
     "balance": "Balance",
     "paid": "Paid",
+    "unpaid": "Unpaid",
     "filterByFarmer": "Filter by Farmer",
     "filterByCustomer": "Filter by Customer",
     "allFarmers": "All Farmers",

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
-import { useFarmers, useCollections, useRoutes, useAreas } from '@/hooks'
+import { useFarmers, useCollections, usePayments, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
 import { db } from '@/db/localDb'
 import { formatCurrency, formatDate } from '@/utils'
@@ -41,10 +41,12 @@ export function FarmerDetailPage() {
   const navigate = useNavigate()
   const { getFarmer, updateFarmer, deleteFarmer } = useFarmers()
   const { getCollectionsByFarmer } = useCollections()
+  const { getPaymentsByFarmer } = usePayments()
   const { routes } = useRoutes()
 
   const [farmer, setFarmer] = useState<LocalFarmer | null>(null)
   const [collections, setCollections] = useState<LocalCollection[]>([])
+  const [lastPaymentDate, setLastPaymentDate] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -71,6 +73,7 @@ export function FarmerDetailPage() {
     if (id) {
       loadFarmer()
       loadCollections()
+      loadLastPaymentDate()
     }
   }, [id])
 
@@ -101,6 +104,18 @@ export function FarmerDetailPage() {
     if (!id) return
     const data = await getCollectionsByFarmer(id, undefined, undefined, 10)
     setCollections(data)
+  }
+
+  const loadLastPaymentDate = async () => {
+    if (!id) return
+    const payments = await getPaymentsByFarmer(id)
+    if (payments.length > 0) {
+      const dates = payments.map((p) => p.data.date)
+      dates.sort()
+      setLastPaymentDate(dates[dates.length - 1])
+    } else {
+      setLastPaymentDate(null)
+    }
   }
 
   const onSubmit = async (data: FarmerFormData) => {
@@ -514,6 +529,9 @@ export function FarmerDetailPage() {
                           </span>
                           <Badge size="sm" variant={collection.data.shift === 'MORNING' ? 'info' : 'warning'}>
                             {collection.data.shift === 'MORNING' ? 'AM' : 'PM'}
+                          </Badge>
+                          <Badge size="sm" variant={lastPaymentDate && collection.data.date <= lastPaymentDate ? 'success' : 'error'}>
+                            {lastPaymentDate && collection.data.date <= lastPaymentDate ? t('reports.paid') : t('reports.unpaid')}
                           </Badge>
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">

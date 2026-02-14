@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
-import { useCustomers, useDeliveries, useRoutes, useAreas } from '@/hooks'
+import { useCustomers, useDeliveries, usePayments, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
 import { db } from '@/db/localDb'
 import { formatCurrency, formatDate } from '@/utils'
@@ -41,10 +41,12 @@ export function CustomerDetailPage() {
   const navigate = useNavigate()
   const { getCustomer, updateCustomer, deleteCustomer } = useCustomers()
   const { getDeliveriesByCustomer } = useDeliveries()
+  const { getPaymentsByCustomer } = usePayments()
   const { routes } = useRoutes()
 
   const [customer, setCustomer] = useState<LocalCustomer | null>(null)
   const [deliveries, setDeliveries] = useState<LocalDelivery[]>([])
+  const [lastPaymentDate, setLastPaymentDate] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -69,6 +71,7 @@ export function CustomerDetailPage() {
     if (id) {
       loadCustomer()
       loadDeliveries()
+      loadLastPaymentDate()
     }
   }, [id])
 
@@ -99,6 +102,18 @@ export function CustomerDetailPage() {
     if (!id) return
     const data = await getDeliveriesByCustomer(id, undefined, undefined, 10)
     setDeliveries(data)
+  }
+
+  const loadLastPaymentDate = async () => {
+    if (!id) return
+    const payments = await getPaymentsByCustomer(id)
+    if (payments.length > 0) {
+      const dates = payments.map((p) => p.data.date)
+      dates.sort()
+      setLastPaymentDate(dates[dates.length - 1])
+    } else {
+      setLastPaymentDate(null)
+    }
   }
 
   const onSubmit = async (data: CustomerFormData) => {
@@ -545,6 +560,9 @@ export function CustomerDetailPage() {
                             {delivery.data.shift === 'MORNING' ? 'AM' : 'PM'}
                           </Badge>
                           {getStatusBadge(delivery.data.status)}
+                          <Badge size="sm" variant={lastPaymentDate && delivery.data.date <= lastPaymentDate ? 'success' : 'error'}>
+                            {lastPaymentDate && delivery.data.date <= lastPaymentDate ? t('reports.paid') : t('reports.unpaid')}
+                          </Badge>
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
                           {delivery.data.quantity}L @ {formatCurrency(delivery.data.ratePerLiter)}/L
