@@ -18,7 +18,7 @@ type Step = 'select-customer' | 'enter-quantity'
 export function AddDeliveryPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const currentShift = useAppStore((state) => state.currentShift)
   const setCurrentShift = useAppStore((state) => state.setCurrentShift)
@@ -216,6 +216,8 @@ export function AddDeliveryPage() {
                     setStep('select-customer')
                     setSelectedCustomer(null)
                     setQuantity('')
+                    searchParams.delete('customerId')
+                    setSearchParams(searchParams, { replace: true })
                   }}
                 >
                   {t('common.edit')}

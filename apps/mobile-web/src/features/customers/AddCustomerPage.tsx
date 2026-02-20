@@ -168,7 +168,7 @@ export function AddCustomerPage() {
                 <Input
                   label={t('customer.morningQty')}
                   type="number"
-                  step="0.1"
+                  step="0.25"
                   placeholder="Morning quantity (optional)"
                   error={errors.subscriptionQtyAM?.message}
                   {...register('subscriptionQtyAM', { valueAsNumber: true })}
@@ -177,7 +177,7 @@ export function AddCustomerPage() {
                 <Input
                   label={t('customer.eveningQty')}
                   type="number"
-                  step="0.1"
+                  step="0.25"
                   placeholder="Evening quantity (optional)"
                   error={errors.subscriptionQtyPM?.message}
                   {...register('subscriptionQtyPM', { valueAsNumber: true })}

@@ -278,7 +278,7 @@ export function CustomerDetailPage() {
                     <Input
                       label={t('customer.morningQty')}
                       type="number"
-                      step="0.5"
+                      step="0.25"
                       placeholder="Morning quantity (liters)"
                       error={errors.subscriptionQtyAM?.message}
                       {...register('subscriptionQtyAM', { valueAsNumber: true })}
@@ -291,7 +291,7 @@ export function CustomerDetailPage() {
                     <Input
                       label={t('customer.eveningQty')}
                       type="number"
-                      step="0.5"
+                      step="0.25"
                       placeholder="Evening quantity (liters)"
                       error={errors.subscriptionQtyPM?.message}
                       {...register('subscriptionQtyPM', { valueAsNumber: true })}

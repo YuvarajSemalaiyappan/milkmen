@@ -17,7 +17,7 @@ type Step = 'select-farmer' | 'enter-quantity'
 export function AddCollectionPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const currentShift = useAppStore((state) => state.currentShift)
   const setCurrentShift = useAppStore((state) => state.setCurrentShift)
@@ -226,6 +226,8 @@ export function AddCollectionPage() {
                     setStep('select-farmer')
                     setSelectedFarmer(null)
                     setQuantity('')
+                    searchParams.delete('farmerId')
+                    setSearchParams(searchParams, { replace: true })
                   }}
                 >
                   {t('common.edit')}

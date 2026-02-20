@@ -202,7 +202,7 @@ export function DeliveryDetailPage() {
               <Input
                 label={t('collection.quantity')}
                 type="number"
-                step="0.1"
+                step="0.25"
                 min="0.1"
                 error={errors.quantity?.message}
                 {...register('quantity', { valueAsNumber: true })}
