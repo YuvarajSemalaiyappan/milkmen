@@ -219,19 +219,28 @@ export function AddCollectionPage() {
                     {selectedFarmer.data.village}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStep('select-farmer')
-                    setSelectedFarmer(null)
-                    setQuantity('')
-                    searchParams.delete('farmerId')
-                    setSearchParams(searchParams, { replace: true })
-                  }}
-                >
-                  {t('common.edit')}
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(`/farmers/${selectedFarmer.id}`)}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setStep('select-farmer')
+                      setSelectedFarmer(null)
+                      setQuantity('')
+                      searchParams.delete('farmerId')
+                      setSearchParams(searchParams, { replace: true })
+                    }}
+                  >
+                    {t('common.change')}
+                  </Button>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <Input

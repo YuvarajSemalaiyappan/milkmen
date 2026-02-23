@@ -209,19 +209,28 @@ export function AddDeliveryPage() {
                     {selectedCustomer.data.address}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStep('select-customer')
-                    setSelectedCustomer(null)
-                    setQuantity('')
-                    searchParams.delete('customerId')
-                    setSearchParams(searchParams, { replace: true })
-                  }}
-                >
-                  {t('common.edit')}
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(`/customers/${selectedCustomer.id}`)}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setStep('select-customer')
+                      setSelectedCustomer(null)
+                      setQuantity('')
+                      searchParams.delete('customerId')
+                      setSearchParams(searchParams, { replace: true })
+                    }}
+                  >
+                    {t('common.change')}
+                  </Button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Input
