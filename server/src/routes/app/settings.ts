@@ -239,7 +239,7 @@ router.put('/business', authenticateToken, requireOwnerOrManager, async (req: Au
 router.get('/staff', authenticateToken, requireOwner, async (req: AuthRequest, res: Response) => {
   try {
     const staff = await prisma.user.findMany({
-      where: { businessId: req.user!.businessId },
+      where: { businessId: req.user!.businessId, isActive: true },
       select: {
         id: true,
         name: true,
