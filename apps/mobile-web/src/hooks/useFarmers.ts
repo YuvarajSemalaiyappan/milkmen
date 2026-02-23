@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, generateLocalId, now } from '@/db/localDb'
 import { syncService } from '@/services/syncService'
@@ -142,9 +142,12 @@ export function useFarmers() {
       .toArray()
   }, [])
 
+  const stableFarmers = useMemo(() => farmers ?? [], [farmers])
+  const stableActiveFarmers = useMemo(() => activeFarmers ?? [], [activeFarmers])
+
   return {
-    farmers: farmers || [],
-    activeFarmers: activeFarmers || [],
+    farmers: stableFarmers,
+    activeFarmers: stableActiveFarmers,
     addFarmer,
     updateFarmer,
     deleteFarmer,

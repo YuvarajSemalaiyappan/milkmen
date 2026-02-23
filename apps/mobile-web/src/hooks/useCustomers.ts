@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, generateLocalId, now } from '@/db/localDb'
 import { syncService } from '@/services/syncService'
@@ -155,9 +155,12 @@ export function useCustomers() {
     []
   )
 
+  const stableCustomers = useMemo(() => customers ?? [], [customers])
+  const stableActiveCustomers = useMemo(() => activeCustomers ?? [], [activeCustomers])
+
   return {
-    customers: customers || [],
-    activeCustomers: activeCustomers || [],
+    customers: stableCustomers,
+    activeCustomers: stableActiveCustomers,
     addCustomer,
     updateCustomer,
     deleteCustomer,
