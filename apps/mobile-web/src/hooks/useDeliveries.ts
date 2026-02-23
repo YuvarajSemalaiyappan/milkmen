@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import Dexie from 'dexie'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, generateLocalId, now } from '@/db/localDb'
@@ -221,10 +221,14 @@ export function useDeliveries() {
     }
   }, [])
 
+  const stableDeliveries = useMemo(() => deliveries ?? [], [deliveries])
+  const stableTodayDeliveries = useMemo(() => todayDeliveries ?? [], [todayDeliveries])
+  const stableTodayTotals = useMemo(() => todayTotals ?? { liters: 0, amount: 0, count: 0 }, [todayTotals])
+
   return {
-    deliveries: deliveries || [],
-    todayDeliveries: todayDeliveries || [],
-    todayTotals: todayTotals || { liters: 0, amount: 0, count: 0 },
+    deliveries: stableDeliveries,
+    todayDeliveries: stableTodayDeliveries,
+    todayTotals: stableTodayTotals,
     addDelivery,
     updateDelivery,
     deleteDelivery,

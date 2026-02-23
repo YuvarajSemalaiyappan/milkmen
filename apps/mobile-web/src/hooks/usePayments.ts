@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, generateLocalId, now } from '@/db/localDb'
 import { syncService } from '@/services/syncService'
@@ -268,8 +268,10 @@ export function usePayments() {
     []
   )
 
+  const stablePayments = useMemo(() => payments ?? [], [payments])
+
   return {
-    payments: payments || [],
+    payments: stablePayments,
     addPayment,
     updatePayment,
     deletePayment,
