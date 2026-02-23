@@ -39,7 +39,7 @@ export function RouteAssignUsersPage() {
       }
 
       // Load all users (via settings API)
-      const response = await api.get('/settings/users') as ApiResponse<User[]>
+      const response = await api.get('/settings/staff') as ApiResponse<User[]>
       if (response.success && response.data) {
         setUsers(response.data.filter(u => u.isActive))
       }
