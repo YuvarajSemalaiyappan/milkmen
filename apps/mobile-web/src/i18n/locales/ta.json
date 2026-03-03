@@ -297,7 +297,8 @@
     "calculating": "கணக்கிடுகிறது...",
     "periodTotal": "கால மொத்தம்",
     "entries": "பதிவுகள்",
-    "usePeriodTotal": "கால மொத்தத்தை பயன்படுத்து"
+    "usePeriodTotal": "கால மொத்தத்தை பயன்படுத்து",
+    "selectRouteHint": "நபர்களைக் காண ஒரு வழியைத் தேர்ந்தெடுக்கவும்"
   },
   "reports": {
     "title": "அறிக்கைகள்",

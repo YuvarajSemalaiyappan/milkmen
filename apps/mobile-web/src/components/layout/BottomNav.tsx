@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { clsx } from 'clsx'
-import { Home, Milk, Truck, Users, MoreHorizontal } from 'lucide-react'
+import { Home, Milk, Truck, IndianRupee, MoreHorizontal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 interface NavItem {
@@ -13,7 +13,7 @@ const navItems: NavItem[] = [
   { path: '/', icon: Home, labelKey: 'nav.home' },
   { path: '/collect', icon: Milk, labelKey: 'nav.collect' },
   { path: '/deliver', icon: Truck, labelKey: 'nav.deliver' },
-  { path: '/farmers', icon: Users, labelKey: 'nav.farmers' },
+  { path: '/payments', icon: IndianRupee, labelKey: 'nav.payments' },
   { path: '/more', icon: MoreHorizontal, labelKey: 'nav.more' }
 ]
 

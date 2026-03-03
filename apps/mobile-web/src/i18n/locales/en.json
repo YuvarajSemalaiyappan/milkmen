@@ -297,7 +297,8 @@
     "calculating": "Calculating...",
     "periodTotal": "Period Total",
     "entries": "entries",
-    "usePeriodTotal": "Use Period Total"
+    "usePeriodTotal": "Use Period Total",
+    "selectRouteHint": "Select a route to see people"
   },
   "reports": {
     "title": "Reports",

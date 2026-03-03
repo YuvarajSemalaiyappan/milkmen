@@ -1,173 +1,229 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, CreditCard, User, UserCircle, Calendar, ArrowUpRight, ArrowDownLeft } from 'lucide-react'
+import { MapPin, Users, ChevronRight, IndianRupee } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Card, Badge } from '@/components/ui'
-import { EmptyState } from '@/components/common'
-import { usePayments, useFarmers, useCustomers } from '@/hooks'
-import { formatCurrency, formatDate } from '@/utils'
-import type { LocalPayment } from '@/types'
+import { Card } from '@/components/ui'
+import { RouteFilter } from '@/components/common'
+import { useRouteStore } from '@/store'
+import { routesApi } from '@/services/api'
+import { formatCurrency } from '@/utils'
+import type { ApiResponse } from '@/types'
+
+type RecipientType = 'farmer' | 'customer'
+
+interface RouteFarmerItem {
+  id: string
+  farmerId: string
+  areaId?: string | null
+  farmer: {
+    id: string
+    name: string
+    phone?: string
+    village?: string
+    isActive: boolean
+    balance: number
+  }
+}
+
+interface RouteCustomerItem {
+  id: string
+  customerId: string
+  areaId?: string | null
+  customer: {
+    id: string
+    name: string
+    phone?: string
+    address?: string
+    isActive: boolean
+    balance: number
+  }
+}
+
+interface RouteDetailData {
+  id: string
+  routeFarmers: RouteFarmerItem[]
+  routeCustomers: RouteCustomerItem[]
+}
 
 export function PaymentsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { payments, isLoading } = usePayments()
-  const { activeFarmers } = useFarmers()
-  const { activeCustomers } = useCustomers()
+  const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
+  const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
 
-  // Get recent payments (last 50)
-  const recentPayments = payments.slice(0, 50)
+  const [recipientType, setRecipientType] = useState<RecipientType>('farmer')
+  const [farmers, setFarmers] = useState<RouteFarmerItem[]>([])
+  const [customers, setCustomers] = useState<RouteCustomerItem[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
-  const getFarmerName = (farmerId?: string) => {
-    if (!farmerId) return null
-    const farmer = activeFarmers.find((f) => f.id === farmerId)
-    return farmer?.data.name
-  }
-
-  const getCustomerName = (customerId?: string) => {
-    if (!customerId) return null
-    const customer = activeCustomers.find((c) => c.id === customerId)
-    return customer?.data.name
-  }
-
-  const getPaymentTypeLabel = (type: string) => {
-    switch (type) {
-      case 'PAID_TO_FARMER':
-        return t('payment.paidToFarmer')
-      case 'RECEIVED_FROM_CUSTOMER':
-        return t('payment.receivedFromCustomer')
-      case 'ADVANCE_TO_FARMER':
-        return t('payment.advanceToFarmer')
-      case 'ADVANCE_FROM_CUSTOMER':
-        return t('payment.advanceFromCustomer')
-      default:
-        return type
+  useEffect(() => {
+    if (!selectedRouteId) {
+      setFarmers([])
+      setCustomers([])
+      return
     }
-  }
 
-  const getMethodLabel = (method: string) => {
-    switch (method) {
-      case 'CASH':
-        return t('payment.cash')
-      case 'UPI':
-        return 'UPI'
-      case 'BANK_TRANSFER':
-        return t('payment.banktransfer')
-      default:
-        return method
+    const fetchRouteData = async () => {
+      setIsLoading(true)
+      try {
+        const response = await routesApi.get(selectedRouteId) as ApiResponse<RouteDetailData>
+        if (response.success && response.data) {
+          setFarmers(response.data.routeFarmers.filter(rf => rf.farmer.isActive))
+          setCustomers(response.data.routeCustomers.filter(rc => rc.customer.isActive))
+        }
+      } catch (error) {
+        console.error('Failed to fetch route data:', error)
+        setFarmers([])
+        setCustomers([])
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }
+    fetchRouteData()
+  }, [selectedRouteId])
+
+  const filteredFarmers = selectedAreaId
+    ? farmers.filter((rf) => rf.areaId === selectedAreaId)
+    : farmers
+
+  const filteredCustomers = selectedAreaId
+    ? customers.filter((rc) => rc.areaId === selectedAreaId)
+    : customers
 
   return (
-    <AppShell
-      title={t('payment.title')}
-      rightAction={
-        <Button
-          size="sm"
-          onClick={() => navigate('/payments/add')}
-          leftIcon={<Plus className="w-4 h-4" />}
-        >
-          {t('common.add')}
-        </Button>
-      }
-    >
+    <AppShell title={t('payment.title')}>
       <div className="px-4 pt-5 pb-4 space-y-4">
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => navigate('/payments/add?type=farmer')}
-            fullWidth
-            leftIcon={<ArrowUpRight className="w-4 h-4 text-red-500" />}
+        {/* Farmer / Customer Toggle */}
+        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+          <button
+            onClick={() => setRecipientType('farmer')}
+            className={`flex-1 py-3 px-4 rounded-md font-medium transition-all ${
+              recipientType === 'farmer'
+                ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-300'
+            }`}
           >
             {t('payment.payFarmer')}
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => navigate('/payments/add?type=customer')}
-            fullWidth
-            leftIcon={<ArrowDownLeft className="w-4 h-4 text-green-500" />}
+          </button>
+          <button
+            onClick={() => setRecipientType('customer')}
+            className={`flex-1 py-3 px-4 rounded-md font-medium transition-all ${
+              recipientType === 'customer'
+                ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-300'
+            }`}
           >
             {t('payment.receiveCustomer')}
-          </Button>
+          </button>
         </div>
 
-        {/* Loading */}
-        {isLoading && (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            {t('common.loading')}...
+        {/* Route Filter (includes Area Filter) */}
+        <RouteFilter />
+
+        {/* People List */}
+        {!selectedRouteId ? (
+          <div className="text-center py-12">
+            <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 dark:text-gray-400">
+              {t('routes.allRoutes')}
+            </p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+              {t('payment.selectRouteHint')}
+            </p>
           </div>
-        )}
-
-        {/* Payments List */}
-        {!isLoading && (
-          <Card>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              {t('payment.history')}
-            </h2>
-            {recentPayments.length === 0 ? (
-              <EmptyState
-                icon={<CreditCard className="w-12 h-12" />}
-                title={t('payment.noPayments')}
-                action={{
-                  label: t('payment.addPayment'),
-                  onClick: () => navigate('/payments/add')
-                }}
-              />
-            ) : (
-              <div className="space-y-3">
-                {recentPayments.map((payment) => {
-                  const isFarmerPayment = !!payment.data.farmerId
-                  const name = isFarmerPayment
-                    ? getFarmerName(payment.data.farmerId)
-                    : getCustomerName(payment.data.customerId)
-                  const isOutgoing = payment.data.type === 'PAID_TO_FARMER' || payment.data.type === 'ADVANCE_TO_FARMER'
-
-                  return (
-                    <div
-                      key={payment.id}
-                      className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
-                    >
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        isFarmerPayment ? 'bg-green-100 dark:bg-green-900/50' : 'bg-blue-100 dark:bg-blue-900/50'
-                      }`}>
-                        {isFarmerPayment ? (
-                          <User className="w-5 h-5 text-green-600 dark:text-green-400" />
-                        ) : (
-                          <UserCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white truncate">
-                          {name || 'Unknown'}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                          <Calendar className="w-3 h-3" />
-                          <span>{formatDate(payment.data.date)}</span>
-                          <Badge size="sm" variant="default">
-                            {getMethodLabel(payment.data.method)}
-                          </Badge>
+        ) : isLoading ? (
+          <div className="text-center py-8 text-gray-500">
+            {t('common.loading')}
+          </div>
+        ) : recipientType === 'farmer' ? (
+          filteredFarmers.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">
+                {selectedAreaId ? t('areas.noFarmersAssigned') : t('routes.noFarmersAssigned')}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {filteredFarmers.length} {t('farmer.farmersFound')}
+              </p>
+              {filteredFarmers.map((rf) => (
+                <Card
+                  key={rf.farmer.id}
+                  className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
+                  onClick={() => navigate(`/payments/add?type=farmer&farmerId=${rf.farmer.id}`)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
+                        {rf.farmer.name}
+                      </p>
+                      {rf.farmer.balance !== 0 && (
+                        <div className="flex items-center gap-1 text-sm mt-1">
+                          <IndianRupee className="w-3 h-3 text-gray-400" />
+                          <span className={rf.farmer.balance > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}>
+                            {formatCurrency(Math.abs(rf.farmer.balance))}
+                          </span>
+                          {rf.farmer.balance > 0 && (
+                            <span className="text-xs text-gray-400">
+                              {t('farmer.weOwe')}
+                            </span>
+                          )}
                         </div>
-                      </div>
-
-                      <div className="text-right">
-                        <p className={`font-semibold ${isOutgoing ? 'text-red-600' : 'text-green-600'}`}>
-                          {isOutgoing ? '-' : '+'}{formatCurrency(payment.data.amount)}
-                        </p>
-                        {payment.syncStatus === 'PENDING' && (
-                          <Badge size="sm" variant="warning">Pending</Badge>
-                        )}
-                      </div>
+                      )}
                     </div>
-                  )
-                })}
-              </div>
-            )}
-          </Card>
+                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )
+        ) : (
+          filteredCustomers.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">
+                {selectedAreaId ? t('areas.noCustomersAssigned') : t('routes.noCustomersAssigned')}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {filteredCustomers.length} {t('customer.customersFound')}
+              </p>
+              {filteredCustomers.map((rc) => (
+                <Card
+                  key={rc.customer.id}
+                  className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
+                  onClick={() => navigate(`/payments/add?type=customer&customerId=${rc.customer.id}`)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
+                        {rc.customer.name}
+                      </p>
+                      {rc.customer.balance !== 0 && (
+                        <div className="flex items-center gap-1 text-sm mt-1">
+                          <IndianRupee className="w-3 h-3 text-gray-400" />
+                          <span className={rc.customer.balance > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}>
+                            {formatCurrency(Math.abs(rc.customer.balance))}
+                          </span>
+                          {rc.customer.balance > 0 && (
+                            <span className="text-xs text-gray-400">
+                              {t('customer.theyOwe')}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )
         )}
       </div>
     </AppShell>
