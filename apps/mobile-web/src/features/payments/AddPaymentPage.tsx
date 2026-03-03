@@ -14,13 +14,18 @@ import type { LocalFarmer, LocalCustomer, PaymentType, PaymentMethod, Shift } fr
 
 type RecipientType = 'farmer' | 'customer'
 
-function getStartOfMonth(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-}
-
 function getToday(): string {
   return new Date().toISOString().split('T')[0]
+}
+
+function nextShift(date: string, shift: Shift): { date: string; shift: Shift } {
+  if (shift === 'MORNING') {
+    return { date, shift: 'EVENING' }
+  }
+  // EVENING → next day MORNING
+  const d = new Date(date + 'T00:00:00')
+  d.setDate(d.getDate() + 1)
+  return { date: d.toISOString().split('T')[0], shift: 'MORNING' }
 }
 
 function shiftOrd(shift: Shift): number {
@@ -56,6 +61,7 @@ export function AddPaymentPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const addToast = useAppStore((state) => state.addToast)
+  const currentShift = useAppStore((state) => state.currentShift)
 
   const { activeFarmers } = useFarmers()
   const { activeCustomers } = useCustomers()
@@ -69,10 +75,10 @@ export function AddPaymentPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Date+shift filter state
-  const [fromDate, setFromDate] = useState(getStartOfMonth)
+  const [fromDate, setFromDate] = useState(getToday)
   const [toDate, setToDate] = useState(getToday)
   const [fromShift, setFromShift] = useState<Shift>('MORNING')
-  const [toShift, setToShift] = useState<Shift>('EVENING')
+  const [toShift, setToShift] = useState<Shift>(currentShift)
   const [periodAmount, setPeriodAmount] = useState<number | null>(null)
   const [periodCount, setPeriodCount] = useState(0)
   const [isCalculating, setIsCalculating] = useState(false)
@@ -95,6 +101,43 @@ export function AddPaymentPage() {
       }
     }
   }, [searchParams, activeFarmers, activeCustomers])
+
+  // Auto-select date range based on last payment for this person
+  useEffect(() => {
+    const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
+    if (!selected) return
+
+    const autoSelectDates = async () => {
+      const allPayments = await db.payments.toArray()
+      const personPayments = allPayments
+        .filter((p) => {
+          if (recipientType === 'farmer') return p.data.farmerId === selected.id
+          return p.data.customerId === selected.id
+        })
+        .filter((p) => p.data.periodToDate && p.data.periodToShift)
+        .sort((a, b) => {
+          // Sort by periodToDate desc, then periodToShift desc
+          if (a.data.periodToDate! > b.data.periodToDate!) return -1
+          if (a.data.periodToDate! < b.data.periodToDate!) return 1
+          return a.data.periodToShift === 'EVENING' ? -1 : 1
+        })
+
+      if (personPayments.length > 0) {
+        const lastPayment = personPayments[0]
+        const next = nextShift(lastPayment.data.periodToDate!, lastPayment.data.periodToShift!)
+        setFromDate(next.date)
+        setFromShift(next.shift)
+      } else {
+        // No previous payment — default to start of month
+        const d = new Date()
+        setFromDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`)
+        setFromShift('MORNING')
+      }
+      setToDate(getToday())
+      setToShift(currentShift)
+    }
+    autoSelectDates()
+  }, [selectedFarmer, selectedCustomer, recipientType, currentShift])
 
   // Calculate period total when filters or recipient change
   const calculatePeriodTotal = useCallback(async () => {
