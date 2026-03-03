@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { User, UserCircle, Calculator } from 'lucide-react'
+import { User, UserCircle, Calculator, AlertTriangle } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Card } from '@/components/ui'
 import { NumberPad, ShiftToggle } from '@/components/common'
@@ -78,6 +78,7 @@ export function AddPaymentPage() {
   const [periodAmount, setPeriodAmount] = useState<number | null>(null)
   const [periodCount, setPeriodCount] = useState(0)
   const [isCalculating, setIsCalculating] = useState(false)
+  const [existingPaymentForPeriod, setExistingPaymentForPeriod] = useState(false)
 
   // Pre-select from URL params
   useEffect(() => {
@@ -148,10 +149,28 @@ export function AddPaymentPage() {
 
       setPeriodAmount(total)
       setPeriodCount(count)
+
+      // Check for existing payment covering this exact period
+      const allPayments = await db.payments.toArray()
+      const personId = selected.id
+      const hasDuplicate = allPayments.some((p) => {
+        const matchesPerson = recipientType === 'farmer'
+          ? p.data.farmerId === personId
+          : p.data.customerId === personId
+        if (!matchesPerson) return false
+        return (
+          p.data.periodFromDate === fromDate &&
+          p.data.periodToDate === toDate &&
+          p.data.periodFromShift === fromShift &&
+          p.data.periodToShift === toShift
+        )
+      })
+      setExistingPaymentForPeriod(hasDuplicate)
     } catch (error) {
       console.error('Failed to calculate period total:', error)
       setPeriodAmount(null)
       setPeriodCount(0)
+      setExistingPaymentForPeriod(false)
     } finally {
       setIsCalculating(false)
     }
@@ -186,7 +205,11 @@ export function AddPaymentPage() {
         amount: amountNum,
         type: paymentType,
         method: paymentMethod,
-        notes: notes || undefined
+        notes: notes || undefined,
+        periodFromDate: fromDate,
+        periodToDate: toDate,
+        periodFromShift: fromShift,
+        periodToShift: toShift
       }
 
       // Add to local DB
@@ -431,7 +454,15 @@ export function AddPaymentPage() {
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {periodCount} {t('payment.entries')}
                       </p>
-                      {periodAmount > 0 && (
+                      {existingPaymentForPeriod && (
+                        <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/30 rounded-lg text-left">
+                          <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-sm text-red-700 dark:text-red-300">
+                            {t('payment.alreadyPaidForPeriod')}
+                          </p>
+                        </div>
+                      )}
+                      {periodAmount > 0 && !existingPaymentForPeriod && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -507,7 +538,7 @@ export function AddPaymentPage() {
             <Button
               onClick={handleSubmit}
               isLoading={isSubmitting}
-              disabled={!amount || parseFloat(amount) <= 0}
+              disabled={!amount || parseFloat(amount) <= 0 || existingPaymentForPeriod}
               fullWidth
               size="lg"
             >

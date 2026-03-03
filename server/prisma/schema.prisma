@@ -273,6 +273,13 @@ model Payment {
   method PaymentMethod @default(CASH)
 
   notes     String?
+
+  // Period this payment covers (for duplicate detection)
+  periodFromDate  DateTime? @db.Date
+  periodToDate    DateTime? @db.Date
+  periodFromShift Shift?
+  periodToShift   Shift?
+
   createdAt DateTime @default(now())
 
   @@index([businessId, date])

@@ -298,7 +298,8 @@
     "periodTotal": "Period Total",
     "entries": "entries",
     "usePeriodTotal": "Use Period Total",
-    "selectRouteHint": "Select a route to see people"
+    "selectRouteHint": "Select a route to see people",
+    "alreadyPaidForPeriod": "A payment has already been made for this period. Change the date range to make a new payment."
   },
   "reports": {
     "title": "Reports",

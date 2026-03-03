@@ -15,7 +15,11 @@ const createPaymentSchema = z.object({
   amount: z.number().positive(),
   type: z.enum(['PAID_TO_FARMER', 'RECEIVED_FROM_CUSTOMER', 'ADVANCE_TO_FARMER', 'ADVANCE_FROM_CUSTOMER']),
   method: z.enum(['CASH', 'UPI', 'BANK_TRANSFER', 'OTHER']).optional(),
-  notes: z.string().max(500).optional()
+  notes: z.string().max(500).optional(),
+  periodFromDate: z.string().optional(),
+  periodToDate: z.string().optional(),
+  periodFromShift: z.enum(['MORNING', 'EVENING']).optional(),
+  periodToShift: z.enum(['MORNING', 'EVENING']).optional()
 }).refine(
   (data) => data.farmerId || data.customerId,
   { message: 'Either farmerId or customerId is required' }
@@ -203,7 +207,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { localId, farmerId, customerId, date, amount, type, method, notes } = validation.data
+    const { localId, farmerId, customerId, date, amount, type, method, notes, periodFromDate, periodToDate, periodFromShift, periodToShift } = validation.data
 
     // Verify farmer/customer belongs to business
     if (farmerId) {
@@ -258,6 +262,10 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           type,
           method: method || 'CASH',
           notes,
+          periodFromDate: periodFromDate ? new Date(periodFromDate) : undefined,
+          periodToDate: periodToDate ? new Date(periodToDate) : undefined,
+          periodFromShift: periodFromShift || undefined,
+          periodToShift: periodToShift || undefined,
           syncStatus: 'SYNCED'
         },
         include: {

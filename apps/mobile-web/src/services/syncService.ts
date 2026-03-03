@@ -543,7 +543,11 @@ class SyncService {
             amount: Number(record.amount) || 0,
             type: record.type as 'PAID_TO_FARMER' | 'RECEIVED_FROM_CUSTOMER' | 'ADVANCE_TO_FARMER' | 'ADVANCE_FROM_CUSTOMER',
             method: (record.method as 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'OTHER') || 'CASH',
-            notes: record.notes as string | undefined
+            notes: record.notes as string | undefined,
+            periodFromDate: record.periodFromDate ? this.toDateString(record.periodFromDate) : undefined,
+            periodToDate: record.periodToDate ? this.toDateString(record.periodToDate) : undefined,
+            periodFromShift: record.periodFromShift as 'MORNING' | 'EVENING' | undefined,
+            periodToShift: record.periodToShift as 'MORNING' | 'EVENING' | undefined
           }
         })
       }
