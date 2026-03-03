@@ -128,10 +128,46 @@ export function AddPaymentPage() {
         setFromDate(next.date)
         setFromShift(next.shift)
       } else {
-        // No previous payment — default to start of month
-        const d = new Date()
-        setFromDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`)
-        setFromShift('MORNING')
+        // No previous payment — default to first collection/delivery for this person
+        let firstDate: string | null = null
+        let firstShift: Shift = 'MORNING'
+
+        if (recipientType === 'farmer') {
+          const collections = await db.collections.toArray()
+          const personCollections = collections
+            .filter((c) => c.data.farmerId === selected.id)
+            .sort((a, b) => {
+              if (a.data.date < b.data.date) return -1
+              if (a.data.date > b.data.date) return 1
+              return a.data.shift === 'MORNING' ? -1 : 1
+            })
+          if (personCollections.length > 0) {
+            firstDate = personCollections[0].data.date
+            firstShift = personCollections[0].data.shift
+          }
+        } else {
+          const deliveries = await db.deliveries.toArray()
+          const personDeliveries = deliveries
+            .filter((d) => d.data.customerId === selected.id)
+            .sort((a, b) => {
+              if (a.data.date < b.data.date) return -1
+              if (a.data.date > b.data.date) return 1
+              return a.data.shift === 'MORNING' ? -1 : 1
+            })
+          if (personDeliveries.length > 0) {
+            firstDate = personDeliveries[0].data.date
+            firstShift = personDeliveries[0].data.shift
+          }
+        }
+
+        if (firstDate) {
+          setFromDate(firstDate)
+          setFromShift(firstShift)
+        } else {
+          // No records at all — fallback to today
+          setFromDate(getToday())
+          setFromShift('MORNING')
+        }
       }
       setToDate(getToday())
       setToShift(currentShift)
