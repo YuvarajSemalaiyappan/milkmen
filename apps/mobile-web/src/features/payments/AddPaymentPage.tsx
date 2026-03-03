@@ -60,9 +60,7 @@ export function AddPaymentPage() {
   const { activeFarmers } = useFarmers()
   const { activeCustomers } = useCustomers()
 
-  const [recipientType, setRecipientType] = useState<RecipientType>(
-    (searchParams.get('type') as RecipientType) || 'farmer'
-  )
+  const recipientType: RecipientType = (searchParams.get('type') as RecipientType) || 'farmer'
   const [selectedFarmer, setSelectedFarmer] = useState<LocalFarmer | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<LocalCustomer | null>(null)
   const [amount, setAmount] = useState('')
@@ -88,13 +86,11 @@ export function AddPaymentPage() {
     if (farmerId) {
       const farmer = activeFarmers.find((f) => f.id === farmerId)
       if (farmer) {
-        setRecipientType('farmer')
         setSelectedFarmer(farmer)
       }
     } else if (customerId) {
       const customer = activeCustomers.find((c) => c.id === customerId)
       if (customer) {
-        setRecipientType('customer')
         setSelectedCustomer(customer)
       }
     }
@@ -252,7 +248,6 @@ export function AddPaymentPage() {
     }
   }
 
-  const recipients = recipientType === 'farmer' ? activeFarmers : activeCustomers
   const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
   const balance = selected
     ? recipientType === 'farmer'
@@ -261,94 +256,8 @@ export function AddPaymentPage() {
     : 0
 
   return (
-    <AppShell title={t('payment.addPayment')} showBack>
+    <AppShell title={recipientType === 'farmer' ? t('payment.payFarmer') : t('payment.receiveCustomer')} showBack>
       <div className="px-4 pt-5 pb-4 space-y-4">
-        {/* Payment Type Toggle */}
-        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-          <button
-            onClick={() => {
-              setRecipientType('farmer')
-              setSelectedCustomer(null)
-            }}
-            className={`flex-1 py-3 px-4 rounded-md font-medium transition-all ${
-              recipientType === 'farmer'
-                ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-300'
-            }`}
-          >
-            {t('payment.payFarmer')}
-          </button>
-          <button
-            onClick={() => {
-              setRecipientType('customer')
-              setSelectedFarmer(null)
-            }}
-            className={`flex-1 py-3 px-4 rounded-md font-medium transition-all ${
-              recipientType === 'customer'
-                ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-300'
-            }`}
-          >
-            {t('payment.receiveCustomer')}
-          </button>
-        </div>
-
-        {/* Select Recipient */}
-        {!selected && (
-          <Card padding="none">
-            <ul className="divide-y divide-gray-100 dark:divide-gray-700 max-h-[70vh] overflow-y-auto">
-              {recipients.map((item) => {
-                const data = 'data' in item ? item.data : item
-                const itemBalance = (data as { balance: number }).balance
-                return (
-                  <li key={item.id}>
-                    <button
-                      onClick={() => {
-                        if (recipientType === 'farmer') {
-                          setSelectedFarmer(item as LocalFarmer)
-                        } else {
-                          setSelectedCustomer(item as LocalCustomer)
-                        }
-                      }}
-                      className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700"
-                    >
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        recipientType === 'farmer' ? 'bg-green-100 dark:bg-green-900/50' : 'bg-blue-100 dark:bg-blue-900/50'
-                      }`}>
-                        {recipientType === 'farmer' ? (
-                          <User className="w-5 h-5 text-green-600 dark:text-green-400" />
-                        ) : (
-                          <UserCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                        )}
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {(data as { name: string }).name}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className={`font-medium ${
-                          itemBalance > 0
-                            ? recipientType === 'farmer' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
-                            : 'text-gray-500 dark:text-gray-400'
-                        }`}>
-                          {formatCurrency(Math.abs(itemBalance))}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {recipientType === 'farmer'
-                            ? itemBalance > 0 ? t('farmer.weOwe') : 'Settled'
-                            : itemBalance > 0 ? t('customer.theyOwe') : 'Settled'
-                          }
-                        </p>
-                      </div>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          </Card>
-        )}
-
         {/* Selected Recipient */}
         {selected && (
           <>
@@ -371,17 +280,6 @@ export function AddPaymentPage() {
                     {t('payment.balanceDue')}: {formatCurrency(Math.abs(balance))}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedFarmer(null)
-                    setSelectedCustomer(null)
-                    setAmount('')
-                  }}
-                >
-                  {t('common.edit')}
-                </Button>
               </div>
             </Card>
 
