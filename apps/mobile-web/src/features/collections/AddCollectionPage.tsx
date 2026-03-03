@@ -115,7 +115,7 @@ export function AddCollectionPage() {
     setStep('enter-quantity')
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (navigateTo?: string) => {
     if (!selectedFarmer || !quantity || !rate) return
 
     try {
@@ -128,7 +128,7 @@ export function AddCollectionPage() {
         ratePerLiter: parseFloat(rate),
         notes: notes || undefined
       })
-      navigate('/collect')
+      navigate(navigateTo || '/collect')
     } catch (error) {
       console.error('Failed to add collection:', error)
     } finally {
@@ -289,15 +289,26 @@ export function AddCollectionPage() {
                   {formatCurrency(total)}
                 </p>
               </div>
-              <Button
-                onClick={handleSubmit}
-                isLoading={isSubmitting}
-                disabled={!quantity || parseFloat(quantity) <= 0}
-                size="lg"
-                className="h-full px-8"
-              >
-                {t('common.save')}
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={() => handleSubmit()}
+                  isLoading={isSubmitting}
+                  disabled={!quantity || parseFloat(quantity) <= 0}
+                  size="lg"
+                  className="px-8"
+                >
+                  {t('common.save')}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSubmit(`/payments/add?type=farmer&farmerId=${selectedFarmer.id}`)}
+                  isLoading={isSubmitting}
+                  disabled={!quantity || parseFloat(quantity) <= 0}
+                  size="sm"
+                >
+                  {t('payment.saveAndPay')}
+                </Button>
+              </div>
             </div>
           </div>
         )}

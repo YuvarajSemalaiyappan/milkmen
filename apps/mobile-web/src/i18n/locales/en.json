@@ -299,7 +299,9 @@
     "entries": "entries",
     "usePeriodTotal": "Use Period Total",
     "selectRouteHint": "Select a route to see people",
-    "alreadyPaidForPeriod": "A payment has already been made for this period. Change the date range to make a new payment."
+    "alreadyPaidForPeriod": "A payment has already been made for this period. Change the date range to make a new payment.",
+    "saveAndPay": "Save & Pay",
+    "saveAndReceive": "Save & Receive"
   },
   "reports": {
     "title": "Reports",

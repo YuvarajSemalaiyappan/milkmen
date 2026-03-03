@@ -107,7 +107,7 @@ export function AddDeliveryPage() {
     setStep('enter-quantity')
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (navigateTo?: string) => {
     if (!selectedCustomer || !quantity || !rate) return
 
     try {
@@ -119,7 +119,7 @@ export function AddDeliveryPage() {
         ratePerLiter: parseFloat(rate),
         notes: notes || undefined
       })
-      navigate('/deliver')
+      navigate(navigateTo || '/deliver')
     } catch (error) {
       console.error('Failed to add delivery:', error)
     } finally {
@@ -270,15 +270,26 @@ export function AddDeliveryPage() {
                   {formatCurrency(total)}
                 </p>
               </div>
-              <Button
-                onClick={handleSubmit}
-                isLoading={isSubmitting}
-                disabled={!quantity || parseFloat(quantity) <= 0}
-                size="lg"
-                className="h-full px-8"
-              >
-                {t('common.save')}
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={() => handleSubmit()}
+                  isLoading={isSubmitting}
+                  disabled={!quantity || parseFloat(quantity) <= 0}
+                  size="lg"
+                  className="px-8"
+                >
+                  {t('common.save')}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSubmit(`/payments/add?type=customer&customerId=${selectedCustomer.id}`)}
+                  isLoading={isSubmitting}
+                  disabled={!quantity || parseFloat(quantity) <= 0}
+                  size="sm"
+                >
+                  {t('payment.saveAndReceive')}
+                </Button>
+              </div>
             </div>
           </div>
         )}
