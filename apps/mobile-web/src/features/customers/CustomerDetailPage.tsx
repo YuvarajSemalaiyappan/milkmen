@@ -108,7 +108,7 @@ export function CustomerDetailPage() {
     if (!id) return
     const payments = await getPaymentsByCustomer(id)
     if (payments.length > 0) {
-      const dates = payments.map((p) => p.data.date)
+      const dates = payments.map((p) => p.data.periodToDate || p.data.date)
       dates.sort()
       setLastPaymentDate(dates[dates.length - 1])
     } else {

@@ -301,7 +301,7 @@ export function AddCollectionPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => handleSubmit(`/payments/add?type=farmer&farmerId=${selectedFarmer.id}`)}
+                  onClick={() => handleSubmit(`/payments/add?type=farmer&farmerId=${selectedFarmer.id}&from=/collect/add`)}
                   isLoading={isSubmitting}
                   disabled={!quantity || parseFloat(quantity) <= 0}
                   size="sm"

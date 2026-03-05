@@ -282,7 +282,7 @@ export function AddDeliveryPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => handleSubmit(`/payments/add?type=customer&customerId=${selectedCustomer.id}`)}
+                  onClick={() => handleSubmit(`/payments/add?type=customer&customerId=${selectedCustomer.id}&from=/deliver/add`)}
                   isLoading={isSubmitting}
                   disabled={!quantity || parseFloat(quantity) <= 0}
                   size="sm"

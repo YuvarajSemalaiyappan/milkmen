@@ -319,7 +319,7 @@ export function AddPaymentPage() {
       })
 
       addToast({ type: 'success', message: t('payment.paymentSaved') })
-      navigate('/payments')
+      navigate(searchParams.get('from') || '/payments')
     } catch (error) {
       console.error('Failed to add payment:', error)
     } finally {
