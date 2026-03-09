@@ -8,7 +8,7 @@ import { ShiftToggle, QuickPad, RouteFilter, SortableList } from '@/components/c
 import { useFarmers, useCollections, useRouteFarmerIds, useSortOrder } from '@/hooks'
 import { useAppStore, useRouteStore } from '@/store'
 import { farmersApi } from '@/services/api'
-import { formatCurrency, formatRate } from '@/utils/format'
+import { formatCurrency, formatRate, getToday } from '@/utils/format'
 import { calculateTotal } from '@/utils/calculate'
 import type { LocalFarmer, ApiResponse, Farmer } from '@/types'
 
@@ -35,6 +35,7 @@ export function AddCollectionPage() {
   const [quantity, setQuantity] = useState('')
   const [rate, setRate] = useState('')
   const [fatContent, setFatContent] = useState('')
+  const [selectedDate, setSelectedDate] = useState(getToday())
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -122,6 +123,7 @@ export function AddCollectionPage() {
       setIsSubmitting(true)
       await addCollection({
         farmerId: selectedFarmer.id,
+        date: selectedDate,
         shift: currentShift,
         quantity: parseFloat(quantity),
         fatContent: fatContent ? parseFloat(fatContent) : undefined,
@@ -143,12 +145,20 @@ export function AddCollectionPage() {
   return (
     <AppShell title={t('collection.addCollection')} showBack>
       <div className={`px-4 pt-4 pb-4 ${step === 'select-farmer' ? 'space-y-4' : 'space-y-3'}`}>
-        {/* Shift Toggle */}
-        <ShiftToggle
-          value={currentShift}
-          onChange={setCurrentShift}
-          fullWidth
-        />
+        {/* Date & Shift */}
+        <div className="flex items-center gap-3">
+          <input
+            type="date"
+            value={selectedDate}
+            max={getToday()}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="flex-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white"
+          />
+          <ShiftToggle
+            value={currentShift}
+            onChange={setCurrentShift}
+          />
+        </div>
 
         {step === 'select-farmer' && (
           <>
@@ -301,7 +311,7 @@ export function AddCollectionPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => handleSubmit(`/payments/add?type=farmer&farmerId=${selectedFarmer.id}&from=/collect/add`)}
+                  onClick={() => handleSubmit(`/payments/add?type=farmer&farmerId=${selectedFarmer.id}&from=/collect`)}
                   isLoading={isSubmitting}
                   disabled={!quantity || parseFloat(quantity) <= 0}
                   size="sm"

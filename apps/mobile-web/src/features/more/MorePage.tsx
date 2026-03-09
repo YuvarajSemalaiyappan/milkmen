@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   UserCircle,
+  Truck,
   CreditCard,
   BarChart3,
   Settings,
@@ -23,6 +24,12 @@ const menuItems: MenuItem[] = [
     titleKey: 'nav.customers',
     path: '/customers',
     color: 'bg-blue-100 text-blue-600'
+  },
+  {
+    icon: Truck,
+    titleKey: 'nav.farmers',
+    path: '/farmers',
+    color: 'bg-orange-100 text-orange-600'
   },
   {
     icon: CreditCard,

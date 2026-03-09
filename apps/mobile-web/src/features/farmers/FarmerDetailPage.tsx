@@ -195,11 +195,14 @@ export function FarmerDetailPage() {
     )
   }
 
-  const totalCollections = collections.reduce(
+  const unpaidCollections = collections.filter(
+    (c) => !lastPaymentDate || c.data.date > lastPaymentDate
+  )
+  const unpaidQty = unpaidCollections.reduce(
     (sum, c) => sum + Number(c.data.quantity),
     0
   )
-  const totalAmount = collections.reduce(
+  const unpaidAmount = unpaidCollections.reduce(
     (sum, c) => sum + Number(c.data.totalAmount),
     0
   )
@@ -415,20 +418,20 @@ export function FarmerDetailPage() {
               </div>
             </Card>
 
-            {/* Stats Cards */}
+            {/* Unpaid Stats Cards */}
             <div className="grid grid-cols-2 gap-3">
               <Card>
                 <div className="text-center">
-                  <TrendingUp className="w-6 h-6 mx-auto text-primary-500 mb-1" />
-                  <p className="text-2xl font-bold">{totalCollections.toFixed(1)}L</p>
-                  <p className="text-xs text-gray-500">{t('farmer.totalCollected')}</p>
+                  <TrendingUp className="w-6 h-6 mx-auto text-red-500 mb-1" />
+                  <p className="text-2xl font-bold">{unpaidQty.toFixed(1)}L</p>
+                  <p className="text-xs text-gray-500">{t('farmer.unpaidQty')}</p>
                 </div>
               </Card>
               <Card>
                 <div className="text-center">
-                  <IndianRupee className="w-6 h-6 mx-auto text-green-500 mb-1" />
-                  <p className="text-2xl font-bold">{formatCurrency(totalAmount)}</p>
-                  <p className="text-xs text-gray-500">{t('farmer.totalValue')}</p>
+                  <IndianRupee className="w-6 h-6 mx-auto text-red-500 mb-1" />
+                  <p className="text-2xl font-bold">{formatCurrency(unpaidAmount)}</p>
+                  <p className="text-xs text-gray-500">{t('farmer.unpaidAmount')}</p>
                 </div>
               </Card>
             </div>
@@ -443,7 +446,7 @@ export function FarmerDetailPage() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => navigate(`/payments/add?farmerId=${id}`)}
+                onClick={() => navigate(`/payments/add?type=farmer&farmerId=${id}`)}
                 fullWidth
               >
                 {t('payment.payFarmer')}

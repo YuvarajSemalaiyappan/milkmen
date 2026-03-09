@@ -159,7 +159,9 @@
     "noCollections": "No collections yet",
     "selectRoute": "Assign to Route",
     "selectArea": "Assign to Area",
-    "collectionShift": "Collection Shift"
+    "collectionShift": "Collection Shift",
+    "unpaidQty": "Unpaid Qty",
+    "unpaidAmount": "Unpaid Amount"
   },
   "customer": {
     "title": "Customers",
@@ -199,7 +201,9 @@
     "address": "Address",
     "noDeliveries": "No deliveries yet",
     "selectRoute": "Assign to Route",
-    "selectArea": "Assign to Area"
+    "selectArea": "Assign to Area",
+    "unpaidQty": "Unpaid Qty",
+    "unpaidAmount": "Unpaid Amount"
   },
   "collection": {
     "title": "Milk Collection",

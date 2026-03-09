@@ -193,11 +193,14 @@ export function CustomerDetailPage() {
     )
   }
 
-  const totalDeliveries = deliveries.reduce(
+  const unpaidDeliveries = deliveries.filter(
+    (d) => !lastPaymentDate || d.data.date > lastPaymentDate
+  )
+  const unpaidQty = unpaidDeliveries.reduce(
     (sum, d) => sum + Number(d.data.quantity),
     0
   )
-  const totalAmount = deliveries.reduce(
+  const unpaidAmount = unpaidDeliveries.reduce(
     (sum, d) => sum + Number(d.data.totalAmount),
     0
   )
@@ -444,20 +447,20 @@ export function CustomerDetailPage() {
               </div>
             </Card>
 
-            {/* Stats Cards */}
+            {/* Unpaid Stats Cards */}
             <div className="grid grid-cols-2 gap-3">
               <Card>
                 <div className="text-center">
-                  <Package className="w-6 h-6 mx-auto text-primary-500 mb-1" />
-                  <p className="text-2xl font-bold">{totalDeliveries.toFixed(1)}L</p>
-                  <p className="text-xs text-gray-500">{t('customer.totalDelivered')}</p>
+                  <Package className="w-6 h-6 mx-auto text-red-500 mb-1" />
+                  <p className="text-2xl font-bold">{unpaidQty.toFixed(1)}L</p>
+                  <p className="text-xs text-gray-500">{t('customer.unpaidQty')}</p>
                 </div>
               </Card>
               <Card>
                 <div className="text-center">
-                  <IndianRupee className="w-6 h-6 mx-auto text-green-500 mb-1" />
-                  <p className="text-2xl font-bold">{formatCurrency(totalAmount)}</p>
-                  <p className="text-xs text-gray-500">{t('customer.totalSales')}</p>
+                  <IndianRupee className="w-6 h-6 mx-auto text-red-500 mb-1" />
+                  <p className="text-2xl font-bold">{formatCurrency(unpaidAmount)}</p>
+                  <p className="text-xs text-gray-500">{t('customer.unpaidAmount')}</p>
                 </div>
               </Card>
             </div>
@@ -472,7 +475,7 @@ export function CustomerDetailPage() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => navigate(`/payments/add?customerId=${id}`)}
+                onClick={() => navigate(`/payments/add?type=customer&customerId=${id}`)}
                 fullWidth
               >
                 {t('payment.receivePayment')}

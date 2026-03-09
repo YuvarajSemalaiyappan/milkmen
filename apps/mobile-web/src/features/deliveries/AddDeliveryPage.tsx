@@ -9,7 +9,7 @@ import { useCustomers } from '@/hooks/useCustomers'
 import { useDeliveries } from '@/hooks/useDeliveries'
 import { useAppStore } from '@/store'
 import { customersApi } from '@/services/api'
-import { formatCurrency, formatRate } from '@/utils/format'
+import { formatCurrency, formatRate, getToday } from '@/utils/format'
 import { calculateTotal } from '@/utils/calculate'
 import type { LocalCustomer, ApiResponse, Customer } from '@/types'
 
@@ -32,6 +32,7 @@ export function AddDeliveryPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<LocalCustomer | null>(null)
   const [quantity, setQuantity] = useState('')
   const [rate, setRate] = useState('')
+  const [selectedDate, setSelectedDate] = useState(getToday())
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -114,6 +115,7 @@ export function AddDeliveryPage() {
       setIsSubmitting(true)
       await addDelivery({
         customerId: selectedCustomer.id,
+        date: selectedDate,
         shift: currentShift,
         quantity: parseFloat(quantity),
         ratePerLiter: parseFloat(rate),
@@ -134,12 +136,20 @@ export function AddDeliveryPage() {
   return (
     <AppShell title={t('delivery.addDelivery')} showBack>
       <div className="px-4 pt-5 pb-4 space-y-4">
-        {/* Shift Toggle */}
-        <ShiftToggle
-          value={currentShift}
-          onChange={setCurrentShift}
-          fullWidth
-        />
+        {/* Date & Shift */}
+        <div className="flex items-center gap-3">
+          <input
+            type="date"
+            value={selectedDate}
+            max={getToday()}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="flex-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white"
+          />
+          <ShiftToggle
+            value={currentShift}
+            onChange={setCurrentShift}
+          />
+        </div>
 
         {step === 'select-customer' && (
           <>
@@ -282,7 +292,7 @@ export function AddDeliveryPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => handleSubmit(`/payments/add?type=customer&customerId=${selectedCustomer.id}&from=/deliver/add`)}
+                  onClick={() => handleSubmit(`/payments/add?type=customer&customerId=${selectedCustomer.id}&from=/deliver`)}
                   isLoading={isSubmitting}
                   disabled={!quantity || parseFloat(quantity) <= 0}
                   size="sm"
