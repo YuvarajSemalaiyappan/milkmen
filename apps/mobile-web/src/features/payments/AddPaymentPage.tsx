@@ -40,13 +40,6 @@ function isInShiftRange(
   toDate: string,
   toShift: Shift
 ): boolean {
-  // When both shifts are the same, filter ALL dates to that shift only
-  if (fromShift === toShift) {
-    if (recordDate < fromDate || recordDate > toDate) return false
-    return recordShift === fromShift
-  }
-
-  // Different shifts: treat as a range with shift boundaries on edge dates
   if (recordDate > fromDate && recordDate < toDate) return true
   if (recordDate === fromDate && recordDate === toDate) {
     return shiftOrd(recordShift) >= shiftOrd(fromShift) && shiftOrd(recordShift) <= shiftOrd(toShift)
