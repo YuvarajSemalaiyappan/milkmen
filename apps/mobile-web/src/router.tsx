@@ -9,7 +9,7 @@ import { FarmersPage, AddFarmerPage, FarmerDetailPage } from '@/features/farmers
 import { CustomersPage, AddCustomerPage, CustomerDetailPage } from '@/features/customers'
 import { CollectionsPage, AddCollectionPage, CollectionDetailPage } from '@/features/collections'
 import { DeliveriesPage, AddDeliveryPage, TodayDeliveriesPage, DeliveryDetailPage } from '@/features/deliveries'
-import { PaymentsPage, AddPaymentPage } from '@/features/payments'
+import { PaymentsPage, AddPaymentPage, PaymentHistoryPage } from '@/features/payments'
 import {
   ReportsPage,
   DailyReportPage,
@@ -190,6 +190,10 @@ export const router = createBrowserRouter([
       {
         path: '/payments/add',
         element: <AddPaymentPage />
+      },
+      {
+        path: '/payments/history',
+        element: <PaymentHistoryPage />
       },
       {
         path: '/reports',

@@ -305,7 +305,13 @@
     "selectRouteHint": "Select a route to see people",
     "alreadyPaidForPeriod": "A payment has already been made for this period. Change the date range to make a new payment.",
     "saveAndPay": "Save & Pay",
-    "saveAndReceive": "Save & Receive"
+    "saveAndReceive": "Save & Receive",
+    "paymentDate": "Payment Date",
+    "notesPlaceholder": "Add a note (optional)",
+    "overpaid": "Overpaid",
+    "sortByName": "Sort by Name",
+    "sortByBalance": "Sort by Balance",
+    "paymentDeleted": "Payment deleted"
   },
   "reports": {
     "title": "Reports",

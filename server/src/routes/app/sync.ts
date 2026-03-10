@@ -434,6 +434,46 @@ router.post('/push', authenticateToken, async (req: AuthRequest, res: Response) 
 
             return payment
           })
+        } else if (operation === 'update') {
+          const id = data.id as string
+          const existing = await prisma.payment.findFirst({ where: { id, businessId } })
+          if (!existing) {
+            result = { skipped: true, reason: 'Payment not found' }
+            break
+          }
+
+          const oldAmount = Number(existing.amount)
+          const newAmount = data.amount != null ? Number(data.amount) : oldAmount
+          const amountDelta = oldAmount - newAmount
+
+          result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+            const updateData: Record<string, unknown> = {}
+            if (data.amount !== undefined) updateData.amount = data.amount
+            if (data.method !== undefined) updateData.method = data.method
+            if (data.notes !== undefined) updateData.notes = data.notes
+
+            const payment = await tx.payment.update({
+              where: { id },
+              data: updateData
+            })
+
+            if (amountDelta !== 0) {
+              if (existing.farmerId) {
+                await tx.farmer.update({
+                  where: { id: existing.farmerId },
+                  data: { balance: { increment: amountDelta } }
+                })
+              }
+              if (existing.customerId) {
+                await tx.customer.update({
+                  where: { id: existing.customerId },
+                  data: { balance: { increment: amountDelta } }
+                })
+              }
+            }
+
+            return payment
+          })
         } else if (operation === 'delete') {
           const id = data.id as string
           const existing = await prisma.payment.findFirst({ where: { id, businessId } })

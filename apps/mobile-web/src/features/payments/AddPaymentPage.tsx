@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { User, UserCircle, Calculator, AlertTriangle } from 'lucide-react'
@@ -55,6 +55,7 @@ export function AddPaymentPage() {
   const [searchParams] = useSearchParams()
   const addToast = useAppStore((state) => state.addToast)
   const currentShift = useAppStore((state) => state.currentShift)
+  const initialShiftRef = useRef(currentShift)
 
   const { activeFarmers } = useFarmers()
   const { activeCustomers } = useCustomers()
@@ -64,8 +65,11 @@ export function AddPaymentPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<LocalCustomer | null>(null)
   const [amount, setAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH')
-  const [notes] = useState('')
+  const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isAdvance, setIsAdvance] = useState(false)
+  const [paymentDate, setPaymentDate] = useState(getToday)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   // Date+shift filter state
   const [fromDate, setFromDate] = useState(getToday)
@@ -163,13 +167,20 @@ export function AddPaymentPage() {
         }
       }
       setToDate(getToday())
-      setToShift(currentShift)
+      setToShift(initialShiftRef.current)
     }
     autoSelectDates()
-  }, [selectedFarmer, selectedCustomer, recipientType, currentShift])
+  }, [selectedFarmer, selectedCustomer, recipientType])
 
   // Calculate period total when filters or recipient change
   const calculatePeriodTotal = useCallback(async () => {
+    if (isAdvance) {
+      setPeriodAmount(null)
+      setPeriodCount(0)
+      setExistingPaymentForPeriod(false)
+      return
+    }
+
     const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
     if (!selected) {
       setPeriodAmount(null)
@@ -245,7 +256,7 @@ export function AddPaymentPage() {
     } finally {
       setIsCalculating(false)
     }
-  }, [recipientType, selectedFarmer, selectedCustomer, fromDate, toDate, fromShift, toShift])
+  }, [recipientType, selectedFarmer, selectedCustomer, fromDate, toDate, fromShift, toShift, isAdvance])
 
   useEffect(() => {
     calculatePeriodTotal()
@@ -263,24 +274,23 @@ export function AddPaymentPage() {
 
       const localId = generateLocalId()
       const timestamp = now()
-      const today = new Date().toISOString().split('T')[0]
 
       const paymentType: PaymentType = recipientType === 'farmer'
-        ? 'PAID_TO_FARMER'
-        : 'RECEIVED_FROM_CUSTOMER'
+        ? (isAdvance ? 'ADVANCE_TO_FARMER' : 'PAID_TO_FARMER')
+        : (isAdvance ? 'ADVANCE_FROM_CUSTOMER' : 'RECEIVED_FROM_CUSTOMER')
 
       const paymentData = {
         farmerId: recipientType === 'farmer' ? selectedFarmer!.id : undefined,
         customerId: recipientType === 'customer' ? selectedCustomer!.id : undefined,
-        date: today,
+        date: paymentDate,
         amount: amountNum,
         type: paymentType,
         method: paymentMethod,
         notes: notes || undefined,
-        periodFromDate: fromDate,
-        periodToDate: toDate,
-        periodFromShift: fromShift,
-        periodToShift: toShift
+        periodFromDate: isAdvance ? undefined : fromDate,
+        periodToDate: isAdvance ? undefined : toDate,
+        periodFromShift: isAdvance ? undefined : fromShift,
+        periodToShift: isAdvance ? undefined : toShift
       }
 
       // Add to local DB
@@ -293,18 +303,16 @@ export function AddPaymentPage() {
         data: paymentData
       })
 
-      // Update balance
+      // Update balance atomically
       if (recipientType === 'farmer' && selectedFarmer) {
-        // Paying farmer reduces what we owe them
-        await db.farmers.update(selectedFarmer.id, {
-          'data.balance': selectedFarmer.data.balance - amountNum,
-          updatedAt: timestamp
+        await db.farmers.where('id').equals(selectedFarmer.id).modify(f => {
+          f.data.balance -= amountNum
+          f.updatedAt = timestamp
         })
       } else if (recipientType === 'customer' && selectedCustomer) {
-        // Receiving from customer reduces what they owe us
-        await db.customers.update(selectedCustomer.id, {
-          'data.balance': selectedCustomer.data.balance - amountNum,
-          updatedAt: timestamp
+        await db.customers.where('id').equals(selectedCustomer.id).modify(f => {
+          f.data.balance -= amountNum
+          f.updatedAt = timestamp
         })
       }
 
@@ -352,105 +360,152 @@ export function AddPaymentPage() {
                     {selected.data.name}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('payment.balanceDue')}: {formatCurrency(Math.abs(balance))}
+                    {balance > 0
+                      ? `${t('payment.balanceDue')}: ${formatCurrency(balance)}`
+                      : balance < 0
+                      ? `${t('payment.overpaid')}: ${formatCurrency(Math.abs(balance))}`
+                      : t('farmer.settled')
+                    }
                   </p>
                 </div>
               </div>
             </Card>
 
-            {/* Date+Shift Filter */}
+            {/* Regular / Advance Toggle */}
+            <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setIsAdvance(false)}
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                  !isAdvance
+                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300'
+                }`}
+              >
+                {recipientType === 'farmer' ? t('payment.paidToFarmer') : t('payment.receivedFromCustomer')}
+              </button>
+              <button
+                onClick={() => setIsAdvance(true)}
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                  isAdvance
+                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300'
+                }`}
+              >
+                {t('payment.advance')}
+              </button>
+            </div>
+
+            {/* Payment Date */}
             <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <Calculator className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+              <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                  {t('payment.dateFilter')}
+                  {t('payment.paymentDate')}
                 </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                      {t('payment.fromDate')}
-                    </label>
-                    <input
-                      type="date"
-                      value={fromDate}
-                      onChange={(e) => setFromDate(e.target.value)}
-                      max={toDate}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                      {t('payment.fromShift')}
-                    </label>
-                    <ShiftToggle value={fromShift} onChange={setFromShift} size="sm" showIcons={false} fullWidth />
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                      {t('payment.toDate')}
-                    </label>
-                    <input
-                      type="date"
-                      value={toDate}
-                      onChange={(e) => setToDate(e.target.value)}
-                      min={fromDate}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                      {t('payment.toShift')}
-                    </label>
-                    <ShiftToggle value={toShift} onChange={setToShift} size="sm" showIcons={false} fullWidth />
-                  </div>
-                </div>
-
-                {/* Period Total */}
-                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-600">
-                  {isCalculating ? (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-                      {t('payment.calculating')}
-                    </p>
-                  ) : periodAmount !== null ? (
-                    <div className="text-center">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {t('payment.periodTotal')}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {formatCurrency(periodAmount)}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {periodCount} {t('payment.entries')}
-                      </p>
-                      {existingPaymentForPeriod && (
-                        <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/30 rounded-lg text-left">
-                          <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                          <p className="text-sm text-red-700 dark:text-red-300">
-                            {t('payment.alreadyPaidForPeriod')}
-                          </p>
-                        </div>
-                      )}
-                      {periodAmount > 0 && !existingPaymentForPeriod && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setAmount(Math.round(periodAmount).toString())}
-                          fullWidth
-                          className="mt-2"
-                        >
-                          {t('payment.usePeriodTotal')} ({formatCurrency(periodAmount)})
-                        </Button>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  max={getToday()}
+                  className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
               </div>
             </Card>
+
+            {/* Date+Shift Filter (hidden for advance payments) */}
+            {!isAdvance && (
+              <Card>
+                <div className="flex items-center gap-2 mb-4">
+                  <Calculator className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {t('payment.dateFilter')}
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        {t('payment.fromDate')}
+                      </label>
+                      <input
+                        type="date"
+                        value={fromDate}
+                        onChange={(e) => setFromDate(e.target.value)}
+                        max={toDate}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        {t('payment.fromShift')}
+                      </label>
+                      <ShiftToggle value={fromShift} onChange={setFromShift} size="sm" showIcons={false} fullWidth />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        {t('payment.toDate')}
+                      </label>
+                      <input
+                        type="date"
+                        value={toDate}
+                        onChange={(e) => setToDate(e.target.value)}
+                        min={fromDate}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        {t('payment.toShift')}
+                      </label>
+                      <ShiftToggle value={toShift} onChange={setToShift} size="sm" showIcons={false} fullWidth />
+                    </div>
+                  </div>
+
+                  {/* Period Total */}
+                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-600">
+                    {isCalculating ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                        {t('payment.calculating')}
+                      </p>
+                    ) : periodAmount !== null ? (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {t('payment.periodTotal')}
+                        </p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                          {formatCurrency(periodAmount)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {periodCount} {t('payment.entries')}
+                        </p>
+                        {existingPaymentForPeriod && (
+                          <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/30 rounded-lg text-left">
+                            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-red-700 dark:text-red-300">
+                              {t('payment.alreadyPaidForPeriod')}
+                            </p>
+                          </div>
+                        )}
+                        {periodAmount > 0 && !existingPaymentForPeriod && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAmount((Math.round(periodAmount * 100) / 100).toString())}
+                            fullWidth
+                            className="mt-2"
+                          >
+                            {t('payment.usePeriodTotal')} ({formatCurrency(periodAmount)})
+                          </Button>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {/* Amount Entry */}
             <Card>
@@ -490,8 +545,8 @@ export function AddPaymentPage() {
               <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
                 {t('payment.method')}
               </p>
-              <div className="grid grid-cols-3 gap-2">
-                {(['CASH', 'UPI', 'BANK_TRANSFER'] as PaymentMethod[]).map((method) => (
+              <div className="grid grid-cols-2 gap-2">
+                {(['CASH', 'UPI', 'BANK_TRANSFER', 'OTHER'] as PaymentMethod[]).map((method) => (
                   <button
                     key={method}
                     onClick={() => setPaymentMethod(method)}
@@ -507,16 +562,66 @@ export function AddPaymentPage() {
               </div>
             </Card>
 
+            {/* Notes */}
+            <Card>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
+                {t('common.notes')} ({t('common.optional')})
+              </p>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={t('payment.notesPlaceholder')}
+                maxLength={500}
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm resize-none"
+              />
+            </Card>
+
             {/* Submit */}
             <Button
-              onClick={handleSubmit}
+              onClick={() => setShowConfirm(true)}
               isLoading={isSubmitting}
-              disabled={!amount || parseFloat(amount) <= 0 || existingPaymentForPeriod}
+              disabled={!amount || parseFloat(amount) <= 0 || (!isAdvance && existingPaymentForPeriod)}
               fullWidth
               size="lg"
             >
               {recipientType === 'farmer' ? t('payment.payFarmer') : t('payment.receiveCustomer')}
             </Button>
+
+            {/* Confirmation Dialog */}
+            {showConfirm && (
+              <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowConfirm(false)}>
+                <div className="bg-white dark:bg-gray-800 w-full rounded-t-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                  <p className="text-lg font-semibold text-gray-900 dark:text-white text-center">
+                    {t('common.confirm')}
+                  </p>
+                  <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                    <div className="flex justify-between">
+                      <span>{recipientType === 'farmer' ? t('payment.payFarmer') : t('payment.receiveCustomer')}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{selected?.data.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t('common.amount')}</span>
+                      <span className="font-bold text-xl text-gray-900 dark:text-white">{formatCurrency(parseFloat(amount))}</span>
+                    </div>
+                    {isAdvance && (
+                      <div className="flex justify-between">
+                        <span>{t('payment.advance')}</span>
+                        <span className="text-orange-600 dark:text-orange-400">{t('common.yes')}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button variant="outline" fullWidth onClick={() => setShowConfirm(false)}>
+                      {t('common.cancel')}
+                    </Button>
+                    <Button fullWidth onClick={() => { setShowConfirm(false); handleSubmit() }} isLoading={isSubmitting}>
+                      {t('common.confirm')}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

@@ -6,6 +6,11 @@ import type { Prisma } from '@prisma/client'
 
 const router = Router()
 
+// Shift ordinal for period overlap comparison
+function shiftOrd(shift: 'MORNING' | 'EVENING'): number {
+  return shift === 'MORNING' ? 0 : 1
+}
+
 // Validation schemas
 const createPaymentSchema = z.object({
   localId: z.string().optional(),
@@ -42,11 +47,21 @@ const createPaymentSchema = z.object({
   { message: 'periodFromDate must be on or before periodToDate' }
 )
 
-// GET /api/payments - List payments with filters
+const updatePaymentSchema = z.object({
+  amount: z.number().positive().optional(),
+  method: z.enum(['CASH', 'UPI', 'BANK_TRANSFER', 'OTHER']).optional(),
+  notes: z.string().max(500).optional()
+})
+
+// GET /api/payments - List payments with filters and pagination
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
-    const { date, farmerId, customerId, type, from, to } = req.query
+    const { date, farmerId, customerId, type, from, to, page: pageStr, limit: limitStr } = req.query
+
+    const page = Math.max(1, parseInt(pageStr as string) || 1)
+    const limit = Math.min(200, Math.max(1, parseInt(limitStr as string) || 50))
+    const skip = (page - 1) * limit
 
     const where: Prisma.PaymentWhereInput = { businessId }
 
@@ -74,25 +89,33 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       where.type = type as 'PAID_TO_FARMER' | 'RECEIVED_FROM_CUSTOMER' | 'ADVANCE_TO_FARMER' | 'ADVANCE_FROM_CUSTOMER'
     }
 
-    const payments = await prisma.payment.findMany({
-      where,
-      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-      include: {
-        farmer: {
-          select: { id: true, name: true, phone: true }
-        },
-        customer: {
-          select: { id: true, name: true, phone: true }
-        },
-        user: {
-          select: { id: true, name: true }
+    const [payments, total] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: limit,
+        include: {
+          farmer: {
+            select: { id: true, name: true, phone: true }
+          },
+          customer: {
+            select: { id: true, name: true, phone: true }
+          },
+          user: {
+            select: { id: true, name: true }
+          }
         }
-      }
-    })
+      }),
+      prisma.payment.count({ where })
+    ])
 
     return res.json({
       success: true,
-      data: payments
+      data: payments,
+      total,
+      page,
+      limit
     })
   } catch (error) {
     console.error('List payments error:', error)
@@ -107,14 +130,21 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 router.get('/today', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
+    const { date: dateParam } = req.query
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    // Use client-provided date or fall back to server date
+    let targetDate: Date
+    if (dateParam && typeof dateParam === 'string') {
+      targetDate = new Date(dateParam + 'T00:00:00.000Z')
+    } else {
+      targetDate = new Date()
+      targetDate.setHours(0, 0, 0, 0)
+    }
 
     const payments = await prisma.payment.findMany({
       where: {
         businessId,
-        date: today
+        date: targetDate
       },
       include: {
         farmer: {
@@ -262,6 +292,56 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Check for period overlap (server-side validation)
+    if (periodFromDate && periodToDate && periodFromShift && periodToShift) {
+      const personFilter: Prisma.PaymentWhereInput = farmerId
+        ? { farmerId, businessId }
+        : { customerId, businessId }
+
+      const existingPayments = await prisma.payment.findMany({
+        where: {
+          ...personFilter,
+          periodFromDate: { not: null },
+          periodToDate: { not: null },
+          periodFromShift: { not: null },
+          periodToShift: { not: null }
+        },
+        select: {
+          periodFromDate: true,
+          periodToDate: true,
+          periodFromShift: true,
+          periodToShift: true
+        }
+      })
+
+      const newFromDate = periodFromDate
+      const newToDate = periodToDate
+      const newFromShiftOrd = shiftOrd(periodFromShift)
+      const newToShiftOrd = shiftOrd(periodToShift)
+
+      const hasOverlap = existingPayments.some(p => {
+        const pFromDate = p.periodFromDate!.toISOString().slice(0, 10)
+        const pToDate = p.periodToDate!.toISOString().slice(0, 10)
+        const pFromShiftOrd = shiftOrd(p.periodFromShift as 'MORNING' | 'EVENING')
+        const pToShiftOrd = shiftOrd(p.periodToShift as 'MORNING' | 'EVENING')
+
+        // Two periods overlap unless one ends entirely before the other starts
+        const newEndBeforeExistingStart = newToDate < pFromDate
+          || (newToDate === pFromDate && newToShiftOrd < pFromShiftOrd)
+        const existingEndBeforeNewStart = pToDate < newFromDate
+          || (pToDate === newFromDate && pToShiftOrd < newFromShiftOrd)
+
+        return !newEndBeforeExistingStart && !existingEndBeforeNewStart
+      })
+
+      if (hasOverlap) {
+        return res.status(409).json({
+          success: false,
+          error: 'A payment already exists for an overlapping period'
+        })
+      }
+    }
+
     // Create payment and update balance in a transaction
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const payment = await tx.payment.create({
@@ -323,6 +403,88 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// PUT /api/payments/:id - Update a payment
+router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId } = req.user!
+    const id = req.params.id as string
+    const validation = updatePaymentSchema.safeParse(req.body)
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid input',
+        details: validation.error.issues
+      })
+    }
+
+    const existing = await prisma.payment.findFirst({
+      where: { id, businessId }
+    })
+
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payment not found'
+      })
+    }
+
+    const { amount, method, notes } = validation.data
+    const oldAmount = Number(existing.amount)
+    const newAmount = amount ?? oldAmount
+    const amountDelta = oldAmount - newAmount
+
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const updateData: Record<string, unknown> = {}
+      if (amount !== undefined) updateData.amount = amount
+      if (method !== undefined) updateData.method = method
+      if (notes !== undefined) updateData.notes = notes
+
+      const payment = await tx.payment.update({
+        where: { id },
+        data: updateData,
+        include: {
+          farmer: existing.farmerId ? {
+            select: { id: true, name: true }
+          } : false,
+          customer: existing.customerId ? {
+            select: { id: true, name: true }
+          } : false
+        }
+      })
+
+      // Adjust balance if amount changed
+      if (amountDelta !== 0) {
+        if (existing.farmerId) {
+          await tx.farmer.update({
+            where: { id: existing.farmerId },
+            data: { balance: { increment: amountDelta } }
+          })
+        }
+        if (existing.customerId) {
+          await tx.customer.update({
+            where: { id: existing.customerId },
+            data: { balance: { increment: amountDelta } }
+          })
+        }
+      }
+
+      return payment
+    })
+
+    return res.json({
+      success: true,
+      data: result
+    })
+  } catch (error) {
+    console.error('Update payment error:', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update payment'
+    })
+  }
+})
+
 // DELETE /api/payments/:id - Delete a payment (and reverse balance)
 router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -350,7 +512,6 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
 
       // Reverse the balance change
       if (existing.farmerId) {
-        // Reverse: add back what was subtracted
         await tx.farmer.update({
           where: { id: existing.farmerId },
           data: {
@@ -360,7 +521,6 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
       }
 
       if (existing.customerId) {
-        // Reverse: add back what was subtracted
         await tx.customer.update({
           where: { id: existing.customerId },
           data: {

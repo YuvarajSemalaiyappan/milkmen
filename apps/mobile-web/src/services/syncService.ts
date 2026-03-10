@@ -327,7 +327,7 @@ class SyncService {
         }
       }
 
-      if (!local || updatedAt > local.updatedAt) {
+      if (!local || (updatedAt > local.updatedAt && (!local.syncStatus || local.syncStatus === 'SYNCED'))) {
         await db.farmers.put({
           id,
           localId: id,
@@ -364,7 +364,7 @@ class SyncService {
         }
       }
 
-      if (!local || updatedAt > local.updatedAt) {
+      if (!local || (updatedAt > local.updatedAt && (!local.syncStatus || local.syncStatus === 'SYNCED'))) {
         await db.customers.put({
           id,
           localId: id,

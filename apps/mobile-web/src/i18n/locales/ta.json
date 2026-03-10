@@ -305,7 +305,13 @@
     "selectRouteHint": "நபர்களைக் காண ஒரு வழியைத் தேர்ந்தெடுக்கவும்",
     "alreadyPaidForPeriod": "இந்த காலத்திற்கு ஏற்கனவே பணம் செலுத்தப்பட்டுள்ளது. புதிய பணம் செலுத்த தேதி வரம்பை மாற்றவும்.",
     "saveAndPay": "சேமி & பணம்",
-    "saveAndReceive": "சேமி & பெறு"
+    "saveAndReceive": "சேமி & பெறு",
+    "paymentDate": "கொடுப்பனவு தேதி",
+    "notesPlaceholder": "குறிப்பு சேர்க்கவும் (விருப்பம்)",
+    "overpaid": "அதிகமாக செலுத்தியது",
+    "sortByName": "பெயர் வரிசை",
+    "sortByBalance": "நிலுவை வரிசை",
+    "paymentDeleted": "கொடுப்பனவு நீக்கப்பட்டது"
   },
   "reports": {
     "title": "அறிக்கைகள்",

@@ -75,23 +75,17 @@ export function usePayments() {
 
       // Update balance: all payment types (regular + advance) reduce balance
       if (data.farmerId) {
-        const farmer = await db.farmers.get(data.farmerId)
-        if (farmer) {
-          await db.farmers.update(data.farmerId, {
-            'data.balance': farmer.data.balance - data.amount,
-            updatedAt: timestamp
-          })
-        }
+        await db.farmers.where('id').equals(data.farmerId).modify(f => {
+          f.data.balance -= data.amount
+          f.updatedAt = timestamp
+        })
       }
 
       if (data.customerId) {
-        const customer = await db.customers.get(data.customerId)
-        if (customer) {
-          await db.customers.update(data.customerId, {
-            'data.balance': customer.data.balance - data.amount,
-            updatedAt: timestamp
-          })
-        }
+        await db.customers.where('id').equals(data.customerId).modify(f => {
+          f.data.balance -= data.amount
+          f.updatedAt = timestamp
+        })
       }
 
       // Queue for sync
@@ -122,6 +116,24 @@ export function usePayments() {
       if (!payment) throw new Error('Payment not found')
 
       const timestamp = now()
+
+      // Adjust balance if amount changed
+      if (updates.amount !== undefined && updates.amount !== payment.data.amount) {
+        const delta = payment.data.amount - updates.amount
+        if (payment.data.farmerId) {
+          await db.farmers.where('id').equals(payment.data.farmerId).modify(f => {
+            f.data.balance += delta
+            f.updatedAt = timestamp
+          })
+        }
+        if (payment.data.customerId) {
+          await db.customers.where('id').equals(payment.data.customerId).modify(f => {
+            f.data.balance += delta
+            f.updatedAt = timestamp
+          })
+        }
+      }
+
       const updatedPayment: LocalPayment = {
         ...payment,
         syncStatus: 'PENDING',
@@ -152,23 +164,17 @@ export function usePayments() {
       // Reverse balance: all payment types originally decremented, so add back
       const timestamp = now()
       if (payment.data.farmerId) {
-        const farmer = await db.farmers.get(payment.data.farmerId)
-        if (farmer) {
-          await db.farmers.update(payment.data.farmerId, {
-            'data.balance': farmer.data.balance + payment.data.amount,
-            updatedAt: timestamp
-          })
-        }
+        await db.farmers.where('id').equals(payment.data.farmerId).modify(f => {
+          f.data.balance += payment.data.amount
+          f.updatedAt = timestamp
+        })
       }
 
       if (payment.data.customerId) {
-        const customer = await db.customers.get(payment.data.customerId)
-        if (customer) {
-          await db.customers.update(payment.data.customerId, {
-            'data.balance': customer.data.balance + payment.data.amount,
-            updatedAt: timestamp
-          })
-        }
+        await db.customers.where('id').equals(payment.data.customerId).modify(f => {
+          f.data.balance += payment.data.amount
+          f.updatedAt = timestamp
+        })
       }
 
       await db.payments.delete(id)
