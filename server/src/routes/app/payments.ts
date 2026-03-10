@@ -26,6 +26,20 @@ const createPaymentSchema = z.object({
 ).refine(
   (data) => !(data.farmerId && data.customerId),
   { message: 'Cannot specify both farmerId and customerId' }
+).refine(
+  (data) => {
+    // If any period field is set, all must be set
+    const periodFields = [data.periodFromDate, data.periodToDate, data.periodFromShift, data.periodToShift]
+    const defined = periodFields.filter(f => f !== undefined)
+    return defined.length === 0 || defined.length === 4
+  },
+  { message: 'All period fields must be provided together (periodFromDate, periodToDate, periodFromShift, periodToShift)' }
+).refine(
+  (data) => {
+    if (!data.periodFromDate || !data.periodToDate) return true
+    return data.periodFromDate <= data.periodToDate
+  },
+  { message: 'periodFromDate must be on or before periodToDate' }
 )
 
 // GET /api/payments - List payments with filters
@@ -278,26 +292,18 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         }
       })
 
-      // Update balance based on payment type
+      // Update balance: all payment types (regular + advance) reduce balance
       if (farmerId) {
-        // Payments to farmers reduce what we owe them
-        const balanceChange = type === 'PAID_TO_FARMER' ? -amount : -amount // Advance also reduces what we'll owe
         await tx.farmer.update({
           where: { id: farmerId },
-          data: {
-            balance: { increment: balanceChange }
-          }
+          data: { balance: { decrement: amount } }
         })
       }
 
       if (customerId) {
-        // Payments from customers reduce what they owe us
-        const balanceChange = type === 'RECEIVED_FROM_CUSTOMER' ? -amount : -amount // Advance also counts
         await tx.customer.update({
           where: { id: customerId },
-          data: {
-            balance: { increment: balanceChange }
-          }
+          data: { balance: { decrement: amount } }
         })
       }
 

@@ -281,6 +281,7 @@ model Payment {
   periodToShift   Shift?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([businessId, date])
   @@index([farmerId])

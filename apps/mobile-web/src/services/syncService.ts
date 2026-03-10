@@ -527,15 +527,15 @@ class SyncService {
   private async mergePayments(records: unknown[]): Promise<void> {
     for (const record of records as Array<Record<string, unknown>>) {
       const id = record.id as string
-      const createdAt = this.toTimestamp(record.createdAt)
+      const updatedAt = this.toTimestamp(record.updatedAt)
       const local = await db.payments.get(id)
-      if (!local || createdAt > local.createdAt) {
+      if (!local || updatedAt > local.updatedAt) {
         await db.payments.put({
           id,
           localId: (record.localId as string) || id,
           syncStatus: 'SYNCED',
-          createdAt,
-          updatedAt: createdAt,
+          createdAt: this.toTimestamp(record.createdAt),
+          updatedAt,
           data: {
             farmerId: record.farmerId as string | undefined,
             customerId: record.customerId as string | undefined,

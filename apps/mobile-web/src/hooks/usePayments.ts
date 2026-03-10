@@ -73,14 +73,12 @@ export function usePayments() {
 
       await db.payments.add(payment)
 
-      // Update balance on farmer or customer
+      // Update balance: all payment types (regular + advance) reduce balance
       if (data.farmerId) {
         const farmer = await db.farmers.get(data.farmerId)
         if (farmer) {
-          const balanceChange =
-            data.type === 'PAID_TO_FARMER' ? -data.amount : data.amount
           await db.farmers.update(data.farmerId, {
-            'data.balance': farmer.data.balance + balanceChange,
+            'data.balance': farmer.data.balance - data.amount,
             updatedAt: timestamp
           })
         }
@@ -89,10 +87,8 @@ export function usePayments() {
       if (data.customerId) {
         const customer = await db.customers.get(data.customerId)
         if (customer) {
-          const balanceChange =
-            data.type === 'RECEIVED_FROM_CUSTOMER' ? -data.amount : data.amount
           await db.customers.update(data.customerId, {
-            'data.balance': customer.data.balance + balanceChange,
+            'data.balance': customer.data.balance - data.amount,
             updatedAt: timestamp
           })
         }
@@ -153,17 +149,13 @@ export function usePayments() {
       const payment = await db.payments.get(id)
       if (!payment) throw new Error('Payment not found')
 
-      // Reverse balance changes
+      // Reverse balance: all payment types originally decremented, so add back
       const timestamp = now()
       if (payment.data.farmerId) {
         const farmer = await db.farmers.get(payment.data.farmerId)
         if (farmer) {
-          const balanceChange =
-            payment.data.type === 'PAID_TO_FARMER'
-              ? payment.data.amount
-              : -payment.data.amount
           await db.farmers.update(payment.data.farmerId, {
-            'data.balance': farmer.data.balance + balanceChange,
+            'data.balance': farmer.data.balance + payment.data.amount,
             updatedAt: timestamp
           })
         }
@@ -172,12 +164,8 @@ export function usePayments() {
       if (payment.data.customerId) {
         const customer = await db.customers.get(payment.data.customerId)
         if (customer) {
-          const balanceChange =
-            payment.data.type === 'RECEIVED_FROM_CUSTOMER'
-              ? payment.data.amount
-              : -payment.data.amount
           await db.customers.update(payment.data.customerId, {
-            'data.balance': customer.data.balance + balanceChange,
+            'data.balance': customer.data.balance + payment.data.amount,
             updatedAt: timestamp
           })
         }

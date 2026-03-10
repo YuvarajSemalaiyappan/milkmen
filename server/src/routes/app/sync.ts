@@ -65,7 +65,7 @@ router.get('/pull', authenticateToken, async (req: AuthRequest, res: Response) =
       prisma.payment.findMany({
         where: {
           businessId,
-          createdAt: { gt: sinceDate }
+          updatedAt: { gt: sinceDate }
         },
         include: {
           farmer: {
@@ -75,7 +75,7 @@ router.get('/pull', authenticateToken, async (req: AuthRequest, res: Response) =
             select: { id: true, name: true }
           }
         },
-        orderBy: { createdAt: 'asc' }
+        orderBy: { updatedAt: 'asc' }
       })
     ])
 
@@ -411,6 +411,10 @@ router.post('/push', authenticateToken, async (req: AuthRequest, res: Response) 
                 type: data.type as 'PAID_TO_FARMER' | 'RECEIVED_FROM_CUSTOMER' | 'ADVANCE_TO_FARMER' | 'ADVANCE_FROM_CUSTOMER',
                 method: ((data.method as string) || 'CASH') as 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'OTHER',
                 notes: data.notes as string | undefined,
+                periodFromDate: data.periodFromDate ? new Date(data.periodFromDate as string) : undefined,
+                periodToDate: data.periodToDate ? new Date(data.periodToDate as string) : undefined,
+                periodFromShift: (data.periodFromShift as 'MORNING' | 'EVENING') || undefined,
+                periodToShift: (data.periodToShift as 'MORNING' | 'EVENING') || undefined,
                 syncStatus: 'SYNCED'
               }
             })
@@ -430,6 +434,35 @@ router.post('/push', authenticateToken, async (req: AuthRequest, res: Response) 
 
             return payment
           })
+        } else if (operation === 'delete') {
+          const id = data.id as string
+          const existing = await prisma.payment.findFirst({ where: { id, businessId } })
+          if (!existing) {
+            // Already deleted or never synced — not an error
+            result = { skipped: true, reason: 'Payment not found' }
+            break
+          }
+
+          const amount = Number(existing.amount)
+
+          await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+            await tx.payment.delete({ where: { id } })
+
+            if (existing.farmerId) {
+              await tx.farmer.update({
+                where: { id: existing.farmerId },
+                data: { balance: { increment: amount } }
+              })
+            }
+            if (existing.customerId) {
+              await tx.customer.update({
+                where: { id: existing.customerId },
+                data: { balance: { increment: amount } }
+              })
+            }
+          })
+
+          result = { deleted: true }
         }
         break
       }
