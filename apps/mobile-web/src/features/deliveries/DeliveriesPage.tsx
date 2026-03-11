@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Phone, MapPin, ChevronRight, Users } from 'lucide-react'
+import { Phone, MapPin, ChevronRight, Users, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
 import { ShiftToggle, RouteFilter, SortableList } from '@/components/common'
@@ -23,6 +23,8 @@ interface RouteCustomerItem {
     phone?: string
     address?: string
     defaultRate: number
+    subscriptionQtyAM?: number
+    subscriptionQtyPM?: number
     isActive: boolean
     balance: number
   }
@@ -149,6 +151,8 @@ export function DeliveriesPage() {
               renderItem={(id) => {
                 const rc = customerMap.get(id)
                 if (!rc) return null
+                const hasAM = !!rc.customer.subscriptionQtyAM
+                const hasPM = !!rc.customer.subscriptionQtyPM
                 return (
                   <Card
                     className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
@@ -156,9 +160,31 @@ export function DeliveriesPage() {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white truncate">
-                          {rc.customer.name}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-900 dark:text-white truncate">
+                            {rc.customer.name}
+                          </p>
+                          {hasAM && (
+                            <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                              currentShift === 'MORNING'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+                                : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                            }`}>
+                              <Sun className="w-3 h-3" />
+                              {rc.customer.subscriptionQtyAM}L
+                            </span>
+                          )}
+                          {hasPM && (
+                            <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                              currentShift === 'EVENING'
+                                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                                : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                            }`}>
+                              <Moon className="w-3 h-3" />
+                              {rc.customer.subscriptionQtyPM}L
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
                           {rc.customer.phone && (
                             <span className="flex items-center gap-1">

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Phone, MapPin, ChevronRight, Users } from 'lucide-react'
+import { Phone, MapPin, ChevronRight, Users, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
 import { ShiftToggle, RouteFilter, SortableList } from '@/components/common'
@@ -23,6 +23,10 @@ interface RouteFarmerItem {
     phone?: string
     village?: string
     defaultRate: number
+    collectAM?: boolean
+    collectPM?: boolean
+    subscriptionQtyAM?: number
+    subscriptionQtyPM?: number
     isActive: boolean
     balance: number
   }
@@ -149,6 +153,8 @@ export function CollectionsPage() {
               renderItem={(id) => {
                 const rf = farmerMap.get(id)
                 if (!rf) return null
+                const hasAM = rf.farmer.collectAM !== false
+                const hasPM = !!rf.farmer.collectPM
                 return (
                   <Card
                     className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
@@ -156,9 +162,31 @@ export function CollectionsPage() {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white truncate">
-                          {rf.farmer.name}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-900 dark:text-white truncate">
+                            {rf.farmer.name}
+                          </p>
+                          {hasAM && (
+                            <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                              currentShift === 'MORNING'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+                                : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                            }`}>
+                              <Sun className="w-3 h-3" />
+                              {rf.farmer.subscriptionQtyAM ? `${rf.farmer.subscriptionQtyAM}L` : 'AM'}
+                            </span>
+                          )}
+                          {hasPM && (
+                            <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                              currentShift === 'EVENING'
+                                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                                : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                            }`}>
+                              <Moon className="w-3 h-3" />
+                              {rf.farmer.subscriptionQtyPM ? `${rf.farmer.subscriptionQtyPM}L` : 'PM'}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
                           {rf.farmer.phone && (
                             <span className="flex items-center gap-1">

@@ -165,7 +165,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
           orderBy: { sortOrder: 'asc' },
           include: {
             farmer: {
-              select: { id: true, name: true, phone: true, village: true, defaultRate: true, isActive: true, balance: true }
+              select: { id: true, name: true, phone: true, village: true, defaultRate: true, collectAM: true, collectPM: true, subscriptionQtyAM: true, subscriptionQtyPM: true, isActive: true, balance: true }
             }
           }
         },
@@ -173,7 +173,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
           orderBy: { sortOrder: 'asc' },
           include: {
             customer: {
-              select: { id: true, name: true, phone: true, address: true, defaultRate: true, isActive: true, balance: true }
+              select: { id: true, name: true, phone: true, address: true, defaultRate: true, subscriptionQtyAM: true, subscriptionQtyPM: true, isActive: true, balance: true }
             }
           }
         },
