@@ -108,9 +108,31 @@ export function CustomerDetailPage() {
     if (!id) return
     const payments = await getPaymentsByCustomer(id)
     if (payments.length > 0) {
-      const dates = payments.map((p) => p.data.periodToDate || p.data.date)
-      dates.sort()
-      setLastPaymentDate(dates[dates.length - 1])
+      // Build sorted list of payment periods (exclude advance payments with no period)
+      const periods = payments
+        .filter((p) => p.data.periodFromDate && p.data.periodToDate)
+        .map((p) => ({ from: p.data.periodFromDate!, to: p.data.periodToDate! }))
+        .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to))
+
+      if (periods.length === 0) {
+        setLastPaymentDate(null)
+        return
+      }
+
+      // Merge contiguous/overlapping periods and find paid-till date
+      // Two periods are contiguous if the next starts within 1 day of current end
+      let paidTill = periods[0].to
+      for (let i = 1; i < periods.length; i++) {
+        const nextDay = new Date(paidTill + 'T00:00:00')
+        nextDay.setDate(nextDay.getDate() + 1)
+        const nextDayStr = nextDay.toISOString().slice(0, 10)
+        if (periods[i].from <= nextDayStr) {
+          if (periods[i].to > paidTill) paidTill = periods[i].to
+        } else {
+          break // gap found
+        }
+      }
+      setLastPaymentDate(paidTill)
     } else {
       setLastPaymentDate(null)
     }

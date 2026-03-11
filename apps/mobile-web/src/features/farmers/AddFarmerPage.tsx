@@ -18,7 +18,9 @@ const farmerSchema = z.object({
   village: z.string().optional(),
   defaultRate: z.number().min(1, 'Rate must be greater than 0'),
   collectAM: z.boolean(),
-  collectPM: z.boolean()
+  collectPM: z.boolean(),
+  subscriptionQtyAM: z.number().positive().optional(),
+  subscriptionQtyPM: z.number().positive().optional()
 })
 
 type FarmerFormData = z.infer<typeof farmerSchema>
@@ -47,7 +49,9 @@ export function AddFarmerPage() {
       village: '',
       defaultRate: 42, // Default rate
       collectAM: true,
-      collectPM: false
+      collectPM: false,
+      subscriptionQtyAM: undefined,
+      subscriptionQtyPM: undefined
     }
   })
 
@@ -63,7 +67,9 @@ export function AddFarmerPage() {
         village: data.village || undefined,
         defaultRate: data.defaultRate,
         collectAM: data.collectAM,
-        collectPM: data.collectPM
+        collectPM: data.collectPM,
+        subscriptionQtyAM: data.subscriptionQtyAM,
+        subscriptionQtyPM: data.subscriptionQtyPM
       })
 
       // Assign to route if selected - wait for sync to get server ID
@@ -129,27 +135,49 @@ export function AddFarmerPage() {
                 {t('farmer.collectionShift')}
               </label>
               <div className="space-y-2">
-                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-5 h-5 text-primary-600 rounded"
-                    checked={collectAM}
-                    onChange={(e) => setValue('collectAM', e.target.checked)}
-                  />
-                  <Sun className="w-5 h-5 text-yellow-500" />
-                  <span>{t('common.morning')} (AM)</span>
-                </label>
+                <div className="flex items-center gap-3 p-3 border rounded-lg">
+                  <label className="flex items-center gap-3 cursor-pointer flex-1">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 text-primary-600 rounded"
+                      checked={collectAM}
+                      onChange={(e) => setValue('collectAM', e.target.checked)}
+                    />
+                    <Sun className="w-5 h-5 text-yellow-500" />
+                    <span>{t('common.morning')} (AM)</span>
+                  </label>
+                  {collectAM && (
+                    <input
+                      type="number"
+                      step="0.5"
+                      placeholder="Qty (L)"
+                      className="w-24 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-right"
+                      {...register('subscriptionQtyAM', { valueAsNumber: true, setValueAs: (v: string) => v === '' ? undefined : Number(v) })}
+                    />
+                  )}
+                </div>
 
-                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-5 h-5 text-primary-600 rounded"
-                    checked={collectPM}
-                    onChange={(e) => setValue('collectPM', e.target.checked)}
-                  />
-                  <Moon className="w-5 h-5 text-blue-500" />
-                  <span>{t('common.evening')} (PM)</span>
-                </label>
+                <div className="flex items-center gap-3 p-3 border rounded-lg">
+                  <label className="flex items-center gap-3 cursor-pointer flex-1">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 text-primary-600 rounded"
+                      checked={collectPM}
+                      onChange={(e) => setValue('collectPM', e.target.checked)}
+                    />
+                    <Moon className="w-5 h-5 text-blue-500" />
+                    <span>{t('common.evening')} (PM)</span>
+                  </label>
+                  {collectPM && (
+                    <input
+                      type="number"
+                      step="0.5"
+                      placeholder="Qty (L)"
+                      className="w-24 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-right"
+                      {...register('subscriptionQtyPM', { valueAsNumber: true, setValueAs: (v: string) => v === '' ? undefined : Number(v) })}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 

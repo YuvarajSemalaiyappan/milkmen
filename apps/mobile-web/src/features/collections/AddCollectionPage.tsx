@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Search, User } from 'lucide-react'
+import { Search, User, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
 import { ShiftToggle, QuickPad, RouteFilter, SortableList } from '@/components/common'
@@ -113,6 +113,13 @@ export function AddCollectionPage() {
   const selectFarmer = (farmer: LocalFarmer) => {
     setSelectedFarmer(farmer)
     setRate(farmer.data.defaultRate.toString())
+    // Pre-fill subscription quantity based on current shift
+    const subscriptionQty = currentShift === 'MORNING'
+      ? farmer.data.subscriptionQtyAM
+      : farmer.data.subscriptionQtyPM
+    if (subscriptionQty) {
+      setQuantity(subscriptionQty.toString())
+    }
     setStep('enter-quantity')
   }
 
@@ -181,13 +188,26 @@ export function AddCollectionPage() {
                   onReorder={handleReorder}
                   renderItem={(id) => {
                     const farmer = routeFilteredFarmers.find((f) => f.id === id)!
+                    const hasAM = farmer.data.collectAM !== false
+                    const hasPM = !!farmer.data.collectPM
+                    const isCurrentShiftActive = currentShift === 'MORNING' ? hasAM : hasPM
                     return (
                       <button
                         onClick={() => selectFarmer(farmer)}
-                        className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        className={`w-full flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                          !isCurrentShiftActive ? 'opacity-50' : ''
+                        }`}
                       >
-                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
-                          <User className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          isCurrentShiftActive
+                            ? 'bg-blue-100 dark:bg-blue-900/50'
+                            : 'bg-gray-100 dark:bg-gray-800'
+                        }`}>
+                          <User className={`w-5 h-5 ${
+                            isCurrentShiftActive
+                              ? 'text-blue-600 dark:text-blue-400'
+                              : 'text-gray-400 dark:text-gray-500'
+                          }`} />
                         </div>
                         <div className="flex-1 text-left">
                           <p className="font-medium text-gray-900 dark:text-white">
@@ -199,10 +219,32 @@ export function AddCollectionPage() {
                             </p>
                           )}
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex flex-col items-end gap-1">
                           <p className="text-sm font-medium text-gray-900 dark:text-white">
                             {formatRate(farmer.data.defaultRate)}
                           </p>
+                          <div className="flex items-center gap-1">
+                            {hasAM && (
+                              <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                                currentShift === 'MORNING'
+                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+                                  : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                              }`}>
+                                <Sun className="w-3 h-3" />
+                                {farmer.data.subscriptionQtyAM ? `${farmer.data.subscriptionQtyAM}L` : 'AM'}
+                              </span>
+                            )}
+                            {hasPM && (
+                              <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                                currentShift === 'EVENING'
+                                  ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                                  : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                              }`}>
+                                <Moon className="w-3 h-3" />
+                                {farmer.data.subscriptionQtyPM ? `${farmer.data.subscriptionQtyPM}L` : 'PM'}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </button>
                     )

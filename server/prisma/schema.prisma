@@ -71,6 +71,10 @@ model Farmer {
   defaultRate Decimal  @db.Decimal(6, 2) // Default rate per liter
   collectAM   Boolean  @default(true)  // Collect in morning shift
   collectPM   Boolean  @default(false) // Collect in evening shift
+
+  // Subscription quantities (optional) - separate for morning and evening
+  subscriptionQtyAM Decimal? @db.Decimal(5, 2) // Morning collection quantity
+  subscriptionQtyPM Decimal? @db.Decimal(5, 2) // Evening collection quantity
   isActive    Boolean  @default(true)
   balance     Decimal  @default(0) @db.Decimal(10, 2) // Positive = we owe them
   createdAt   DateTime @default(now())

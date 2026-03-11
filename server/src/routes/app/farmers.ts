@@ -10,7 +10,11 @@ const createFarmerSchema = z.object({
   name: z.string().min(2).max(100),
   phone: z.string().min(10).max(15).optional(),
   village: z.string().max(100).optional(),
-  defaultRate: z.number().positive()
+  defaultRate: z.number().positive(),
+  collectAM: z.boolean().optional(),
+  collectPM: z.boolean().optional(),
+  subscriptionQtyAM: z.number().positive().optional().nullable(),
+  subscriptionQtyPM: z.number().positive().optional().nullable()
 })
 
 const updateFarmerSchema = z.object({
@@ -18,6 +22,10 @@ const updateFarmerSchema = z.object({
   phone: z.string().min(10).max(15).optional().nullable(),
   village: z.string().max(100).optional().nullable(),
   defaultRate: z.number().positive().optional(),
+  collectAM: z.boolean().optional(),
+  collectPM: z.boolean().optional(),
+  subscriptionQtyAM: z.number().positive().optional().nullable(),
+  subscriptionQtyPM: z.number().positive().optional().nullable(),
   isActive: z.boolean().optional()
 })
 
@@ -172,7 +180,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { name, phone, village, defaultRate } = validation.data
+    const { name, phone, village, defaultRate, collectAM, collectPM, subscriptionQtyAM, subscriptionQtyPM } = validation.data
 
     // Check for duplicate phone within business
     if (phone) {
@@ -193,7 +201,11 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         name,
         phone,
         village,
-        defaultRate
+        defaultRate,
+        collectAM: collectAM ?? true,
+        collectPM: collectPM ?? false,
+        subscriptionQtyAM,
+        subscriptionQtyPM
       }
     })
 

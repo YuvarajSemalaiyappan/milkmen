@@ -28,6 +28,8 @@ export function useFarmers() {
       defaultRate: number
       collectAM?: boolean
       collectPM?: boolean
+      subscriptionQtyAM?: number
+      subscriptionQtyPM?: number
     }) => {
       const localId = generateLocalId()
       const timestamp = now()
@@ -45,6 +47,8 @@ export function useFarmers() {
           defaultRate: data.defaultRate,
           collectAM: data.collectAM ?? true,
           collectPM: data.collectPM ?? false,
+          subscriptionQtyAM: data.subscriptionQtyAM,
+          subscriptionQtyPM: data.subscriptionQtyPM,
           isActive: true,
           balance: 0
         }
@@ -75,6 +79,8 @@ export function useFarmers() {
         defaultRate: number
         collectAM: boolean
         collectPM: boolean
+        subscriptionQtyAM?: number
+        subscriptionQtyPM?: number
         isActive: boolean
       }>
     ) => {

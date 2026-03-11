@@ -120,8 +120,38 @@ export function AddPaymentPage() {
         })
 
       if (personPayments.length > 0) {
-        const lastPayment = personPayments[0]
-        const next = nextShift(lastPayment.data.periodToDate!, lastPayment.data.periodToShift!)
+        // Sort ascending by (periodFromDate, periodFromShift) to find contiguous coverage
+        const sorted = [...personPayments].sort((a, b) => {
+          if (a.data.periodFromDate! < b.data.periodFromDate!) return -1
+          if (a.data.periodFromDate! > b.data.periodFromDate!) return 1
+          return shiftOrd(a.data.periodFromShift!) - shiftOrd(b.data.periodFromShift!)
+        })
+
+        // Merge contiguous/overlapping periods to find the paid-till point
+        let paidTillDate = sorted[0].data.periodToDate!
+        let paidTillShift = sorted[0].data.periodToShift!
+        for (let i = 1; i < sorted.length; i++) {
+          const p = sorted[i]
+          const paidTillNext = nextShift(paidTillDate, paidTillShift)
+          const fromDate = p.data.periodFromDate!
+          const fromShift = p.data.periodFromShift!
+          // Contiguous: next period starts at or before the shift after current end
+          const startsBeforeOrAtEnd = fromDate < paidTillDate
+            || (fromDate === paidTillDate && shiftOrd(fromShift) <= shiftOrd(paidTillShift))
+          const startsAtNextShift = fromDate === paidTillNext.date && fromShift === paidTillNext.shift
+          if (startsBeforeOrAtEnd || startsAtNextShift) {
+            // Extend if this payment goes further
+            if (p.data.periodToDate! > paidTillDate
+              || (p.data.periodToDate! === paidTillDate && shiftOrd(p.data.periodToShift!) > shiftOrd(paidTillShift))) {
+              paidTillDate = p.data.periodToDate!
+              paidTillShift = p.data.periodToShift!
+            }
+          } else {
+            break // gap found
+          }
+        }
+
+        const next = nextShift(paidTillDate, paidTillShift)
         setFromDate(next.date)
         setFromShift(next.shift)
       } else {

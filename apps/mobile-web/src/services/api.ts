@@ -147,9 +147,9 @@ export const authApi = {
 export const farmersApi = {
   list: () => api.get('/farmers'),
   get: (id: string) => api.get(`/farmers/${id}`),
-  create: (data: { name: string; phone?: string; village?: string; defaultRate: number; collectAM?: boolean; collectPM?: boolean }) =>
+  create: (data: { name: string; phone?: string; village?: string; defaultRate: number; collectAM?: boolean; collectPM?: boolean; subscriptionQtyAM?: number; subscriptionQtyPM?: number }) =>
     api.post('/farmers', data),
-  update: (id: string, data: Partial<{ name: string; phone?: string; village?: string; defaultRate: number; collectAM: boolean; collectPM: boolean; isActive: boolean }>) =>
+  update: (id: string, data: Partial<{ name: string; phone?: string; village?: string; defaultRate: number; collectAM: boolean; collectPM: boolean; subscriptionQtyAM?: number; subscriptionQtyPM?: number; isActive: boolean }>) =>
     api.put(`/farmers/${id}`, data),
   delete: (id: string) => api.delete(`/farmers/${id}`),
   updateSortOrder: (orders: { farmerId: string; sortOrder: number }[]) =>

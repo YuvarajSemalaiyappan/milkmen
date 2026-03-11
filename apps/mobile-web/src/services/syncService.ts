@@ -339,6 +339,10 @@ class SyncService {
             phone: record.phone as string | undefined,
             village: record.village as string | undefined,
             defaultRate: Number(record.defaultRate) || 0,
+            collectAM: record.collectAM as boolean | undefined,
+            collectPM: record.collectPM as boolean | undefined,
+            subscriptionQtyAM: record.subscriptionQtyAM != null ? Number(record.subscriptionQtyAM) : undefined,
+            subscriptionQtyPM: record.subscriptionQtyPM != null ? Number(record.subscriptionQtyPM) : undefined,
             isActive: record.isActive as boolean,
             balance: Number(record.balance) || 0
           }

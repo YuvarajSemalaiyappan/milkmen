@@ -30,7 +30,9 @@ const farmerSchema = z.object({
   village: z.string().optional(),
   defaultRate: z.number().min(1, 'Rate must be greater than 0'),
   collectAM: z.boolean(),
-  collectPM: z.boolean()
+  collectPM: z.boolean(),
+  subscriptionQtyAM: z.number().positive().optional(),
+  subscriptionQtyPM: z.number().positive().optional()
 })
 
 type FarmerFormData = z.infer<typeof farmerSchema>
@@ -88,7 +90,9 @@ export function FarmerDetailPage() {
         village: data.data.village || '',
         defaultRate: data.data.defaultRate,
         collectAM: data.data.collectAM ?? true,
-        collectPM: data.data.collectPM ?? false
+        collectPM: data.data.collectPM ?? false,
+        subscriptionQtyAM: data.data.subscriptionQtyAM,
+        subscriptionQtyPM: data.data.subscriptionQtyPM
       })
 
       // Load existing route/area assignment
@@ -110,9 +114,31 @@ export function FarmerDetailPage() {
     if (!id) return
     const payments = await getPaymentsByFarmer(id)
     if (payments.length > 0) {
-      const dates = payments.map((p) => p.data.periodToDate || p.data.date)
-      dates.sort()
-      setLastPaymentDate(dates[dates.length - 1])
+      // Build sorted list of payment periods (exclude advance payments with no period)
+      const periods = payments
+        .filter((p) => p.data.periodFromDate && p.data.periodToDate)
+        .map((p) => ({ from: p.data.periodFromDate!, to: p.data.periodToDate! }))
+        .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to))
+
+      if (periods.length === 0) {
+        setLastPaymentDate(null)
+        return
+      }
+
+      // Merge contiguous/overlapping periods and find paid-till date
+      // Two periods are contiguous if the next starts within 1 day of current end
+      let paidTill = periods[0].to
+      for (let i = 1; i < periods.length; i++) {
+        const nextDay = new Date(paidTill + 'T00:00:00')
+        nextDay.setDate(nextDay.getDate() + 1)
+        const nextDayStr = nextDay.toISOString().slice(0, 10)
+        if (periods[i].from <= nextDayStr) {
+          if (periods[i].to > paidTill) paidTill = periods[i].to
+        } else {
+          break // gap found
+        }
+      }
+      setLastPaymentDate(paidTill)
     } else {
       setLastPaymentDate(null)
     }
@@ -128,7 +154,9 @@ export function FarmerDetailPage() {
         village: data.village || undefined,
         defaultRate: data.defaultRate,
         collectAM: data.collectAM,
-        collectPM: data.collectPM
+        collectPM: data.collectPM,
+        subscriptionQtyAM: data.subscriptionQtyAM,
+        subscriptionQtyPM: data.subscriptionQtyPM
       })
 
       // Update route assignment if changed
@@ -265,27 +293,49 @@ export function FarmerDetailPage() {
                   {t('farmer.collectionShift')}
                 </label>
                 <div className="space-y-2">
-                  <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 text-primary-600 rounded"
-                      checked={collectAM}
-                      onChange={(e) => setValue('collectAM', e.target.checked)}
-                    />
-                    <Sun className="w-5 h-5 text-yellow-500" />
-                    <span>{t('common.morning')} (AM)</span>
-                  </label>
+                  <div className="flex items-center gap-3 p-3 border rounded-lg">
+                    <label className="flex items-center gap-3 cursor-pointer flex-1">
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 text-primary-600 rounded"
+                        checked={collectAM}
+                        onChange={(e) => setValue('collectAM', e.target.checked)}
+                      />
+                      <Sun className="w-5 h-5 text-yellow-500" />
+                      <span>{t('common.morning')} (AM)</span>
+                    </label>
+                    {collectAM && (
+                      <input
+                        type="number"
+                        step="0.5"
+                        placeholder="Qty (L)"
+                        className="w-24 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-right"
+                        {...register('subscriptionQtyAM', { valueAsNumber: true, setValueAs: (v: string) => v === '' ? undefined : Number(v) })}
+                      />
+                    )}
+                  </div>
 
-                  <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 text-primary-600 rounded"
-                      checked={collectPM}
-                      onChange={(e) => setValue('collectPM', e.target.checked)}
-                    />
-                    <Moon className="w-5 h-5 text-blue-500" />
-                    <span>{t('common.evening')} (PM)</span>
-                  </label>
+                  <div className="flex items-center gap-3 p-3 border rounded-lg">
+                    <label className="flex items-center gap-3 cursor-pointer flex-1">
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 text-primary-600 rounded"
+                        checked={collectPM}
+                        onChange={(e) => setValue('collectPM', e.target.checked)}
+                      />
+                      <Moon className="w-5 h-5 text-blue-500" />
+                      <span>{t('common.evening')} (PM)</span>
+                    </label>
+                    {collectPM && (
+                      <input
+                        type="number"
+                        step="0.5"
+                        placeholder="Qty (L)"
+                        className="w-24 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-right"
+                        {...register('subscriptionQtyPM', { valueAsNumber: true, setValueAs: (v: string) => v === '' ? undefined : Number(v) })}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -388,13 +438,13 @@ export function FarmerDetailPage() {
                   {farmer.data.collectAM && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                       <Sun className="w-3 h-3" />
-                      {t('common.morning')}
+                      {t('common.morning')}{farmer.data.subscriptionQtyAM ? ` · ${farmer.data.subscriptionQtyAM}L` : ''}
                     </span>
                   )}
                   {farmer.data.collectPM && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       <Moon className="w-3 h-3" />
-                      {t('common.evening')}
+                      {t('common.evening')}{farmer.data.subscriptionQtyPM ? ` · ${farmer.data.subscriptionQtyPM}L` : ''}
                     </span>
                   )}
                 </div>

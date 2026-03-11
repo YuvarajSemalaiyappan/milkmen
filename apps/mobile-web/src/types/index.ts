@@ -56,6 +56,8 @@ export interface Farmer {
   defaultRate: number
   collectAM?: boolean
   collectPM?: boolean
+  subscriptionQtyAM?: number
+  subscriptionQtyPM?: number
   isActive: boolean
   balance: number
   createdAt: string
@@ -70,6 +72,8 @@ export interface LocalFarmer extends SyncableEntity {
     defaultRate: number
     collectAM?: boolean
     collectPM?: boolean
+    subscriptionQtyAM?: number
+    subscriptionQtyPM?: number
     isActive: boolean
     balance: number
   }
