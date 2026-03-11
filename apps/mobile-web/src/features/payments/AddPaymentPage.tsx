@@ -111,47 +111,19 @@ export function AddPaymentPage() {
           if (recipientType === 'farmer') return p.data.farmerId === selected.id
           return p.data.customerId === selected.id
         })
-        .filter((p) => p.data.periodToDate && p.data.periodToShift)
-        .sort((a, b) => {
-          // Sort by periodToDate desc, then periodToShift desc
-          if (a.data.periodToDate! > b.data.periodToDate!) return -1
-          if (a.data.periodToDate! < b.data.periodToDate!) return 1
-          return a.data.periodToShift === 'EVENING' ? -1 : 1
-        })
+        .filter((p) => p.data.periodFromDate && p.data.periodFromShift && p.data.periodToDate && p.data.periodToShift)
 
       if (personPayments.length > 0) {
-        // Sort ascending by (periodFromDate, periodFromShift) to find contiguous coverage
-        const sorted = [...personPayments].sort((a, b) => {
-          if (a.data.periodFromDate! < b.data.periodFromDate!) return -1
-          if (a.data.periodFromDate! > b.data.periodFromDate!) return 1
-          return shiftOrd(a.data.periodFromShift!) - shiftOrd(b.data.periodFromShift!)
+        // Sort descending by (periodToDate, periodToShift) to find latest payment
+        const descByEnd = [...personPayments].sort((a, b) => {
+          if (a.data.periodToDate! > b.data.periodToDate!) return -1
+          if (a.data.periodToDate! < b.data.periodToDate!) return 1
+          return shiftOrd(b.data.periodToShift!) - shiftOrd(a.data.periodToShift!)
         })
+        const lastPaidDate = descByEnd[0].data.periodToDate!
+        const lastPaidShift = descByEnd[0].data.periodToShift!
 
-        // Merge contiguous/overlapping periods to find the paid-till point
-        let paidTillDate = sorted[0].data.periodToDate!
-        let paidTillShift = sorted[0].data.periodToShift!
-        for (let i = 1; i < sorted.length; i++) {
-          const p = sorted[i]
-          const paidTillNext = nextShift(paidTillDate, paidTillShift)
-          const fromDate = p.data.periodFromDate!
-          const fromShift = p.data.periodFromShift!
-          // Contiguous: next period starts at or before the shift after current end
-          const startsBeforeOrAtEnd = fromDate < paidTillDate
-            || (fromDate === paidTillDate && shiftOrd(fromShift) <= shiftOrd(paidTillShift))
-          const startsAtNextShift = fromDate === paidTillNext.date && fromShift === paidTillNext.shift
-          if (startsBeforeOrAtEnd || startsAtNextShift) {
-            // Extend if this payment goes further
-            if (p.data.periodToDate! > paidTillDate
-              || (p.data.periodToDate! === paidTillDate && shiftOrd(p.data.periodToShift!) > shiftOrd(paidTillShift))) {
-              paidTillDate = p.data.periodToDate!
-              paidTillShift = p.data.periodToShift!
-            }
-          } else {
-            break // gap found
-          }
-        }
-
-        const next = nextShift(paidTillDate, paidTillShift)
+        const next = nextShift(lastPaidDate, lastPaidShift)
         setFromDate(next.date)
         setFromShift(next.shift)
       } else {
