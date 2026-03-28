@@ -83,10 +83,13 @@ export function DeliveriesPage() {
     ? customers.filter((rc) => rc.areaId === selectedAreaId)
     : customers
 
-  // Only show customers who are pending (no delivery yet today for this shift)
-  const filteredCustomers = areaFilteredCustomers.filter(
-    (rc) => !completedCustomerIds?.has(rc.customer.id)
-  )
+  // Only show customers subscribed to the current shift who are pending (no delivery yet today)
+  const filteredCustomers = areaFilteredCustomers.filter((rc) => {
+    const isSubscribed = currentShift === 'MORNING'
+      ? !!rc.customer.subscriptionQtyAM
+      : !!rc.customer.subscriptionQtyPM
+    return isSubscribed && !completedCustomerIds?.has(rc.customer.id)
+  })
 
   const customerMap = useMemo(() => {
     const map = new Map<string, RouteCustomerItem>()
@@ -153,13 +156,9 @@ export function DeliveriesPage() {
                 if (!rc) return null
                 const hasAM = !!rc.customer.subscriptionQtyAM
                 const hasPM = !!rc.customer.subscriptionQtyPM
-                const hasSubscription = hasAM || hasPM
-                const isCurrentShiftSubscribed = currentShift === 'MORNING' ? hasAM : hasPM
                 return (
                   <Card
-                    className={`cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 ${
-                      hasSubscription && !isCurrentShiftSubscribed ? 'opacity-50' : ''
-                    }`}
+                    className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
                     onClick={() => navigate(`/deliver/add?customerId=${rc.customer.id}`)}
                   >
                     <div className="flex items-center justify-between">

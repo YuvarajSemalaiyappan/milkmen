@@ -29,8 +29,8 @@ const customerSchema = z.object({
   phone: z.string().optional(),
   address: z.string().optional(),
   defaultRate: z.number().min(1, 'Rate must be greater than 0'),
-  subscriptionQtyAM: z.number().optional(),
-  subscriptionQtyPM: z.number().optional()
+  subscriptionQtyAM: z.preprocess((v) => (v === '' || Number.isNaN(v) ? undefined : v), z.number().optional()),
+  subscriptionQtyPM: z.preprocess((v) => (v === '' || Number.isNaN(v) ? undefined : v), z.number().optional())
 })
 
 type CustomerFormData = z.infer<typeof customerSchema>
