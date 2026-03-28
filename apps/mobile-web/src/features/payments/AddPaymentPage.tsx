@@ -192,6 +192,28 @@ export function AddPaymentPage() {
 
     setIsCalculating(true)
     try {
+      // Load existing payments to determine which records are already paid
+      const allPayments = await db.payments.toArray()
+      const personId = selected.id
+      const existingPaidPeriods = allPayments
+        .filter((p) => {
+          const matchesPerson = recipientType === 'farmer'
+            ? p.data.farmerId === personId
+            : p.data.customerId === personId
+          return matchesPerson && p.data.periodFromDate && p.data.periodToDate && p.data.periodFromShift && p.data.periodToShift
+        })
+        .map((p) => ({
+          from: p.data.periodFromDate!,
+          fromShift: p.data.periodFromShift!,
+          to: p.data.periodToDate!,
+          toShift: p.data.periodToShift!,
+        }))
+
+      const isAlreadyPaid = (date: string, shift: Shift) =>
+        existingPaidPeriods.some((pp) =>
+          isInShiftRange(date, shift, pp.from, pp.fromShift, pp.to, pp.toShift)
+        )
+
       let total = 0
       let count = 0
 
@@ -204,7 +226,8 @@ export function AddPaymentPage() {
         for (const c of collections) {
           if (
             c.data.farmerId === selected.id &&
-            isInShiftRange(c.data.date, c.data.shift, fromDate, fromShift, toDate, toShift)
+            isInShiftRange(c.data.date, c.data.shift, fromDate, fromShift, toDate, toShift) &&
+            !isAlreadyPaid(c.data.date, c.data.shift)
           ) {
             total += c.data.totalAmount
             count++
@@ -220,7 +243,8 @@ export function AddPaymentPage() {
           if (
             d.data.customerId === selected.id &&
             d.data.status === 'DELIVERED' &&
-            isInShiftRange(d.data.date, d.data.shift, fromDate, fromShift, toDate, toShift)
+            isInShiftRange(d.data.date, d.data.shift, fromDate, fromShift, toDate, toShift) &&
+            !isAlreadyPaid(d.data.date, d.data.shift)
           ) {
             total += d.data.totalAmount
             count++
@@ -491,17 +515,6 @@ export function AddPaymentPage() {
                             </p>
                           </div>
                         )}
-                        {periodAmount > 0 && !existingPaymentForPeriod && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setAmount((Math.round(periodAmount * 100) / 100).toString())}
-                            fullWidth
-                            className="mt-2"
-                          >
-                            {t('payment.usePeriodTotal')} ({formatCurrency(periodAmount)})
-                          </Button>
-                        )}
                       </div>
                     ) : null}
                   </div>
@@ -521,15 +534,15 @@ export function AddPaymentPage() {
               </div>
 
               {/* Quick amount buttons */}
-              {balance > 0 && (
+              {!isAdvance && periodAmount !== null && periodAmount > 0 && (
                 <div className="flex gap-2 mb-4">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setAmount(Math.abs(balance).toString())}
+                    onClick={() => setAmount((Math.round(periodAmount * 100) / 100).toString())}
                     fullWidth
                   >
-                    {t('payment.fullPayment')} ({formatCurrency(Math.abs(balance))})
+                    {t('payment.fullPayment')} ({formatCurrency(periodAmount)})
                   </Button>
                 </div>
               )}

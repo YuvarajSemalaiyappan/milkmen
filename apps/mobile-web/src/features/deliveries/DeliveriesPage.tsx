@@ -153,9 +153,13 @@ export function DeliveriesPage() {
                 if (!rc) return null
                 const hasAM = !!rc.customer.subscriptionQtyAM
                 const hasPM = !!rc.customer.subscriptionQtyPM
+                const hasSubscription = hasAM || hasPM
+                const isCurrentShiftSubscribed = currentShift === 'MORNING' ? hasAM : hasPM
                 return (
                   <Card
-                    className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
+                    className={`cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 ${
+                      hasSubscription && !isCurrentShiftSubscribed ? 'opacity-50' : ''
+                    }`}
                     onClick={() => navigate(`/deliver/add?customerId=${rc.customer.id}`)}
                   >
                     <div className="flex items-center justify-between">

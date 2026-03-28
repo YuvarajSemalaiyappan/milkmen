@@ -155,9 +155,12 @@ export function CollectionsPage() {
                 if (!rf) return null
                 const hasAM = rf.farmer.collectAM !== false
                 const hasPM = !!rf.farmer.collectPM
+                const isCurrentShiftActive = currentShift === 'MORNING' ? hasAM : hasPM
                 return (
                   <Card
-                    className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
+                    className={`cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 ${
+                      !isCurrentShiftActive ? 'opacity-50' : ''
+                    }`}
                     onClick={() => navigate(`/collect/add?farmerId=${rf.farmer.id}`)}
                   >
                     <div className="flex items-center justify-between">

@@ -31,8 +31,8 @@ const farmerSchema = z.object({
   defaultRate: z.number().min(1, 'Rate must be greater than 0'),
   collectAM: z.boolean(),
   collectPM: z.boolean(),
-  subscriptionQtyAM: z.number().positive().optional(),
-  subscriptionQtyPM: z.number().positive().optional()
+  subscriptionQtyAM: z.number().min(0).optional(),
+  subscriptionQtyPM: z.number().min(0).optional()
 })
 
 type FarmerFormData = z.infer<typeof farmerSchema>
@@ -49,6 +49,7 @@ export function FarmerDetailPage() {
   const [farmer, setFarmer] = useState<LocalFarmer | null>(null)
   const [collections, setCollections] = useState<LocalCollection[]>([])
   const [lastPaymentDate, setLastPaymentDate] = useState<string | null>(null)
+  const [paidPeriods, setPaidPeriods] = useState<{ from: string; to: string }[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -122,25 +123,30 @@ export function FarmerDetailPage() {
 
       if (periods.length === 0) {
         setLastPaymentDate(null)
+        setPaidPeriods([])
         return
       }
 
-      // Merge contiguous/overlapping periods and find paid-till date
+      // Merge contiguous/overlapping periods
       // Two periods are contiguous if the next starts within 1 day of current end
-      let paidTill = periods[0].to
+      const merged: { from: string; to: string }[] = [{ ...periods[0] }]
       for (let i = 1; i < periods.length; i++) {
-        const nextDay = new Date(paidTill + 'T00:00:00')
+        const current = merged[merged.length - 1]
+        const nextDay = new Date(current.to + 'T00:00:00')
         nextDay.setDate(nextDay.getDate() + 1)
         const nextDayStr = nextDay.toISOString().slice(0, 10)
         if (periods[i].from <= nextDayStr) {
-          if (periods[i].to > paidTill) paidTill = periods[i].to
+          if (periods[i].to > current.to) current.to = periods[i].to
         } else {
-          break // gap found
+          merged.push({ ...periods[i] })
         }
       }
+      setPaidPeriods(merged)
+      const paidTill = merged.reduce((max, p) => p.to > max ? p.to : max, merged[0].to)
       setLastPaymentDate(paidTill)
     } else {
       setLastPaymentDate(null)
+      setPaidPeriods([])
     }
   }
 
@@ -155,8 +161,8 @@ export function FarmerDetailPage() {
         defaultRate: data.defaultRate,
         collectAM: data.collectAM,
         collectPM: data.collectPM,
-        subscriptionQtyAM: data.subscriptionQtyAM,
-        subscriptionQtyPM: data.subscriptionQtyPM
+        subscriptionQtyAM: data.subscriptionQtyAM || undefined,
+        subscriptionQtyPM: data.subscriptionQtyPM || undefined
       })
 
       // Update route assignment if changed
@@ -223,8 +229,11 @@ export function FarmerDetailPage() {
     )
   }
 
+  const isDatePaid = (date: string) =>
+    paidPeriods.some((p) => date >= p.from && date <= p.to)
+
   const unpaidCollections = collections.filter(
-    (c) => !lastPaymentDate || c.data.date > lastPaymentDate
+    (c) => !isDatePaid(c.data.date)
   )
   const unpaidQty = unpaidCollections.reduce(
     (sum, c) => sum + Number(c.data.quantity),
@@ -583,8 +592,8 @@ export function FarmerDetailPage() {
                           <Badge size="sm" variant={collection.data.shift === 'MORNING' ? 'info' : 'warning'}>
                             {collection.data.shift === 'MORNING' ? 'AM' : 'PM'}
                           </Badge>
-                          <Badge size="sm" variant={lastPaymentDate && collection.data.date <= lastPaymentDate ? 'success' : 'error'}>
-                            {lastPaymentDate && collection.data.date <= lastPaymentDate ? t('reports.paid') : t('reports.unpaid')}
+                          <Badge size="sm" variant={isDatePaid(collection.data.date) ? 'success' : 'error'}>
+                            {isDatePaid(collection.data.date) ? t('reports.paid') : t('reports.unpaid')}
                           </Badge>
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
