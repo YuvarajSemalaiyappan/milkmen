@@ -255,21 +255,13 @@ export function AddPaymentPage() {
       setPeriodAmount(total)
       setPeriodCount(count)
 
-      // Check for existing payment with overlapping period
-      const allPayments = await db.payments.toArray()
-      const personId = selected.id
-      const hasDuplicate = allPayments.some((p) => {
-        const matchesPerson = recipientType === 'farmer'
-          ? p.data.farmerId === personId
-          : p.data.customerId === personId
-        if (!matchesPerson) return false
-        if (!p.data.periodFromDate || !p.data.periodToDate || !p.data.periodFromShift || !p.data.periodToShift) return false
-
+      // Check for existing payment with overlapping period (reuse allPayments from above)
+      const hasDuplicate = existingPaidPeriods.some((pp) => {
         // Two periods overlap unless one ends before the other starts
-        const aEndBeforeBStart = toDate < p.data.periodFromDate
-          || (toDate === p.data.periodFromDate && shiftOrd(toShift) < shiftOrd(p.data.periodFromShift))
-        const bEndBeforeAStart = p.data.periodToDate < fromDate
-          || (p.data.periodToDate === fromDate && shiftOrd(p.data.periodToShift) < shiftOrd(fromShift))
+        const aEndBeforeBStart = toDate < pp.from
+          || (toDate === pp.from && shiftOrd(toShift) < shiftOrd(pp.fromShift))
+        const bEndBeforeAStart = pp.to < fromDate
+          || (pp.to === fromDate && shiftOrd(pp.toShift) < shiftOrd(fromShift))
 
         return !aEndBeforeBStart && !bEndBeforeAStart
       })
