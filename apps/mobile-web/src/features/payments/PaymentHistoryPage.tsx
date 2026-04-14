@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { IndianRupee, Trash2, Calendar } from 'lucide-react'
+import { IndianRupee, Trash2, Calendar, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Button } from '@/components/ui'
 import { useFarmers, useCustomers, usePayments } from '@/hooks'
@@ -79,7 +79,18 @@ export function PaymentHistoryPage() {
     }
   }
 
-  const paymentsTyped = payments as Array<Payment & { periodFromDate?: string; periodToDate?: string; method: string }>
+  const shiftBadge = (shift: string) => {
+    if (shift === 'MORNING') return (
+      <span className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+        <Sun className="w-3 h-3" />AM
+      </span>
+    )
+    return (
+      <span className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+        <Moon className="w-3 h-3" />PM
+      </span>
+    )
+  }
 
   return (
     <AppShell title={person?.name ? `${t('payment.history')} - ${person.name}` : t('payment.history')} showBack>
@@ -96,7 +107,7 @@ export function PaymentHistoryPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {payments.length} {t('payment.entries')}
             </p>
-            {paymentsTyped.map((p) => (
+            {payments.map((p) => (
               <Card key={p.id}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0 space-y-1">
@@ -120,9 +131,14 @@ export function PaymentHistoryPage() {
                       <span>{methodLabel(p.method)}</span>
                     </div>
                     {p.periodFromDate && p.periodToDate && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {t('payment.dateFilter')}: {p.periodFromDate} → {p.periodToDate}
-                      </p>
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+                        <span>{t('payment.dateFilter')}:</span>
+                        <span>{p.periodFromDate}</span>
+                        {p.periodFromShift && shiftBadge(p.periodFromShift)}
+                        <span>→</span>
+                        <span>{p.periodToDate}</span>
+                        {p.periodToShift && shiftBadge(p.periodToShift)}
+                      </div>
                     )}
                     {p.notes && (
                       <p className="text-xs text-gray-400 dark:text-gray-500 italic">{p.notes}</p>

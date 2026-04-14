@@ -109,7 +109,7 @@ export function AddPaymentPage() {
         ? await getPaymentsByFarmer(selected.id)
         : await getPaymentsByCustomer(selected.id)
 
-      const personPayments = (allPayments as Array<typeof allPayments[0] & { periodFromDate?: string; periodFromShift?: Shift; periodToDate?: string; periodToShift?: Shift }>)
+      const personPayments = allPayments
         .filter((p) => p.periodFromDate && p.periodFromShift && p.periodToDate && p.periodToShift)
 
       if (personPayments.length > 0) {
@@ -190,7 +190,7 @@ export function AddPaymentPage() {
         ? await getPaymentsByFarmer(selected.id)
         : await getPaymentsByCustomer(selected.id)
 
-      const existingPaidPeriods = (allPayments as Array<typeof allPayments[0] & { periodFromDate?: string; periodFromShift?: Shift; periodToDate?: string; periodToShift?: Shift }>)
+      const existingPaidPeriods = allPayments
         .filter((p) => p.periodFromDate && p.periodToDate && p.periodFromShift && p.periodToShift)
         .map((p) => ({
           from: p.periodFromDate!,

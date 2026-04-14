@@ -122,6 +122,10 @@ export interface Payment {
   type: PaymentType
   method: PaymentMethod
   notes?: string
+  periodFromDate?: string
+  periodToDate?: string
+  periodFromShift?: Shift
+  periodToShift?: Shift
   createdAt: string
 }
 
