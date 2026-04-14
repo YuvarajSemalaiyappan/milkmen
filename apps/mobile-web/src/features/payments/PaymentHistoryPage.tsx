@@ -1,50 +1,57 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { IndianRupee, Trash2, Calendar } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Button } from '@/components/ui'
-import { db } from '@/db/localDb'
-import { usePayments } from '@/hooks'
+import { useFarmers, useCustomers, usePayments } from '@/hooks'
 import { formatCurrency } from '@/utils'
-import type { LocalPayment } from '@/types'
+import type { Payment } from '@/types'
 
 export function PaymentHistoryPage() {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()
-  const { deletePayment } = usePayments()
+  const { getFarmer } = useFarmers()
+  const { getCustomer } = useCustomers()
+  const { getPaymentsByFarmer, getPaymentsByCustomer, deletePayment } = usePayments()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [person, setPerson] = useState<{ name: string; type: 'farmer' | 'customer' } | null>(null)
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   const farmerId = searchParams.get('farmerId')
   const customerId = searchParams.get('customerId')
 
-  const person = useLiveQuery(async () => {
-    if (farmerId) {
-      const f = await db.farmers.get(farmerId)
-      return f ? { name: f.data.name, type: 'farmer' as const } : null
+  useEffect(() => {
+    const load = async () => {
+      setIsLoading(true)
+      try {
+        if (farmerId) {
+          const farmer = await getFarmer(farmerId)
+          if (farmer) setPerson({ name: farmer.name, type: 'farmer' })
+          const data = await getPaymentsByFarmer(farmerId)
+          setPayments(data)
+        } else if (customerId) {
+          const customer = await getCustomer(customerId)
+          if (customer) setPerson({ name: customer.name, type: 'customer' })
+          const data = await getPaymentsByCustomer(customerId)
+          setPayments(data)
+        }
+      } catch (error) {
+        console.error('Failed to load payment history:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
-    if (customerId) {
-      const c = await db.customers.get(customerId)
-      return c ? { name: c.data.name, type: 'customer' as const } : null
-    }
-    return null
-  }, [farmerId, customerId])
-
-  const payments = useLiveQuery(async () => {
-    const all = await db.payments.orderBy('updatedAt').reverse().toArray()
-    return all.filter(p => {
-      if (farmerId) return p.data.farmerId === farmerId
-      if (customerId) return p.data.customerId === customerId
-      return false
-    })
-  }, [farmerId, customerId])
+    load()
+  }, [farmerId, customerId, getFarmer, getCustomer, getPaymentsByFarmer, getPaymentsByCustomer])
 
   const handleDelete = async (id: string) => {
     try {
       setDeletingId(id)
       await deletePayment(id)
+      setPayments((prev) => prev.filter((p) => p.id !== id))
       setConfirmDeleteId(null)
     } catch (error) {
       console.error('Failed to delete payment:', error)
@@ -53,8 +60,8 @@ export function PaymentHistoryPage() {
     }
   }
 
-  const typeLabel = (p: LocalPayment) => {
-    switch (p.data.type) {
+  const typeLabel = (p: Payment) => {
+    switch (p.type) {
       case 'PAID_TO_FARMER': return t('payment.paidToFarmer')
       case 'RECEIVED_FROM_CUSTOMER': return t('payment.receivedFromCustomer')
       case 'ADVANCE_TO_FARMER': return t('payment.advanceToFarmer')
@@ -72,10 +79,14 @@ export function PaymentHistoryPage() {
     }
   }
 
+  const paymentsTyped = payments as Array<Payment & { periodFromDate?: string; periodToDate?: string; method: string }>
+
   return (
     <AppShell title={person?.name ? `${t('payment.history')} - ${person.name}` : t('payment.history')} showBack>
       <div className="px-4 pt-5 pb-4 space-y-3">
-        {!payments || payments.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-500">{t('common.loading')}...</div>
+        ) : payments.length === 0 ? (
           <div className="text-center py-12">
             <IndianRupee className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 dark:text-gray-400">{t('payment.noPayments')}</p>
@@ -85,16 +96,16 @@ export function PaymentHistoryPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {payments.length} {t('payment.entries')}
             </p>
-            {payments.map((p) => (
+            {paymentsTyped.map((p) => (
               <Card key={p.id}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-gray-900 dark:text-white">
-                        {formatCurrency(p.data.amount)}
+                        {formatCurrency(p.amount)}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        p.data.type.includes('ADVANCE')
+                        p.type.includes('ADVANCE')
                           ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
                           : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                       }`}>
@@ -104,20 +115,17 @@ export function PaymentHistoryPage() {
                     <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {p.data.date}
+                        {p.date}
                       </span>
-                      <span>{methodLabel(p.data.method)}</span>
-                      {p.syncStatus === 'PENDING' && (
-                        <span className="text-yellow-600 dark:text-yellow-400">{t('common.pending')}</span>
-                      )}
+                      <span>{methodLabel(p.method)}</span>
                     </div>
-                    {p.data.periodFromDate && p.data.periodToDate && (
+                    {p.periodFromDate && p.periodToDate && (
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {t('payment.dateFilter')}: {p.data.periodFromDate} → {p.data.periodToDate}
+                        {t('payment.dateFilter')}: {p.periodFromDate} → {p.periodToDate}
                       </p>
                     )}
-                    {p.data.notes && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500 italic">{p.data.notes}</p>
+                    {p.notes && (
+                      <p className="text-xs text-gray-400 dark:text-gray-500 italic">{p.notes}</p>
                     )}
                   </div>
                   <button

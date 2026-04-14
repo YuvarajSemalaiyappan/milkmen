@@ -18,7 +18,7 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useCollections, useFarmers } from '@/hooks'
 import { formatCurrency, formatDate } from '@/utils'
-import type { LocalCollection, LocalFarmer } from '@/types'
+import type { Collection, Farmer } from '@/types'
 
 const collectionSchema = z.object({
   quantity: z.number().min(0.1, 'Quantity must be at least 0.1'),
@@ -36,8 +36,8 @@ export function CollectionDetailPage() {
   const { collections, updateCollection, deleteCollection } = useCollections()
   const { getFarmer } = useFarmers()
 
-  const [collection, setCollection] = useState<LocalCollection | null>(null)
-  const [farmer, setFarmer] = useState<LocalFarmer | null>(null)
+  const [collection, setCollection] = useState<Collection | null>(null)
+  const [farmer, setFarmer] = useState<Farmer | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -69,14 +69,14 @@ export function CollectionDetailPage() {
     if (found) {
       setCollection(found)
       reset({
-        quantity: found.data.quantity,
-        fatContent: found.data.fatContent,
-        ratePerLiter: found.data.ratePerLiter,
-        notes: found.data.notes || ''
+        quantity: found.quantity,
+        fatContent: found.fatContent,
+        ratePerLiter: found.ratePerLiter,
+        notes: found.notes || ''
       })
 
       // Load farmer details
-      const farmerData = await getFarmer(found.data.farmerId)
+      const farmerData = await getFarmer(found.farmerId)
       setFarmer(farmerData)
     }
   }
@@ -123,7 +123,7 @@ export function CollectionDetailPage() {
     )
   }
 
-  const hasRateBeenEdited = collection.data.rateEditedAt && collection.data.originalRate
+  const hasRateBeenEdited = collection.rateEditedAt && collection.originalRate
 
   return (
     <AppShell
@@ -220,9 +220,9 @@ export function CollectionDetailPage() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm text-gray-500">{t('collection.selectFarmer')}</p>
-                  <p className="font-semibold text-gray-900">{farmer?.data.name || t('common.unknown')}</p>
-                  {farmer?.data.village && (
-                    <p className="text-sm text-gray-500">{farmer.data.village}</p>
+                  <p className="font-semibold text-gray-900">{farmer?.name || t('common.unknown')}</p>
+                  {farmer?.village && (
+                    <p className="text-sm text-gray-500">{farmer.village}</p>
                   )}
                 </div>
                 <Button
@@ -244,7 +244,7 @@ export function CollectionDetailPage() {
                     <Calendar className="w-4 h-4" />
                     <span>{t('common.date')}</span>
                   </div>
-                  <span className="font-medium">{formatDate(collection.data.date)}</span>
+                  <span className="font-medium">{formatDate(collection.date)}</span>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -252,8 +252,8 @@ export function CollectionDetailPage() {
                     <Clock className="w-4 h-4" />
                     <span>{t('collection.shift')}</span>
                   </div>
-                  <Badge variant={collection.data.shift === 'MORNING' ? 'info' : 'warning'}>
-                    {t(`shifts.${collection.data.shift.toLowerCase()}`)}
+                  <Badge variant={collection.shift === 'MORNING' ? 'info' : 'warning'}>
+                    {t(`shifts.${collection.shift.toLowerCase()}`)}
                   </Badge>
                 </div>
 
@@ -262,16 +262,16 @@ export function CollectionDetailPage() {
                     <Droplets className="w-4 h-4" />
                     <span>{t('common.quantity')}</span>
                   </div>
-                  <span className="font-medium">{Number(collection.data.quantity).toFixed(1)} L</span>
+                  <span className="font-medium">{Number(collection.quantity).toFixed(1)} L</span>
                 </div>
 
-                {collection.data.fatContent && (
+                {collection.fatContent && (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-gray-600">
                       <span className="w-4 h-4 text-center text-xs font-bold">%</span>
                       <span>{t('collection.fatContent')}</span>
                     </div>
-                    <span className="font-medium">{Number(collection.data.fatContent).toFixed(1)}%</span>
+                    <span className="font-medium">{Number(collection.fatContent).toFixed(1)}%</span>
                   </div>
                 )}
 
@@ -280,13 +280,13 @@ export function CollectionDetailPage() {
                     <IndianRupee className="w-4 h-4" />
                     <span>{t('common.rate')}</span>
                   </div>
-                  <span className="font-medium">{formatCurrency(collection.data.ratePerLiter)}/L</span>
+                  <span className="font-medium">{formatCurrency(collection.ratePerLiter)}/L</span>
                 </div>
 
-                {collection.data.notes && (
+                {collection.notes && (
                   <div className="pt-2 border-t">
                     <p className="text-sm text-gray-500">{t('common.notes')}</p>
-                    <p className="text-gray-700">{collection.data.notes}</p>
+                    <p className="text-gray-700">{collection.notes}</p>
                   </div>
                 )}
               </div>
@@ -297,7 +297,7 @@ export function CollectionDetailPage() {
               <div className="text-center">
                 <p className="text-sm text-gray-600">{t('collection.totalAmount')}</p>
                 <p className="text-3xl font-bold text-green-600">
-                  {formatCurrency(collection.data.totalAmount)}
+                  {formatCurrency(collection.totalAmount)}
                 </p>
               </div>
             </Card>
@@ -310,10 +310,10 @@ export function CollectionDetailPage() {
                   <div>
                     <h4 className="font-medium text-yellow-800">{t('collection.rateEdited')}</h4>
                     <p className="text-sm text-yellow-700 mt-1">
-                      {t('collection.originalRate')}: {formatCurrency(collection.data.originalRate!)}/L
+                      {t('collection.originalRate')}: {formatCurrency(collection.originalRate!)}/L
                     </p>
                     <p className="text-xs text-yellow-600 mt-1">
-                      {t('collection.editedOn')} {formatDate(collection.data.rateEditedAt!)}
+                      {t('collection.editedOn')} {formatDate(collection.rateEditedAt!)}
                     </p>
                   </div>
                 </div>

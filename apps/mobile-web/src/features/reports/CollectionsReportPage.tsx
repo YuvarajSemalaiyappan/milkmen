@@ -7,9 +7,9 @@ import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useFarmers, useCollections } from '@/hooks'
 import { formatCurrency, formatDate, getToday, exportToExcel } from '@/utils'
-import type { LocalFarmer, LocalCollection } from '@/types'
+import type { Farmer, Collection } from '@/types'
 
-interface CollectionWithFarmer extends LocalCollection {
+interface CollectionWithFarmer extends Collection {
   farmerName: string
   farmerVillage?: string
 }
@@ -51,11 +51,11 @@ export function CollectionsReportPage() {
   const personName = useMemo(() => {
     if (!farmerIdParam) return ''
     const farmer = allFarmers.find(f => f.id === farmerIdParam)
-    return farmer?.data.name || ''
+    return farmer?.name || ''
   }, [farmerIdParam, allFarmers])
 
   const getFarmerMap = () => {
-    const map = new Map<string, LocalFarmer>()
+    const map = new Map<string, Farmer>()
     allFarmers.forEach(f => map.set(f.id, f))
     return map
   }
@@ -75,18 +75,18 @@ export function CollectionsReportPage() {
 
       // Filter by farmer if selected
       if (selectedFarmerId) {
-        allCollections = allCollections.filter(c => c.data.farmerId === selectedFarmerId)
+        allCollections = allCollections.filter(c => c.farmerId === selectedFarmerId)
       }
 
       const farmerMap = getFarmerMap()
 
       // Add farmer names to collections
       const collectionsWithFarmers: CollectionWithFarmer[] = allCollections.map(c => {
-        const farmer = farmerMap.get(c.data.farmerId)
+        const farmer = farmerMap.get(c.farmerId)
         return {
           ...c,
-          farmerName: farmer?.data.name || t('common.unknown'),
-          farmerVillage: farmer?.data.village
+          farmerName: farmer?.name || t('common.unknown'),
+          farmerVillage: farmer?.village
         }
       }).sort((a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime())
 
@@ -95,14 +95,14 @@ export function CollectionsReportPage() {
       // Calculate farmer summaries
       const summaryMap = new Map<string, FarmerSummary>()
       allCollections.forEach(c => {
-        const farmerId = c.data.farmerId
+        const farmerId = c.farmerId
         const farmer = farmerMap.get(farmerId)
 
         if (!summaryMap.has(farmerId)) {
           summaryMap.set(farmerId, {
             farmerId,
-            name: farmer?.data.name || t('common.unknown'),
-            village: farmer?.data.village,
+            name: farmer?.name || t('common.unknown'),
+            village: farmer?.village,
             totalLiters: 0,
             totalAmount: 0,
             count: 0
@@ -110,8 +110,8 @@ export function CollectionsReportPage() {
         }
 
         const summary = summaryMap.get(farmerId)!
-        summary.totalLiters += Number(c.data.quantity)
-        summary.totalAmount += Number(c.data.totalAmount)
+        summary.totalLiters += Number(c.quantity)
+        summary.totalAmount += Number(c.totalAmount)
         summary.count++
       })
 
@@ -124,8 +124,8 @@ export function CollectionsReportPage() {
     }
   }
 
-  const totalLiters = collections.reduce((sum, c) => sum + Number(c.data.quantity), 0)
-  const totalAmount = collections.reduce((sum, c) => sum + Number(c.data.totalAmount), 0)
+  const totalLiters = collections.reduce((sum, c) => sum + Number(c.quantity), 0)
+  const totalAmount = collections.reduce((sum, c) => sum + Number(c.totalAmount), 0)
   const avgRate = totalLiters > 0 ? totalAmount / totalLiters : 0
 
   const visibleCollections = collections.slice(0, visibleCount)
@@ -133,14 +133,14 @@ export function CollectionsReportPage() {
 
   const handleExport = () => {
     const rows = collections.map(c => ({
-      Date: formatDate(c.data.date),
-      Shift: c.data.shift,
+      Date: formatDate(c.date),
+      Shift: c.shift,
       Farmer: c.farmerName,
-      'Quantity (L)': Number(c.data.quantity),
-      'Rate/L': Number(c.data.ratePerLiter),
-      Total: Number(c.data.totalAmount),
-      'Fat %': c.data.fatPercentage ? Number(c.data.fatPercentage) : '',
-      Notes: c.data.notes || ''
+      'Quantity (L)': Number(c.quantity),
+      'Rate/L': Number(c.ratePerLiter),
+      Total: Number(c.totalAmount),
+      'Fat %': c.fatPercentage ? Number(c.fatPercentage) : '',
+      Notes: c.notes || ''
     }))
     const name = personName || 'Collections'
     exportToExcel(rows, `${name}_${startDate}_${endDate}`)
@@ -201,7 +201,7 @@ export function CollectionsReportPage() {
               <option value="">{t('reports.allFarmers')}</option>
               {allFarmers.map(farmer => (
                 <option key={farmer.id} value={farmer.id}>
-                  {farmer.data.name} {farmer.data.village ? `(${farmer.data.village})` : ''}
+                  {farmer.name} {farmer.village ? `(${farmer.village})` : ''}
                 </option>
               ))}
             </select>
@@ -312,17 +312,17 @@ export function CollectionsReportPage() {
                     <div>
                       <h3 className="font-semibold text-gray-900">{collection.farmerName}</h3>
                       <p className="text-sm text-gray-500">
-                        {formatDate(collection.data.date)} - {t(`shifts.${collection.data.shift.toLowerCase()}`)}
+                        {formatDate(collection.date)} - {t(`shifts.${collection.shift.toLowerCase()}`)}
                       </p>
                     </div>
                   </div>
                   <div className="text-right flex items-center gap-2">
                     <div>
-                      <p className="font-bold text-gray-900">{Number(collection.data.quantity).toFixed(1)}L</p>
+                      <p className="font-bold text-gray-900">{Number(collection.quantity).toFixed(1)}L</p>
                       <p className="text-sm text-gray-500">
-                        @ {formatCurrency(collection.data.ratePerLiter)}/L
+                        @ {formatCurrency(collection.ratePerLiter)}/L
                       </p>
-                      <p className="font-semibold text-green-600">{formatCurrency(collection.data.totalAmount)}</p>
+                      <p className="font-semibold text-green-600">{formatCurrency(collection.totalAmount)}</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-400" />
                   </div>

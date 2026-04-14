@@ -1,46 +1,64 @@
-import { useCallback, useMemo } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db, generateLocalId, now } from '@/db/localDb'
-import { syncService } from '@/services/syncService'
+import { useState, useEffect, useCallback } from 'react'
+import { paymentsApi } from '@/services/api'
 import { useAppStore } from '@/store'
-import type { LocalPayment, PaymentType, PaymentMethod } from '@/types'
+import type { Payment, PaymentType, PaymentMethod, ApiResponse } from '@/types'
 
 export function usePayments() {
   const addToast = useAppStore((state) => state.addToast)
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Live query from IndexedDB
-  const payments = useLiveQuery(
-    () => db.payments.orderBy('updatedAt').reverse().toArray(),
-    []
-  )
+  const fetchPayments = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const response = await paymentsApi.list() as ApiResponse<Payment[]>
+      if (response.success && response.data) {
+        setPayments(response.data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch payments:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
-  // Get payments by date range
+  useEffect(() => {
+    fetchPayments()
+  }, [fetchPayments])
+
   const getPaymentsByDateRange = useCallback(
     async (startDate: string, endDate: string) => {
-      return db.payments
-        .filter((p) => p.data.date >= startDate && p.data.date <= endDate)
-        .toArray()
+      return payments.filter((p) => p.date >= startDate && p.date <= endDate)
     },
-    []
+    [payments]
   )
 
-  // Get payments by farmer
   const getPaymentsByFarmer = useCallback(async (farmerId: string) => {
-    return db.payments
-      .filter((p) => p.data.farmerId === farmerId)
-      .reverse()
-      .sortBy('updatedAt')
+    try {
+      const response = await paymentsApi.list({ farmerId }) as ApiResponse<Payment[]>
+      if (response.success && response.data) {
+        return response.data
+      }
+      return []
+    } catch (error) {
+      console.error('Failed to fetch payments by farmer:', error)
+      return []
+    }
   }, [])
 
-  // Get payments by customer
   const getPaymentsByCustomer = useCallback(async (customerId: string) => {
-    return db.payments
-      .filter((p) => p.data.customerId === customerId)
-      .reverse()
-      .sortBy('updatedAt')
+    try {
+      const response = await paymentsApi.list({ customerId }) as ApiResponse<Payment[]>
+      if (response.success && response.data) {
+        return response.data
+      }
+      return []
+    } catch (error) {
+      console.error('Failed to fetch payments by customer:', error)
+      return []
+    }
   }, [])
 
-  // Add new payment
   const addPayment = useCallback(
     async (data: {
       farmerId?: string
@@ -50,57 +68,27 @@ export function usePayments() {
       type: PaymentType
       method: PaymentMethod
       notes?: string
+      periodFromDate?: string
+      periodToDate?: string
+      periodFromShift?: string
+      periodToShift?: string
     }) => {
-      const localId = generateLocalId()
-      const timestamp = now()
-
-      const payment: LocalPayment = {
-        id: localId,
-        localId,
-        syncStatus: 'PENDING',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        data: {
-          farmerId: data.farmerId,
-          customerId: data.customerId,
-          date: data.date,
-          amount: data.amount,
-          type: data.type,
-          method: data.method,
-          notes: data.notes
+      try {
+        const response = await paymentsApi.create(data) as ApiResponse<Payment>
+        if (response.success && response.data) {
+          addToast({ type: 'success', message: 'Payment recorded' })
+          await fetchPayments()
+          return response.data
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to add payment'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      await db.payments.add(payment)
-
-      // Update balance: all payment types (regular + advance) reduce balance
-      if (data.farmerId) {
-        await db.farmers.where('id').equals(data.farmerId).modify(f => {
-          f.data.balance -= data.amount
-          f.updatedAt = timestamp
-        })
-      }
-
-      if (data.customerId) {
-        await db.customers.where('id').equals(data.customerId).modify(f => {
-          f.data.balance -= data.amount
-          f.updatedAt = timestamp
-        })
-      }
-
-      // Queue for sync
-      await syncService.queueSync('payments', localId, 'create', {
-        ...data,
-        localId
-      })
-
-      addToast({ type: 'success', message: 'Payment recorded' })
-      return payment
     },
-    [addToast]
+    [addToast, fetchPayments]
   )
 
-  // Update payment
   const updatePayment = useCallback(
     async (
       id: string,
@@ -112,160 +100,118 @@ export function usePayments() {
         notes?: string
       }>
     ) => {
-      const payment = await db.payments.get(id)
-      if (!payment) throw new Error('Payment not found')
-
-      const timestamp = now()
-
-      // Adjust balance if amount changed
-      if (updates.amount !== undefined && updates.amount !== payment.data.amount) {
-        const delta = payment.data.amount - updates.amount
-        if (payment.data.farmerId) {
-          await db.farmers.where('id').equals(payment.data.farmerId).modify(f => {
-            f.data.balance += delta
-            f.updatedAt = timestamp
-          })
+      try {
+        const response = await paymentsApi.update(id, updates) as ApiResponse<Payment>
+        if (response.success && response.data) {
+          addToast({ type: 'success', message: 'Payment updated' })
+          await fetchPayments()
+          return response.data
         }
-        if (payment.data.customerId) {
-          await db.customers.where('id').equals(payment.data.customerId).modify(f => {
-            f.data.balance += delta
-            f.updatedAt = timestamp
-          })
-        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update payment'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      const updatedPayment: LocalPayment = {
-        ...payment,
-        syncStatus: 'PENDING',
-        updatedAt: timestamp,
-        data: { ...payment.data, ...updates }
-      }
-
-      await db.payments.put(updatedPayment)
-
-      // Queue for sync
-      await syncService.queueSync('payments', payment.localId, 'update', {
-        id: payment.id,
-        ...updates
-      })
-
-      addToast({ type: 'success', message: 'Payment updated' })
-      return updatedPayment
     },
-    [addToast]
+    [addToast, fetchPayments]
   )
 
-  // Delete payment
   const deletePayment = useCallback(
     async (id: string) => {
-      const payment = await db.payments.get(id)
-      if (!payment) throw new Error('Payment not found')
-
-      // Reverse balance: all payment types originally decremented, so add back
-      const timestamp = now()
-      if (payment.data.farmerId) {
-        await db.farmers.where('id').equals(payment.data.farmerId).modify(f => {
-          f.data.balance += payment.data.amount
-          f.updatedAt = timestamp
-        })
+      try {
+        const response = await paymentsApi.delete(id) as ApiResponse<void>
+        if (response.success) {
+          addToast({ type: 'success', message: 'Payment deleted' })
+          await fetchPayments()
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete payment'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      if (payment.data.customerId) {
-        await db.customers.where('id').equals(payment.data.customerId).modify(f => {
-          f.data.balance += payment.data.amount
-          f.updatedAt = timestamp
-        })
-      }
-
-      await db.payments.delete(id)
-
-      // Queue for sync
-      await syncService.queueSync('payments', payment.localId, 'delete', {
-        id: payment.id
-      })
-
-      addToast({ type: 'success', message: 'Payment deleted' })
     },
-    [addToast]
+    [addToast, fetchPayments]
   )
 
-  // Get payment by ID
   const getPayment = useCallback(async (id: string) => {
-    return db.payments.get(id)
+    try {
+      const response = await paymentsApi.get(id) as ApiResponse<Payment>
+      if (response.success && response.data) {
+        return response.data
+      }
+      return null
+    } catch (error) {
+      console.error('Failed to fetch payment:', error)
+      return null
+    }
   }, [])
 
-  // Get today's payments
   const getTodayPayments = useCallback(async () => {
     const today = new Date().toISOString().split('T')[0]
-    return db.payments.filter((p) => p.data.date === today).toArray()
+    try {
+      const response = await paymentsApi.list({ date: today }) as ApiResponse<Payment[]>
+      if (response.success && response.data) {
+        return response.data
+      }
+      return []
+    } catch (error) {
+      console.error('Failed to fetch today payments:', error)
+      return []
+    }
   }, [])
 
-  // Get farmer payments summary
   const getFarmerPaymentsSummary = useCallback(
     async (farmerId: string, startDate?: string, endDate?: string) => {
-      let payments = await db.payments
-        .filter((p) => p.data.farmerId === farmerId)
-        .toArray()
-
+      const farmerPayments = await getPaymentsByFarmer(farmerId)
+      let filtered = farmerPayments
       if (startDate && endDate) {
-        payments = payments.filter(
-          (p) => p.data.date >= startDate && p.data.date <= endDate
+        filtered = farmerPayments.filter(
+          (p) => p.date >= startDate && p.date <= endDate
         )
       }
-
-      const totalPaid = payments
-        .filter((p) => p.data.type === 'PAID_TO_FARMER')
-        .reduce((sum, p) => sum + Number(p.data.amount), 0)
-
-      const totalAdvance = payments
-        .filter((p) => p.data.type === 'ADVANCE_TO_FARMER')
-        .reduce((sum, p) => sum + Number(p.data.amount), 0)
-
+      const totalPaid = filtered
+        .filter((p) => p.type === 'PAID_TO_FARMER')
+        .reduce((sum, p) => sum + Number(p.amount), 0)
+      const totalAdvance = filtered
+        .filter((p) => p.type === 'ADVANCE_TO_FARMER')
+        .reduce((sum, p) => sum + Number(p.amount), 0)
       return {
         totalPaid,
         totalAdvance,
         totalPayments: totalPaid + totalAdvance,
-        paymentCount: payments.length
+        paymentCount: filtered.length
       }
     },
-    []
+    [getPaymentsByFarmer]
   )
 
-  // Get customer payments summary
   const getCustomerPaymentsSummary = useCallback(
     async (customerId: string, startDate?: string, endDate?: string) => {
-      let payments = await db.payments
-        .filter((p) => p.data.customerId === customerId)
-        .toArray()
-
+      const customerPayments = await getPaymentsByCustomer(customerId)
+      let filtered = customerPayments
       if (startDate && endDate) {
-        payments = payments.filter(
-          (p) => p.data.date >= startDate && p.data.date <= endDate
+        filtered = customerPayments.filter(
+          (p) => p.date >= startDate && p.date <= endDate
         )
       }
-
-      const totalReceived = payments
-        .filter((p) => p.data.type === 'RECEIVED_FROM_CUSTOMER')
-        .reduce((sum, p) => sum + Number(p.data.amount), 0)
-
-      const totalAdvance = payments
-        .filter((p) => p.data.type === 'ADVANCE_FROM_CUSTOMER')
-        .reduce((sum, p) => sum + Number(p.data.amount), 0)
-
+      const totalReceived = filtered
+        .filter((p) => p.type === 'RECEIVED_FROM_CUSTOMER')
+        .reduce((sum, p) => sum + Number(p.amount), 0)
+      const totalAdvance = filtered
+        .filter((p) => p.type === 'ADVANCE_FROM_CUSTOMER')
+        .reduce((sum, p) => sum + Number(p.amount), 0)
       return {
         totalReceived,
         totalAdvance,
         totalPayments: totalReceived + totalAdvance,
-        paymentCount: payments.length
+        paymentCount: filtered.length
       }
     },
-    []
+    [getPaymentsByCustomer]
   )
 
-  const stablePayments = useMemo(() => payments ?? [], [payments])
-
   return {
-    payments: stablePayments,
+    payments,
     addPayment,
     updatePayment,
     deletePayment,
@@ -276,7 +222,8 @@ export function usePayments() {
     getTodayPayments,
     getFarmerPaymentsSummary,
     getCustomerPaymentsSummary,
-    isLoading: payments === undefined
+    fetchPayments,
+    isLoading
   }
 }
 

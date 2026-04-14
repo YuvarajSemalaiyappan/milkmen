@@ -21,7 +21,7 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useDeliveries, useCustomers } from '@/hooks'
 import { formatCurrency, formatDate } from '@/utils'
-import type { LocalDelivery, LocalCustomer, DeliveryStatus } from '@/types'
+import type { Delivery, Customer, DeliveryStatus } from '@/types'
 
 const deliverySchema = z.object({
   quantity: z.number().min(0.1, 'Quantity must be at least 0.1'),
@@ -39,8 +39,8 @@ export function DeliveryDetailPage() {
   const { deliveries, updateDelivery, deleteDelivery } = useDeliveries()
   const { getCustomer } = useCustomers()
 
-  const [delivery, setDelivery] = useState<LocalDelivery | null>(null)
-  const [customer, setCustomer] = useState<LocalCustomer | null>(null)
+  const [delivery, setDelivery] = useState<Delivery | null>(null)
+  const [customer, setCustomer] = useState<Customer | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -74,14 +74,14 @@ export function DeliveryDetailPage() {
     if (found) {
       setDelivery(found)
       reset({
-        quantity: found.data.quantity,
-        ratePerLiter: found.data.ratePerLiter,
-        status: found.data.status,
-        notes: found.data.notes || ''
+        quantity: found.quantity,
+        ratePerLiter: found.ratePerLiter,
+        status: found.status,
+        notes: found.notes || ''
       })
 
       // Load customer details
-      const customerData = await getCustomer(found.data.customerId)
+      const customerData = await getCustomer(found.customerId)
       setCustomer(customerData)
     }
   }
@@ -150,7 +150,7 @@ export function DeliveryDetailPage() {
     )
   }
 
-  const hasRateBeenEdited = delivery.data.rateEditedAt && delivery.data.originalRate
+  const hasRateBeenEdited = delivery.rateEditedAt && delivery.originalRate
 
   return (
     <AppShell
@@ -261,9 +261,9 @@ export function DeliveryDetailPage() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm text-gray-500">{t('delivery.selectCustomer')}</p>
-                  <p className="font-semibold text-gray-900">{customer?.data.name || t('common.unknown')}</p>
-                  {customer?.data.address && (
-                    <p className="text-sm text-gray-500">{customer.data.address}</p>
+                  <p className="font-semibold text-gray-900">{customer?.name || t('common.unknown')}</p>
+                  {customer?.address && (
+                    <p className="text-sm text-gray-500">{customer.address}</p>
                   )}
                 </div>
                 <Button
@@ -278,14 +278,14 @@ export function DeliveryDetailPage() {
 
             {/* Delivery Status */}
             <Card className={
-              delivery.data.status === 'DELIVERED' ? 'bg-green-50 border-green-200' :
-              delivery.data.status === 'SKIPPED' ? 'bg-yellow-50 border-yellow-200' :
+              delivery.status === 'DELIVERED' ? 'bg-green-50 border-green-200' :
+              delivery.status === 'SKIPPED' ? 'bg-yellow-50 border-yellow-200' :
               'bg-red-50 border-red-200'
             }>
               <div className="flex items-center justify-center gap-3">
-                {getStatusIcon(delivery.data.status)}
+                {getStatusIcon(delivery.status)}
                 <span className="text-lg font-semibold">
-                  {t(`delivery.${delivery.data.status.toLowerCase()}`)}
+                  {t(`delivery.${delivery.status.toLowerCase()}`)}
                 </span>
               </div>
             </Card>
@@ -299,7 +299,7 @@ export function DeliveryDetailPage() {
                     <Calendar className="w-4 h-4" />
                     <span>{t('common.date')}</span>
                   </div>
-                  <span className="font-medium">{formatDate(delivery.data.date)}</span>
+                  <span className="font-medium">{formatDate(delivery.date)}</span>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -307,8 +307,8 @@ export function DeliveryDetailPage() {
                     <Clock className="w-4 h-4" />
                     <span>{t('collection.shift')}</span>
                   </div>
-                  <Badge variant={delivery.data.shift === 'MORNING' ? 'info' : 'warning'}>
-                    {t(`shifts.${delivery.data.shift.toLowerCase()}`)}
+                  <Badge variant={delivery.shift === 'MORNING' ? 'info' : 'warning'}>
+                    {t(`shifts.${delivery.shift.toLowerCase()}`)}
                   </Badge>
                 </div>
 
@@ -317,7 +317,7 @@ export function DeliveryDetailPage() {
                     <Droplets className="w-4 h-4" />
                     <span>{t('common.quantity')}</span>
                   </div>
-                  <span className="font-medium">{Number(delivery.data.quantity).toFixed(1)} L</span>
+                  <span className="font-medium">{Number(delivery.quantity).toFixed(1)} L</span>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -325,22 +325,22 @@ export function DeliveryDetailPage() {
                     <IndianRupee className="w-4 h-4" />
                     <span>{t('common.rate')}</span>
                   </div>
-                  <span className="font-medium">{formatCurrency(delivery.data.ratePerLiter)}/L</span>
+                  <span className="font-medium">{formatCurrency(delivery.ratePerLiter)}/L</span>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-gray-600">
                     <span className="text-xs">{t('delivery.type')}</span>
                   </div>
-                  <Badge variant={delivery.data.isSubscription ? 'info' : 'default'}>
-                    {delivery.data.isSubscription ? t('delivery.subscriptionDelivery') : t('delivery.extraDelivery')}
+                  <Badge variant={delivery.isSubscription ? 'info' : 'default'}>
+                    {delivery.isSubscription ? t('delivery.subscriptionDelivery') : t('delivery.extraDelivery')}
                   </Badge>
                 </div>
 
-                {delivery.data.notes && (
+                {delivery.notes && (
                   <div className="pt-2 border-t">
                     <p className="text-sm text-gray-500">{t('common.notes')}</p>
-                    <p className="text-gray-700">{delivery.data.notes}</p>
+                    <p className="text-gray-700">{delivery.notes}</p>
                   </div>
                 )}
               </div>
@@ -351,7 +351,7 @@ export function DeliveryDetailPage() {
               <div className="text-center">
                 <p className="text-sm text-gray-600">{t('collection.totalAmount')}</p>
                 <p className="text-3xl font-bold text-green-600">
-                  {formatCurrency(delivery.data.totalAmount)}
+                  {formatCurrency(delivery.totalAmount)}
                 </p>
               </div>
             </Card>
@@ -364,10 +364,10 @@ export function DeliveryDetailPage() {
                   <div>
                     <h4 className="font-medium text-yellow-800">{t('delivery.rateEdited')}</h4>
                     <p className="text-sm text-yellow-700 mt-1">
-                      {t('collection.originalRate')}: {formatCurrency(delivery.data.originalRate!)}/L
+                      {t('collection.originalRate')}: {formatCurrency(delivery.originalRate!)}/L
                     </p>
                     <p className="text-xs text-yellow-600 mt-1">
-                      {t('collection.editedOn')} {formatDate(delivery.data.rateEditedAt!)}
+                      {t('collection.editedOn')} {formatDate(delivery.rateEditedAt!)}
                     </p>
                   </div>
                 </div>

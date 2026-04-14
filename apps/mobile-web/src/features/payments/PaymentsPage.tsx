@@ -1,17 +1,29 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { MapPin, Users, ChevronRight, IndianRupee, Search, ArrowUpDown, History } from 'lucide-react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
 import { RouteFilter } from '@/components/common'
 import { useRouteStore } from '@/store'
-import { db } from '@/db/localDb'
+import { routesApi } from '@/services/api'
 import { formatCurrency } from '@/utils'
+import type { ApiResponse } from '@/types'
 
 type RecipientType = 'farmer' | 'customer'
 type SortMode = 'name' | 'balance'
+
+interface RoutePerson {
+  id: string
+  areaId?: string
+  person: { id: string; name: string; phone?: string; balance: number }
+}
+
+interface RouteDetailData {
+  id: string
+  routeFarmers: Array<{ id: string; farmerId: string; areaId?: string; farmer: { id: string; name: string; phone?: string; balance: number; isActive: boolean } }>
+  routeCustomers: Array<{ id: string; customerId: string; areaId?: string; customer: { id: string; name: string; phone?: string; balance: number; isActive: boolean } }>
+}
 
 export function PaymentsPage() {
   const { t } = useTranslation()
@@ -22,64 +34,70 @@ export function PaymentsPage() {
   const [recipientType, setRecipientType] = useState<RecipientType>('farmer')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortMode, setSortMode] = useState<SortMode>('balance')
+  const [routeFarmers, setRouteFarmers] = useState<RoutePerson[]>([])
+  const [routeCustomers, setRouteCustomers] = useState<RoutePerson[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Fetch route farmers from local DB
-  const routeFarmers = useLiveQuery(async () => {
-    if (!selectedRouteId) return []
-    const rfs = await db.routeFarmers.where('routeId').equals(selectedRouteId).toArray()
-    const farmerIds = rfs.map(rf => rf.farmerId)
-    const farmers = await db.farmers.bulkGet(farmerIds)
-    return rfs.map(rf => {
-      const farmer = farmers.find(f => f?.id === rf.farmerId)
-      if (!farmer || !farmer.data.isActive) return null
-      return { ...rf, farmer: { id: farmer.id, name: farmer.data.name, phone: farmer.data.phone, balance: farmer.data.balance } }
-    }).filter(Boolean) as Array<{ id: string; farmerId: string; areaId?: string; farmer: { id: string; name: string; phone?: string; balance: number } }>
-  }, [selectedRouteId])
-
-  // Fetch route customers from local DB
-  const routeCustomers = useLiveQuery(async () => {
-    if (!selectedRouteId) return []
-    const rcs = await db.routeCustomers.where('routeId').equals(selectedRouteId).toArray()
-    const customerIds = rcs.map(rc => rc.customerId)
-    const customers = await db.customers.bulkGet(customerIds)
-    return rcs.map(rc => {
-      const customer = customers.find(c => c?.id === rc.customerId)
-      if (!customer || !customer.data.isActive) return null
-      return { ...rc, customer: { id: customer.id, name: customer.data.name, phone: customer.data.phone, balance: customer.data.balance } }
-    }).filter(Boolean) as Array<{ id: string; customerId: string; areaId?: string; customer: { id: string; name: string; phone?: string; balance: number } }>
+  useEffect(() => {
+    if (!selectedRouteId) {
+      setRouteFarmers([])
+      setRouteCustomers([])
+      return
+    }
+    const fetchRouteData = async () => {
+      setIsLoading(true)
+      try {
+        const response = await routesApi.get(selectedRouteId) as ApiResponse<RouteDetailData>
+        if (response.success && response.data) {
+          setRouteFarmers(
+            response.data.routeFarmers
+              .filter(rf => rf.farmer.isActive)
+              .map(rf => ({ id: rf.id, areaId: rf.areaId, person: { id: rf.farmer.id, name: rf.farmer.name, phone: rf.farmer.phone, balance: rf.farmer.balance } }))
+          )
+          setRouteCustomers(
+            response.data.routeCustomers
+              .filter(rc => rc.customer.isActive)
+              .map(rc => ({ id: rc.id, areaId: rc.areaId, person: { id: rc.customer.id, name: rc.customer.name, phone: rc.customer.phone, balance: rc.customer.balance } }))
+          )
+        }
+      } catch (error) {
+        console.error('Failed to fetch route data:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchRouteData()
   }, [selectedRouteId])
 
   const filteredFarmers = useMemo(() => {
-    let list = routeFarmers ?? []
+    let list = routeFarmers
     if (selectedAreaId) list = list.filter(rf => rf.areaId === selectedAreaId)
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      list = list.filter(rf => rf.farmer.name.toLowerCase().includes(q))
+      list = list.filter(rf => rf.person.name.toLowerCase().includes(q))
     }
     if (sortMode === 'balance') {
-      list = [...list].sort((a, b) => b.farmer.balance - a.farmer.balance)
+      list = [...list].sort((a, b) => b.person.balance - a.person.balance)
     } else {
-      list = [...list].sort((a, b) => a.farmer.name.localeCompare(b.farmer.name))
+      list = [...list].sort((a, b) => a.person.name.localeCompare(b.person.name))
     }
     return list
   }, [routeFarmers, selectedAreaId, searchQuery, sortMode])
 
   const filteredCustomers = useMemo(() => {
-    let list = routeCustomers ?? []
+    let list = routeCustomers
     if (selectedAreaId) list = list.filter(rc => rc.areaId === selectedAreaId)
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      list = list.filter(rc => rc.customer.name.toLowerCase().includes(q))
+      list = list.filter(rc => rc.person.name.toLowerCase().includes(q))
     }
     if (sortMode === 'balance') {
-      list = [...list].sort((a, b) => b.customer.balance - a.customer.balance)
+      list = [...list].sort((a, b) => b.person.balance - a.person.balance)
     } else {
-      list = [...list].sort((a, b) => a.customer.name.localeCompare(b.customer.name))
+      list = [...list].sort((a, b) => a.person.name.localeCompare(b.person.name))
     }
     return list
   }, [routeCustomers, selectedAreaId, searchQuery, sortMode])
-
-  const isLoading = selectedRouteId ? (recipientType === 'farmer' ? routeFarmers === undefined : routeCustomers === undefined) : false
 
   return (
     <AppShell title={t('payment.title')}>
@@ -164,30 +182,30 @@ export function PaymentsPage() {
               </p>
               {filteredFarmers.map((rf) => (
                 <Card
-                  key={rf.farmer.id}
+                  key={rf.person.id}
                   className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
-                  onClick={() => navigate(`/payments/add?type=farmer&farmerId=${rf.farmer.id}`)}
+                  onClick={() => navigate(`/payments/add?type=farmer&farmerId=${rf.person.id}`)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 dark:text-white truncate">
-                        {rf.farmer.name}
+                        {rf.person.name}
                       </p>
-                      {rf.farmer.balance !== 0 && (
+                      {rf.person.balance !== 0 && (
                         <div className="flex items-center gap-1 text-sm mt-1">
                           <IndianRupee className="w-3 h-3 text-gray-400" />
-                          <span className={rf.farmer.balance > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
-                            {formatCurrency(Math.abs(rf.farmer.balance))}
+                          <span className={rf.person.balance > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+                            {formatCurrency(Math.abs(rf.person.balance))}
                           </span>
                           <span className="text-xs text-gray-400">
-                            {rf.farmer.balance > 0 ? t('farmer.weOwe') : t('payment.overpaid')}
+                            {rf.person.balance > 0 ? t('farmer.weOwe') : t('payment.overpaid')}
                           </span>
                         </div>
                       )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                       <button
-                        onClick={(e) => { e.stopPropagation(); navigate(`/payments/history?farmerId=${rf.farmer.id}`) }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/payments/history?farmerId=${rf.person.id}`) }}
                         className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                       >
                         <History className="w-4 h-4" />
@@ -214,30 +232,30 @@ export function PaymentsPage() {
               </p>
               {filteredCustomers.map((rc) => (
                 <Card
-                  key={rc.customer.id}
+                  key={rc.person.id}
                   className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
-                  onClick={() => navigate(`/payments/add?type=customer&customerId=${rc.customer.id}`)}
+                  onClick={() => navigate(`/payments/add?type=customer&customerId=${rc.person.id}`)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 dark:text-white truncate">
-                        {rc.customer.name}
+                        {rc.person.name}
                       </p>
-                      {rc.customer.balance !== 0 && (
+                      {rc.person.balance !== 0 && (
                         <div className="flex items-center gap-1 text-sm mt-1">
                           <IndianRupee className="w-3 h-3 text-gray-400" />
-                          <span className={rc.customer.balance > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                            {formatCurrency(Math.abs(rc.customer.balance))}
+                          <span className={rc.person.balance > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                            {formatCurrency(Math.abs(rc.person.balance))}
                           </span>
                           <span className="text-xs text-gray-400">
-                            {rc.customer.balance > 0 ? t('customer.theyOwe') : t('payment.overpaid')}
+                            {rc.person.balance > 0 ? t('customer.theyOwe') : t('payment.overpaid')}
                           </span>
                         </div>
                       )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                       <button
-                        onClick={(e) => { e.stopPropagation(); navigate(`/payments/history?customerId=${rc.customer.id}`) }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/payments/history?customerId=${rc.person.id}`) }}
                         className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                       >
                         <History className="w-4 h-4" />

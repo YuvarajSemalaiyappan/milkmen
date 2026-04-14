@@ -9,8 +9,6 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
 import { useFarmers, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
-import { syncService } from '@/services/syncService'
-import { db } from '@/db/localDb'
 
 const farmerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -72,15 +70,10 @@ export function AddFarmerPage() {
         subscriptionQtyPM: data.subscriptionQtyPM
       })
 
-      // Assign to route if selected - wait for sync to get server ID
+      // Assign to route if selected
       if (selectedRouteId && result) {
         try {
-          await syncService.waitForProcessing()
-          const synced = await db.farmers.where('localId').equals(result.localId).first()
-          const serverId = synced?.id
-          if (serverId && !serverId.startsWith('local_')) {
-            await routesApi.assignFarmers(selectedRouteId, [serverId], undefined, selectedAreaId ? { [serverId]: selectedAreaId } : undefined)
-          }
+          await routesApi.assignFarmers(selectedRouteId, [result.id], undefined, selectedAreaId ? { [result.id]: selectedAreaId } : undefined)
         } catch {
           // Non-critical: farmer created but route assignment failed
         }

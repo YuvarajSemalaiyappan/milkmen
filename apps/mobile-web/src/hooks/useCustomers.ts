@@ -1,25 +1,33 @@
-import { useCallback, useMemo } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db, generateLocalId, now } from '@/db/localDb'
-import { syncService } from '@/services/syncService'
+import { useState, useEffect, useCallback } from 'react'
+import { customersApi } from '@/services/api'
 import { useAppStore } from '@/store'
-import type { LocalCustomer } from '@/types'
+import type { Customer, ApiResponse } from '@/types'
 
 export function useCustomers() {
   const addToast = useAppStore((state) => state.addToast)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Live query from IndexedDB
-  const customers = useLiveQuery(
-    () => db.customers.orderBy('updatedAt').reverse().toArray(),
-    []
-  )
+  const fetchCustomers = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const response = await customersApi.list() as ApiResponse<Customer[]>
+      if (response.success && response.data) {
+        setCustomers(response.data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch customers:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
-  const activeCustomers = useLiveQuery(
-    () => db.customers.filter((c) => c.data.isActive).toArray(),
-    []
-  )
+  useEffect(() => {
+    fetchCustomers()
+  }, [fetchCustomers])
 
-  // Add new customer
+  const activeCustomers = customers.filter((c) => c.isActive)
+
   const addCustomer = useCallback(
     async (data: {
       name: string
@@ -29,42 +37,22 @@ export function useCustomers() {
       subscriptionQtyAM?: number
       subscriptionQtyPM?: number
     }) => {
-      const localId = generateLocalId()
-      const timestamp = now()
-
-      const customer: LocalCustomer = {
-        id: localId,
-        localId,
-        syncStatus: 'PENDING',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        data: {
-          name: data.name,
-          phone: data.phone,
-          address: data.address,
-          defaultRate: data.defaultRate,
-          subscriptionQtyAM: data.subscriptionQtyAM,
-          subscriptionQtyPM: data.subscriptionQtyPM,
-          isActive: true,
-          balance: 0
+      try {
+        const response = await customersApi.create(data) as ApiResponse<Customer>
+        if (response.success && response.data) {
+          addToast({ type: 'success', message: 'Customer added' })
+          await fetchCustomers()
+          return response.data
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to add customer'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      await db.customers.add(customer)
-
-      // Queue for sync
-      await syncService.queueSync('customers', localId, 'create', {
-        ...data,
-        localId
-      })
-
-      addToast({ type: 'success', message: 'Customer added' })
-      return customer
     },
-    [addToast]
+    [addToast, fetchCustomers]
   )
 
-  // Update customer
   const updateCustomer = useCallback(
     async (
       id: string,
@@ -78,96 +66,89 @@ export function useCustomers() {
         isActive: boolean
       }>
     ) => {
-      const customer = await db.customers.get(id)
-      if (!customer) throw new Error('Customer not found')
-
-      const timestamp = now()
-      const updatedCustomer: LocalCustomer = {
-        ...customer,
-        syncStatus: 'PENDING',
-        updatedAt: timestamp,
-        data: { ...customer.data, ...updates }
+      try {
+        const response = await customersApi.update(id, updates) as ApiResponse<Customer>
+        if (response.success && response.data) {
+          addToast({ type: 'success', message: 'Customer updated' })
+          await fetchCustomers()
+          return response.data
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update customer'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      await db.customers.put(updatedCustomer)
-
-      // Queue for sync - include phone so server can resolve local_ IDs
-      await syncService.queueSync('customers', customer.localId, 'update', {
-        id: customer.id,
-        phone: customer.data.phone,
-        ...updates
-      })
-
-      addToast({ type: 'success', message: 'Customer updated' })
-      return updatedCustomer
     },
-    [addToast]
+    [addToast, fetchCustomers]
   )
 
-  // Delete customer (soft delete)
   const deleteCustomer = useCallback(
     async (id: string) => {
-      const customer = await db.customers.get(id)
-      if (!customer) throw new Error('Customer not found')
-
-      await updateCustomer(id, { isActive: false })
-      addToast({ type: 'success', message: 'Customer deleted' })
+      try {
+        const response = await customersApi.delete(id) as ApiResponse<void>
+        if (response.success) {
+          addToast({ type: 'success', message: 'Customer deleted' })
+          await fetchCustomers()
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete customer'
+        addToast({ type: 'error', message })
+        throw error
+      }
     },
-    [updateCustomer, addToast]
+    [addToast, fetchCustomers]
   )
 
-  // Get customer by ID
   const getCustomer = useCallback(async (id: string) => {
-    return db.customers.get(id)
+    try {
+      const response = await customersApi.get(id) as ApiResponse<Customer>
+      if (response.success && response.data) {
+        return response.data
+      }
+      return null
+    } catch (error) {
+      console.error('Failed to fetch customer:', error)
+      return null
+    }
   }, [])
 
-  // Search customers
   const searchCustomers = useCallback(async (query: string, activeOnly = true) => {
     if (!query) {
-      if (activeOnly) return db.customers.filter((c) => !!c.data.isActive).toArray()
-      return db.customers.orderBy('updatedAt').reverse().toArray()
+      return activeOnly ? customers.filter((c) => c.isActive) : customers
     }
-
     const lowerQuery = query.toLowerCase()
-    return db.customers
-      .filter(
-        (c) =>
-          (!activeOnly || !!c.data.isActive) &&
-          (c.data.name.toLowerCase().includes(lowerQuery) ||
-            !!c.data.phone?.toLowerCase().includes(lowerQuery) ||
-            !!c.data.address?.toLowerCase().includes(lowerQuery))
-      )
-      .toArray()
-  }, [])
+    return customers.filter(
+      (c) =>
+        (!activeOnly || c.isActive) &&
+        (c.name.toLowerCase().includes(lowerQuery) ||
+          c.phone?.toLowerCase().includes(lowerQuery) ||
+          c.address?.toLowerCase().includes(lowerQuery))
+    )
+  }, [customers])
 
-  // Get customers with subscriptions
   const getSubscribedCustomers = useCallback(
     async (shift?: 'MORNING' | 'EVENING') => {
-      return db.customers
-        .filter((c) => {
-          if (!c.data.isActive) return false
-          if (shift === 'MORNING') return !!c.data.subscriptionQtyAM
-          if (shift === 'EVENING') return !!c.data.subscriptionQtyPM
-          return !!c.data.subscriptionQtyAM || !!c.data.subscriptionQtyPM
-        })
-        .toArray()
+      return customers.filter((c) => {
+        if (!c.isActive) return false
+        if (shift === 'MORNING') return !!c.subscriptionQtyAM
+        if (shift === 'EVENING') return !!c.subscriptionQtyPM
+        return !!c.subscriptionQtyAM || !!c.subscriptionQtyPM
+      })
     },
-    []
+    [customers]
   )
 
-  const stableCustomers = useMemo(() => customers ?? [], [customers])
-  const stableActiveCustomers = useMemo(() => activeCustomers ?? [], [activeCustomers])
-
   return {
-    customers: stableCustomers,
-    activeCustomers: stableActiveCustomers,
+    customers,
+    activeCustomers,
     addCustomer,
     updateCustomer,
     deleteCustomer,
     getCustomer,
     searchCustomers,
     getSubscribedCustomers,
-    isLoading: customers === undefined
+    fetchCustomers,
+    isLoading
   }
 }
 

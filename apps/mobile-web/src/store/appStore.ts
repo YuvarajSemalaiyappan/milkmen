@@ -5,9 +5,6 @@ import type { Shift } from '@/types'
 export type Theme = 'light' | 'dark' | 'system'
 
 interface AppState {
-  // Network status
-  isOnline: boolean
-
   // Current shift (auto-detected or manually set)
   currentShift: Shift
 
@@ -25,7 +22,6 @@ interface AppState {
   toasts: Toast[]
 
   // Actions
-  setOnline: (online: boolean) => void
   setCurrentShift: (shift: Shift) => void
   setSelectedDate: (date: string) => void
   toggleSidebar: () => void
@@ -62,15 +58,12 @@ function generateToastId(): string {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
       currentShift: getDefaultShift(),
       selectedDate: getToday(),
       isSidebarOpen: false,
       isBottomSheetOpen: false,
       theme: 'system' as Theme,
       toasts: [],
-
-      setOnline: (isOnline) => set({ isOnline }),
 
       setCurrentShift: (currentShift) => set({ currentShift }),
 
@@ -120,23 +113,3 @@ export const useAppStore = create<AppState>()(
   )
 )
 
-// Setup online/offline listeners
-if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
-    useAppStore.getState().setOnline(true)
-    useAppStore.getState().addToast({
-      type: 'success',
-      message: 'Back online',
-      duration: 2000
-    })
-  })
-
-  window.addEventListener('offline', () => {
-    useAppStore.getState().setOnline(false)
-    useAppStore.getState().addToast({
-      type: 'warning',
-      message: 'You are offline',
-      duration: 3000
-    })
-  })
-}

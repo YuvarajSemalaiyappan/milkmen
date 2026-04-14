@@ -20,9 +20,8 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useFarmers, useCollections, usePayments, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
-import { db } from '@/db/localDb'
 import { formatCurrency, formatDate } from '@/utils'
-import type { LocalFarmer, LocalCollection } from '@/types'
+import type { Farmer, Collection, ApiResponse } from '@/types'
 
 const farmerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -46,8 +45,8 @@ export function FarmerDetailPage() {
   const { getPaymentsByFarmer } = usePayments()
   const { routes } = useRoutes()
 
-  const [farmer, setFarmer] = useState<LocalFarmer | null>(null)
-  const [collections, setCollections] = useState<LocalCollection[]>([])
+  const [farmer, setFarmer] = useState<Farmer | null>(null)
+  const [collections, setCollections] = useState<Collection[]>([])
   const [lastPaymentDate, setLastPaymentDate] = useState<string | null>(null)
   const [paidPeriods, setPaidPeriods] = useState<{ from: string; to: string }[]>([])
   const [isEditing, setIsEditing] = useState(false)
@@ -86,21 +85,21 @@ export function FarmerDetailPage() {
     if (data) {
       setFarmer(data)
       reset({
-        name: data.data.name,
-        phone: data.data.phone || '',
-        village: data.data.village || '',
-        defaultRate: data.data.defaultRate,
-        collectAM: data.data.collectAM ?? true,
-        collectPM: data.data.collectPM ?? false,
-        subscriptionQtyAM: data.data.subscriptionQtyAM,
-        subscriptionQtyPM: data.data.subscriptionQtyPM
+        name: data.name,
+        phone: data.phone || '',
+        village: data.village || '',
+        defaultRate: data.defaultRate,
+        collectAM: data.collectAM ?? true,
+        collectPM: data.collectPM ?? false,
+        subscriptionQtyAM: data.subscriptionQtyAM,
+        subscriptionQtyPM: data.subscriptionQtyPM
       })
 
-      // Load existing route/area assignment
-      const routeFarmer = await db.routeFarmers.where('farmerId').equals(id).first()
-      if (routeFarmer) {
-        setSelectedRouteId(routeFarmer.routeId)
-        setSelectedAreaId(routeFarmer.areaId || null)
+      // Load existing route/area assignment from server response
+      const farmerDetail = data as Farmer & { routeFarmers?: Array<{ routeId: string; areaId?: string }> }
+      if (farmerDetail.routeFarmers && farmerDetail.routeFarmers.length > 0) {
+        setSelectedRouteId(farmerDetail.routeFarmers[0].routeId)
+        setSelectedAreaId(farmerDetail.routeFarmers[0].areaId || null)
       }
     }
   }
@@ -116,9 +115,10 @@ export function FarmerDetailPage() {
     const payments = await getPaymentsByFarmer(id)
     if (payments.length > 0) {
       // Build sorted list of payment periods (exclude advance payments with no period)
-      const periods = payments
-        .filter((p) => p.data.periodFromDate && p.data.periodToDate)
-        .map((p) => ({ from: p.data.periodFromDate!, to: p.data.periodToDate! }))
+      const paymentsWithPeriod = payments as Array<typeof payments[0] & { periodFromDate?: string; periodToDate?: string }>
+      const periods = paymentsWithPeriod
+        .filter((p) => p.periodFromDate && p.periodToDate)
+        .map((p) => ({ from: p.periodFromDate!, to: p.periodToDate! }))
         .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to))
 
       if (periods.length === 0) {
@@ -166,19 +166,9 @@ export function FarmerDetailPage() {
       })
 
       // Update route assignment if changed
-      if (selectedRouteId && !id.startsWith('local_')) {
+      if (selectedRouteId) {
         try {
           await routesApi.assignFarmers(selectedRouteId, [id], undefined, selectedAreaId ? { [id]: selectedAreaId } : undefined)
-          // Update local DB so it shows on next load without sync
-          const existing = await db.routeFarmers.where('farmerId').equals(id).first()
-          if (existing) await db.routeFarmers.delete(existing.id)
-          await db.routeFarmers.add({
-            id: `${selectedRouteId}_${id}`,
-            routeId: selectedRouteId,
-            farmerId: id,
-            areaId: selectedAreaId || undefined,
-            sortOrder: existing?.sortOrder || 0
-          })
         } catch {
           // Non-critical
         }
@@ -246,7 +236,7 @@ export function FarmerDetailPage() {
 
   return (
     <AppShell
-      title={isEditing ? t('farmer.edit') : farmer.data.name}
+      title={isEditing ? t('farmer.edit') : farmer.name}
       showBack
       rightAction={
         !isEditing && (
@@ -412,48 +402,48 @@ export function FarmerDetailPage() {
             <Card>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">{farmer.data.name}</h2>
+                  <h2 className="text-xl font-semibold">{farmer.name}</h2>
                   <Badge
-                    variant={farmer.data.isActive ? 'success' : 'error'}
+                    variant={farmer.isActive ? 'success' : 'error'}
                   >
-                    {farmer.data.isActive ? t('common.active') : t('common.inactive')}
+                    {farmer.isActive ? t('common.active') : t('common.inactive')}
                   </Badge>
                 </div>
 
-                {farmer.data.phone && (
+                {farmer.phone && (
                   <div className="flex items-center gap-2 text-gray-600">
                     <Phone className="w-4 h-4" />
-                    <a href={`tel:${farmer.data.phone}`} className="text-primary-600">
-                      {farmer.data.phone}
+                    <a href={`tel:${farmer.phone}`} className="text-primary-600">
+                      {farmer.phone}
                     </a>
                   </div>
                 )}
 
-                {farmer.data.village && (
+                {farmer.village && (
                   <div className="flex items-center gap-2 text-gray-600">
                     <MapPin className="w-4 h-4" />
-                    <span>{farmer.data.village}</span>
+                    <span>{farmer.village}</span>
                   </div>
                 )}
 
                 <div className="flex items-center gap-2 text-gray-600">
                   <IndianRupee className="w-4 h-4" />
                   <span>
-                    {t('farmer.defaultRate')}: {formatCurrency(farmer.data.defaultRate)}/L
+                    {t('farmer.defaultRate')}: {formatCurrency(farmer.defaultRate)}/L
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2 text-gray-600">
-                  {farmer.data.collectAM && (
+                  {farmer.collectAM && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                       <Sun className="w-3 h-3" />
-                      {t('common.morning')}{farmer.data.subscriptionQtyAM ? ` · ${farmer.data.subscriptionQtyAM}L` : ''}
+                      {t('common.morning')}{farmer.subscriptionQtyAM ? ` · ${farmer.subscriptionQtyAM}L` : ''}
                     </span>
                   )}
-                  {farmer.data.collectPM && (
+                  {farmer.collectPM && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       <Moon className="w-3 h-3" />
-                      {t('common.evening')}{farmer.data.subscriptionQtyPM ? ` · ${farmer.data.subscriptionQtyPM}L` : ''}
+                      {t('common.evening')}{farmer.subscriptionQtyPM ? ` · ${farmer.subscriptionQtyPM}L` : ''}
                     </span>
                   )}
                 </div>
@@ -461,17 +451,17 @@ export function FarmerDetailPage() {
             </Card>
 
             {/* Balance Card */}
-            <Card className={farmer.data.balance > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}>
+            <Card className={farmer.balance > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">{t('farmer.balance')}</p>
-                  <p className={`text-2xl font-bold ${farmer.data.balance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                    {formatCurrency(Math.abs(farmer.data.balance))}
+                  <p className={`text-2xl font-bold ${farmer.balance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                    {formatCurrency(Math.abs(farmer.balance))}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-500">
-                    {farmer.data.balance > 0 ? t('farmer.weOwe') : t('farmer.settled')}
+                    {farmer.balance > 0 ? t('farmer.weOwe') : t('farmer.settled')}
                   </p>
                 </div>
               </div>
@@ -514,7 +504,7 @@ export function FarmerDetailPage() {
 
             {/* Delete / Activate Button */}
             <div>
-              {!farmer.data.isActive ? (
+              {!farmer.isActive ? (
                 <Button
                   onClick={handleActivate}
                   isLoading={isDeleting}
@@ -587,21 +577,21 @@ export function FarmerDetailPage() {
                         <div className="flex items-center gap-2">
                           <Calendar className="w-3 h-3 text-gray-400" />
                           <span className="text-sm">
-                            {formatDate(collection.data.date)}
+                            {formatDate(collection.date)}
                           </span>
-                          <Badge size="sm" variant={collection.data.shift === 'MORNING' ? 'info' : 'warning'}>
-                            {collection.data.shift === 'MORNING' ? 'AM' : 'PM'}
+                          <Badge size="sm" variant={collection.shift === 'MORNING' ? 'info' : 'warning'}>
+                            {collection.shift === 'MORNING' ? 'AM' : 'PM'}
                           </Badge>
-                          <Badge size="sm" variant={isDatePaid(collection.data.date) ? 'success' : 'error'}>
-                            {isDatePaid(collection.data.date) ? t('reports.paid') : t('reports.unpaid')}
+                          <Badge size="sm" variant={isDatePaid(collection.date) ? 'success' : 'error'}>
+                            {isDatePaid(collection.date) ? t('reports.paid') : t('reports.unpaid')}
                           </Badge>
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          {collection.data.quantity}L @ {formatCurrency(collection.data.ratePerLiter)}/L
+                          {collection.quantity}L @ {formatCurrency(collection.ratePerLiter)}/L
                         </p>
                       </div>
                       <span className="font-semibold text-green-600">
-                        {formatCurrency(collection.data.totalAmount)}
+                        {formatCurrency(collection.totalAmount)}
                       </span>
                     </div>
                   ))}

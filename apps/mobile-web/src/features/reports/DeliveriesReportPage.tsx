@@ -7,9 +7,9 @@ import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useCustomers, useDeliveries } from '@/hooks'
 import { formatCurrency, formatDate, getToday, exportToExcel } from '@/utils'
-import type { LocalCustomer, LocalDelivery } from '@/types'
+import type { Customer, Delivery } from '@/types'
 
-interface DeliveryWithCustomer extends LocalDelivery {
+interface DeliveryWithCustomer extends Delivery {
   customerName: string
   customerAddress?: string
 }
@@ -51,11 +51,11 @@ export function DeliveriesReportPage() {
   const personName = useMemo(() => {
     if (!customerIdParam) return ''
     const customer = allCustomers.find(c => c.id === customerIdParam)
-    return customer?.data.name || ''
+    return customer?.name || ''
   }, [customerIdParam, allCustomers])
 
   const getCustomerMap = () => {
-    const map = new Map<string, LocalCustomer>()
+    const map = new Map<string, Customer>()
     allCustomers.forEach(c => map.set(c.id, c))
     return map
   }
@@ -75,23 +75,23 @@ export function DeliveriesReportPage() {
 
       // In person mode, show all statuses; otherwise only DELIVERED
       if (!isPersonMode) {
-        allDeliveries = allDeliveries.filter(d => d.data.status === 'DELIVERED')
+        allDeliveries = allDeliveries.filter(d => d.status === 'DELIVERED')
       }
 
       // Filter by customer if selected
       if (selectedCustomerId) {
-        allDeliveries = allDeliveries.filter(d => d.data.customerId === selectedCustomerId)
+        allDeliveries = allDeliveries.filter(d => d.customerId === selectedCustomerId)
       }
 
       const customerMap = getCustomerMap()
 
       // Add customer names to deliveries
       const deliveriesWithCustomers: DeliveryWithCustomer[] = allDeliveries.map(d => {
-        const customer = customerMap.get(d.data.customerId)
+        const customer = customerMap.get(d.customerId)
         return {
           ...d,
-          customerName: customer?.data.name || t('common.unknown'),
-          customerAddress: customer?.data.address
+          customerName: customer?.name || t('common.unknown'),
+          customerAddress: customer?.address
         }
       }).sort((a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime())
 
@@ -100,14 +100,14 @@ export function DeliveriesReportPage() {
       // Calculate customer summaries
       const summaryMap = new Map<string, CustomerSummary>()
       allDeliveries.forEach(d => {
-        const customerId = d.data.customerId
+        const customerId = d.customerId
         const customer = customerMap.get(customerId)
 
         if (!summaryMap.has(customerId)) {
           summaryMap.set(customerId, {
             customerId,
-            name: customer?.data.name || t('common.unknown'),
-            address: customer?.data.address,
+            name: customer?.name || t('common.unknown'),
+            address: customer?.address,
             totalLiters: 0,
             totalAmount: 0,
             count: 0
@@ -115,8 +115,8 @@ export function DeliveriesReportPage() {
         }
 
         const summary = summaryMap.get(customerId)!
-        summary.totalLiters += Number(d.data.quantity)
-        summary.totalAmount += Number(d.data.totalAmount)
+        summary.totalLiters += Number(d.quantity)
+        summary.totalAmount += Number(d.totalAmount)
         summary.count++
       })
 
@@ -129,8 +129,8 @@ export function DeliveriesReportPage() {
     }
   }
 
-  const totalLiters = deliveries.reduce((sum, d) => sum + Number(d.data.quantity), 0)
-  const totalAmount = deliveries.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
+  const totalLiters = deliveries.reduce((sum, d) => sum + Number(d.quantity), 0)
+  const totalAmount = deliveries.reduce((sum, d) => sum + Number(d.totalAmount), 0)
   const avgRate = totalLiters > 0 ? totalAmount / totalLiters : 0
 
   const visibleDeliveries = deliveries.slice(0, visibleCount)
@@ -138,14 +138,14 @@ export function DeliveriesReportPage() {
 
   const handleExport = () => {
     const rows = deliveries.map(d => ({
-      Date: formatDate(d.data.date),
-      Shift: d.data.shift,
+      Date: formatDate(d.date),
+      Shift: d.shift,
       Customer: d.customerName,
-      'Quantity (L)': Number(d.data.quantity),
-      'Rate/L': Number(d.data.ratePerLiter),
-      Total: Number(d.data.totalAmount),
-      Status: d.data.status,
-      Notes: d.data.notes || ''
+      'Quantity (L)': Number(d.quantity),
+      'Rate/L': Number(d.ratePerLiter),
+      Total: Number(d.totalAmount),
+      Status: d.status,
+      Notes: d.notes || ''
     }))
     const name = personName || 'Deliveries'
     exportToExcel(rows, `${name}_${startDate}_${endDate}`)
@@ -221,7 +221,7 @@ export function DeliveriesReportPage() {
               <option value="">{t('reports.allCustomers')}</option>
               {allCustomers.map(customer => (
                 <option key={customer.id} value={customer.id}>
-                  {customer.data.name} {customer.data.address ? `(${customer.data.address})` : ''}
+                  {customer.name} {customer.address ? `(${customer.address})` : ''}
                 </option>
               ))}
             </select>
@@ -332,11 +332,11 @@ export function DeliveriesReportPage() {
                     <div>
                       <h3 className="font-semibold text-gray-900">{delivery.customerName}</h3>
                       <p className="text-sm text-gray-500">
-                        {formatDate(delivery.data.date)} - {t(`shifts.${delivery.data.shift.toLowerCase()}`)}
+                        {formatDate(delivery.date)} - {t(`shifts.${delivery.shift.toLowerCase()}`)}
                       </p>
                       <div className="flex items-center gap-1 mt-0.5">
-                        {isPersonMode && getStatusBadge(delivery.data.status)}
-                        {delivery.data.isSubscription && (
+                        {isPersonMode && getStatusBadge(delivery.status)}
+                        {delivery.isSubscription && (
                           <Badge variant="info" size="sm">{t('delivery.subscriptionDelivery')}</Badge>
                         )}
                       </div>
@@ -344,11 +344,11 @@ export function DeliveriesReportPage() {
                   </div>
                   <div className="text-right flex items-center gap-2">
                     <div>
-                      <p className="font-bold text-gray-900">{Number(delivery.data.quantity).toFixed(1)}L</p>
+                      <p className="font-bold text-gray-900">{Number(delivery.quantity).toFixed(1)}L</p>
                       <p className="text-sm text-gray-500">
-                        @ {formatCurrency(delivery.data.ratePerLiter)}/L
+                        @ {formatCurrency(delivery.ratePerLiter)}/L
                       </p>
-                      <p className="font-semibold text-green-600">{formatCurrency(delivery.data.totalAmount)}</p>
+                      <p className="font-semibold text-green-600">{formatCurrency(delivery.totalAmount)}</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-400" />
                   </div>

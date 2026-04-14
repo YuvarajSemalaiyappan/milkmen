@@ -10,7 +10,7 @@ import { useAppStore, useRouteStore } from '@/store'
 import { farmersApi } from '@/services/api'
 import { formatCurrency, formatRate, getToday } from '@/utils/format'
 import { calculateTotal } from '@/utils/calculate'
-import type { LocalFarmer, ApiResponse, Farmer } from '@/types'
+import type { Farmer, ApiResponse } from '@/types'
 
 type Step = 'select-farmer' | 'enter-quantity'
 
@@ -30,8 +30,8 @@ export function AddCollectionPage() {
 
   const [step, setStep] = useState<Step>('select-farmer')
   const [searchQuery, setSearchQuery] = useState('')
-  const [filteredFarmers, setFilteredFarmers] = useState<LocalFarmer[]>([])
-  const [selectedFarmer, setSelectedFarmer] = useState<LocalFarmer | null>(null)
+  const [filteredFarmers, setFilteredFarmers] = useState<Farmer[]>([])
+  const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null)
   const [quantity, setQuantity] = useState('')
   const [rate, setRate] = useState('')
   const [fatContent, setFatContent] = useState('')
@@ -57,23 +57,7 @@ export function AddCollectionPage() {
       try {
         const response = await farmersApi.get(farmerId) as ApiResponse<Farmer>
         if (response.success && response.data) {
-          const f = response.data
-          const local: LocalFarmer = {
-            id: f.id,
-            localId: f.id,
-            syncStatus: 'SYNCED',
-            createdAt: new Date(f.createdAt).getTime(),
-            updatedAt: new Date(f.updatedAt).getTime(),
-            data: {
-              name: f.name,
-              phone: f.phone,
-              village: f.village,
-              defaultRate: f.defaultRate,
-              isActive: f.isActive,
-              balance: f.balance,
-            },
-          }
-          selectFarmer(local)
+          selectFarmer(response.data)
         }
       } catch (error) {
         console.error('Failed to fetch farmer:', error)
@@ -110,13 +94,13 @@ export function AddCollectionPage() {
     saveSortOrder(newIds)
   }, [saveSortOrder])
 
-  const selectFarmer = (farmer: LocalFarmer) => {
+  const selectFarmer = (farmer: Farmer) => {
     setSelectedFarmer(farmer)
-    setRate(farmer.data.defaultRate.toString())
+    setRate(farmer.defaultRate.toString())
     // Pre-fill subscription quantity based on current shift
     const subscriptionQty = currentShift === 'MORNING'
-      ? farmer.data.subscriptionQtyAM
-      : farmer.data.subscriptionQtyPM
+      ? farmer.subscriptionQtyAM
+      : farmer.subscriptionQtyPM
     if (subscriptionQty) {
       setQuantity(subscriptionQty.toString())
     }
@@ -188,8 +172,8 @@ export function AddCollectionPage() {
                   onReorder={handleReorder}
                   renderItem={(id) => {
                     const farmer = routeFilteredFarmers.find((f) => f.id === id)!
-                    const hasAM = farmer.data.collectAM !== false
-                    const hasPM = !!farmer.data.collectPM
+                    const hasAM = farmer.collectAM !== false
+                    const hasPM = !!farmer.collectPM
                     const isCurrentShiftActive = currentShift === 'MORNING' ? hasAM : hasPM
                     return (
                       <button
@@ -211,17 +195,17 @@ export function AddCollectionPage() {
                         </div>
                         <div className="flex-1 text-left">
                           <p className="font-medium text-gray-900 dark:text-white">
-                            {farmer.data.name}
+                            {farmer.name}
                           </p>
-                          {farmer.data.village && (
+                          {farmer.village && (
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {farmer.data.village}
+                              {farmer.village}
                             </p>
                           )}
                         </div>
                         <div className="text-right flex flex-col items-end gap-1">
                           <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {formatRate(farmer.data.defaultRate)}
+                            {formatRate(farmer.defaultRate)}
                           </p>
                           <div className="flex items-center gap-1">
                             {hasAM && (
@@ -231,7 +215,7 @@ export function AddCollectionPage() {
                                   : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
                               }`}>
                                 <Sun className="w-3 h-3" />
-                                {farmer.data.subscriptionQtyAM ? `${farmer.data.subscriptionQtyAM}L` : 'AM'}
+                                {farmer.subscriptionQtyAM ? `${farmer.subscriptionQtyAM}L` : 'AM'}
                               </span>
                             )}
                             {hasPM && (
@@ -241,7 +225,7 @@ export function AddCollectionPage() {
                                   : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
                               }`}>
                                 <Moon className="w-3 h-3" />
-                                {farmer.data.subscriptionQtyPM ? `${farmer.data.subscriptionQtyPM}L` : 'PM'}
+                                {farmer.subscriptionQtyPM ? `${farmer.subscriptionQtyPM}L` : 'PM'}
                               </span>
                             )}
                           </div>
@@ -265,10 +249,10 @@ export function AddCollectionPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 dark:text-white truncate">
-                    {selectedFarmer.data.name}
+                    {selectedFarmer.name}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {selectedFarmer.data.village}
+                    {selectedFarmer.village}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">

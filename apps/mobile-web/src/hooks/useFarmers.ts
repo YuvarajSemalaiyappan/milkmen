@@ -1,25 +1,33 @@
-import { useCallback, useMemo } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db, generateLocalId, now } from '@/db/localDb'
-import { syncService } from '@/services/syncService'
+import { useState, useEffect, useCallback } from 'react'
+import { farmersApi } from '@/services/api'
 import { useAppStore } from '@/store'
-import type { LocalFarmer } from '@/types'
+import type { Farmer, ApiResponse } from '@/types'
 
 export function useFarmers() {
   const addToast = useAppStore((state) => state.addToast)
+  const [farmers, setFarmers] = useState<Farmer[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Live query from IndexedDB
-  const farmers = useLiveQuery(
-    () => db.farmers.orderBy('updatedAt').reverse().toArray(),
-    []
-  )
+  const fetchFarmers = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const response = await farmersApi.list() as ApiResponse<Farmer[]>
+      if (response.success && response.data) {
+        setFarmers(response.data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch farmers:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
-  const activeFarmers = useLiveQuery(
-    () => db.farmers.filter((f) => f.data.isActive).toArray(),
-    []
-  )
+  useEffect(() => {
+    fetchFarmers()
+  }, [fetchFarmers])
 
-  // Add new farmer
+  const activeFarmers = farmers.filter((f) => f.isActive)
+
   const addFarmer = useCallback(
     async (data: {
       name: string
@@ -31,44 +39,22 @@ export function useFarmers() {
       subscriptionQtyAM?: number
       subscriptionQtyPM?: number
     }) => {
-      const localId = generateLocalId()
-      const timestamp = now()
-
-      const farmer: LocalFarmer = {
-        id: localId, // Will be replaced with server ID after sync
-        localId,
-        syncStatus: 'PENDING',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        data: {
-          name: data.name,
-          phone: data.phone,
-          village: data.village,
-          defaultRate: data.defaultRate,
-          collectAM: data.collectAM ?? true,
-          collectPM: data.collectPM ?? false,
-          subscriptionQtyAM: data.subscriptionQtyAM,
-          subscriptionQtyPM: data.subscriptionQtyPM,
-          isActive: true,
-          balance: 0
+      try {
+        const response = await farmersApi.create(data) as ApiResponse<Farmer>
+        if (response.success && response.data) {
+          addToast({ type: 'success', message: 'Farmer added' })
+          await fetchFarmers()
+          return response.data
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to add farmer'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      await db.farmers.add(farmer)
-
-      // Queue for sync
-      await syncService.queueSync('farmers', localId, 'create', {
-        ...data,
-        localId
-      })
-
-      addToast({ type: 'success', message: 'Farmer added' })
-      return farmer
     },
-    [addToast]
+    [addToast, fetchFarmers]
   )
 
-  // Update farmer
   const updateFarmer = useCallback(
     async (
       id: string,
@@ -84,82 +70,76 @@ export function useFarmers() {
         isActive: boolean
       }>
     ) => {
-      const farmer = await db.farmers.get(id)
-      if (!farmer) throw new Error('Farmer not found')
-
-      const timestamp = now()
-      const updatedFarmer: LocalFarmer = {
-        ...farmer,
-        syncStatus: 'PENDING',
-        updatedAt: timestamp,
-        data: { ...farmer.data, ...updates }
+      try {
+        const response = await farmersApi.update(id, updates) as ApiResponse<Farmer>
+        if (response.success && response.data) {
+          addToast({ type: 'success', message: 'Farmer updated' })
+          await fetchFarmers()
+          return response.data
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update farmer'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      await db.farmers.put(updatedFarmer)
-
-      // Queue for sync - include phone so server can resolve local_ IDs
-      await syncService.queueSync('farmers', farmer.localId, 'update', {
-        id: farmer.id,
-        phone: farmer.data.phone,
-        ...updates
-      })
-
-      addToast({ type: 'success', message: 'Farmer updated' })
-      return updatedFarmer
     },
-    [addToast]
+    [addToast, fetchFarmers]
   )
 
-  // Delete farmer (soft delete)
   const deleteFarmer = useCallback(
     async (id: string) => {
-      const farmer = await db.farmers.get(id)
-      if (!farmer) throw new Error('Farmer not found')
-
-      // Soft delete - mark as inactive
-      await updateFarmer(id, { isActive: false })
-
-      addToast({ type: 'success', message: 'Farmer deleted' })
+      try {
+        const response = await farmersApi.delete(id) as ApiResponse<void>
+        if (response.success) {
+          addToast({ type: 'success', message: 'Farmer deleted' })
+          await fetchFarmers()
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete farmer'
+        addToast({ type: 'error', message })
+        throw error
+      }
     },
-    [updateFarmer, addToast]
+    [addToast, fetchFarmers]
   )
 
-  // Get farmer by ID
   const getFarmer = useCallback(async (id: string) => {
-    return db.farmers.get(id)
+    try {
+      const response = await farmersApi.get(id) as ApiResponse<Farmer>
+      if (response.success && response.data) {
+        return response.data
+      }
+      return null
+    } catch (error) {
+      console.error('Failed to fetch farmer:', error)
+      return null
+    }
   }, [])
 
-  // Search farmers
   const searchFarmers = useCallback(async (query: string, activeOnly = true) => {
     if (!query) {
-      if (activeOnly) return db.farmers.filter((f) => f.data.isActive).toArray()
-      return db.farmers.orderBy('updatedAt').reverse().toArray()
+      return activeOnly ? farmers.filter((f) => f.isActive) : farmers
     }
-
     const lowerQuery = query.toLowerCase()
-    return db.farmers
-      .filter(
-        (f) =>
-          (!activeOnly || !!f.data.isActive) &&
-          (f.data.name.toLowerCase().includes(lowerQuery) ||
-            !!f.data.phone?.toLowerCase().includes(lowerQuery) ||
-            !!f.data.village?.toLowerCase().includes(lowerQuery))
-      )
-      .toArray()
-  }, [])
-
-  const stableFarmers = useMemo(() => farmers ?? [], [farmers])
-  const stableActiveFarmers = useMemo(() => activeFarmers ?? [], [activeFarmers])
+    return farmers.filter(
+      (f) =>
+        (!activeOnly || f.isActive) &&
+        (f.name.toLowerCase().includes(lowerQuery) ||
+          f.phone?.toLowerCase().includes(lowerQuery) ||
+          f.village?.toLowerCase().includes(lowerQuery))
+    )
+  }, [farmers])
 
   return {
-    farmers: stableFarmers,
-    activeFarmers: stableActiveFarmers,
+    farmers,
+    activeFarmers,
     addFarmer,
     updateFarmer,
     deleteFarmer,
     getFarmer,
     searchFarmers,
-    isLoading: farmers === undefined
+    fetchFarmers,
+    isLoading
   }
 }
 

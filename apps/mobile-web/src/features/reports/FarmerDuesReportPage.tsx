@@ -7,10 +7,10 @@ import { Card, Button, Badge, Input } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useFarmers, useCollections, usePayments } from '@/hooks'
 import { formatCurrency, formatDate, getToday } from '@/utils'
-import type { LocalFarmer } from '@/types'
+import type { Farmer } from '@/types'
 
 interface FarmerDue {
-  farmer: LocalFarmer
+  farmer: Farmer
   totalLiters: number
   totalAmount: number
   totalPaid: number
@@ -45,8 +45,8 @@ export function FarmerDuesReportPage() {
           const collections = await getCollectionsByFarmer(farmer.id, startDate, endDate)
           const paymentsSummary = await getFarmerPaymentsSummary(farmer.id, startDate, endDate)
 
-          const totalLiters = collections.reduce((sum, c) => sum + Number(c.data.quantity), 0)
-          const totalAmount = collections.reduce((sum, c) => sum + Number(c.data.totalAmount), 0)
+          const totalLiters = collections.reduce((sum, c) => sum + Number(c.quantity), 0)
+          const totalAmount = collections.reduce((sum, c) => sum + Number(c.totalAmount), 0)
           const totalPaid = paymentsSummary.totalPayments
 
           return {
@@ -139,7 +139,7 @@ export function FarmerDuesReportPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{item.farmer.data.name}</h3>
+                      <h3 className="font-semibold">{item.farmer.name}</h3>
                       {item.balance > 0 && (
                         <Badge variant="warning" size="sm">
                           {t('reports.due')}
@@ -147,8 +147,8 @@ export function FarmerDuesReportPage() {
                       )}
                     </div>
 
-                    {item.farmer.data.village && (
-                      <p className="text-sm text-gray-500">{item.farmer.data.village}</p>
+                    {item.farmer.village && (
+                      <p className="text-sm text-gray-500">{item.farmer.village}</p>
                     )}
 
                     <div className="grid grid-cols-3 gap-2 mt-2 text-sm">

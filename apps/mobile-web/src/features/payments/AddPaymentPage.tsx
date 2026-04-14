@@ -5,12 +5,10 @@ import { User, UserCircle, Calculator, AlertTriangle } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Card } from '@/components/ui'
 import { NumberPad, ShiftToggle } from '@/components/common'
-import { useFarmers, useCustomers } from '@/hooks'
+import { useFarmers, useCustomers, usePayments, useCollections, useDeliveries } from '@/hooks'
 import { useAppStore } from '@/store'
-import { db, generateLocalId, now } from '@/db/localDb'
-import { syncService } from '@/services/syncService'
 import { formatCurrency } from '@/utils/format'
-import type { LocalFarmer, LocalCustomer, PaymentType, PaymentMethod, Shift } from '@/types'
+import type { Farmer, Customer, PaymentType, PaymentMethod, Shift } from '@/types'
 
 type RecipientType = 'farmer' | 'customer'
 
@@ -22,7 +20,6 @@ function nextShift(date: string, shift: Shift): { date: string; shift: Shift } {
   if (shift === 'MORNING') {
     return { date, shift: 'EVENING' }
   }
-  // EVENING → next day MORNING
   const d = new Date(date + 'T00:00:00')
   d.setDate(d.getDate() + 1)
   return { date: d.toISOString().split('T')[0], shift: 'MORNING' }
@@ -59,10 +56,13 @@ export function AddPaymentPage() {
 
   const { activeFarmers } = useFarmers()
   const { activeCustomers } = useCustomers()
+  const { addPayment, getPaymentsByFarmer, getPaymentsByCustomer } = usePayments()
+  const { getCollectionsByFarmer } = useCollections()
+  const { getDeliveriesByCustomer } = useDeliveries()
 
   const recipientType: RecipientType = (searchParams.get('type') as RecipientType) || 'farmer'
-  const [selectedFarmer, setSelectedFarmer] = useState<LocalFarmer | null>(null)
-  const [selectedCustomer, setSelectedCustomer] = useState<LocalCustomer | null>(null)
+  const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [amount, setAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH')
   const [notes, setNotes] = useState('')
@@ -105,23 +105,21 @@ export function AddPaymentPage() {
     if (!selected) return
 
     const autoSelectDates = async () => {
-      const allPayments = await db.payments.toArray()
-      const personPayments = allPayments
-        .filter((p) => {
-          if (recipientType === 'farmer') return p.data.farmerId === selected.id
-          return p.data.customerId === selected.id
-        })
-        .filter((p) => p.data.periodFromDate && p.data.periodFromShift && p.data.periodToDate && p.data.periodToShift)
+      const allPayments = recipientType === 'farmer'
+        ? await getPaymentsByFarmer(selected.id)
+        : await getPaymentsByCustomer(selected.id)
+
+      const personPayments = (allPayments as Array<typeof allPayments[0] & { periodFromDate?: string; periodFromShift?: Shift; periodToDate?: string; periodToShift?: Shift }>)
+        .filter((p) => p.periodFromDate && p.periodFromShift && p.periodToDate && p.periodToShift)
 
       if (personPayments.length > 0) {
-        // Sort descending by (periodToDate, periodToShift) to find latest payment
         const descByEnd = [...personPayments].sort((a, b) => {
-          if (a.data.periodToDate! > b.data.periodToDate!) return -1
-          if (a.data.periodToDate! < b.data.periodToDate!) return 1
-          return shiftOrd(b.data.periodToShift!) - shiftOrd(a.data.periodToShift!)
+          if (a.periodToDate! > b.periodToDate!) return -1
+          if (a.periodToDate! < b.periodToDate!) return 1
+          return shiftOrd(b.periodToShift!) - shiftOrd(a.periodToShift!)
         })
-        const lastPaidDate = descByEnd[0].data.periodToDate!
-        const lastPaidShift = descByEnd[0].data.periodToShift!
+        const lastPaidDate = descByEnd[0].periodToDate!
+        const lastPaidShift = descByEnd[0].periodToShift!
 
         const next = nextShift(lastPaidDate, lastPaidShift)
         setFromDate(next.date)
@@ -132,30 +130,26 @@ export function AddPaymentPage() {
         let firstShift: Shift = 'MORNING'
 
         if (recipientType === 'farmer') {
-          const collections = await db.collections.toArray()
-          const personCollections = collections
-            .filter((c) => c.data.farmerId === selected.id)
-            .sort((a, b) => {
-              if (a.data.date < b.data.date) return -1
-              if (a.data.date > b.data.date) return 1
-              return a.data.shift === 'MORNING' ? -1 : 1
-            })
-          if (personCollections.length > 0) {
-            firstDate = personCollections[0].data.date
-            firstShift = personCollections[0].data.shift
+          const collections = await getCollectionsByFarmer(selected.id)
+          const sorted = collections.sort((a, b) => {
+            if (a.date < b.date) return -1
+            if (a.date > b.date) return 1
+            return a.shift === 'MORNING' ? -1 : 1
+          })
+          if (sorted.length > 0) {
+            firstDate = sorted[0].date
+            firstShift = sorted[0].shift
           }
         } else {
-          const deliveries = await db.deliveries.toArray()
-          const personDeliveries = deliveries
-            .filter((d) => d.data.customerId === selected.id)
-            .sort((a, b) => {
-              if (a.data.date < b.data.date) return -1
-              if (a.data.date > b.data.date) return 1
-              return a.data.shift === 'MORNING' ? -1 : 1
-            })
-          if (personDeliveries.length > 0) {
-            firstDate = personDeliveries[0].data.date
-            firstShift = personDeliveries[0].data.shift
+          const deliveries = await getDeliveriesByCustomer(selected.id)
+          const sorted = deliveries.sort((a, b) => {
+            if (a.date < b.date) return -1
+            if (a.date > b.date) return 1
+            return a.shift === 'MORNING' ? -1 : 1
+          })
+          if (sorted.length > 0) {
+            firstDate = sorted[0].date
+            firstShift = sorted[0].shift
           }
         }
 
@@ -163,7 +157,6 @@ export function AddPaymentPage() {
           setFromDate(firstDate)
           setFromShift(firstShift)
         } else {
-          // No records at all — fallback to today
           setFromDate(getToday())
           setFromShift('MORNING')
         }
@@ -172,7 +165,7 @@ export function AddPaymentPage() {
       setToShift(initialShiftRef.current)
     }
     autoSelectDates()
-  }, [selectedFarmer, selectedCustomer, recipientType])
+  }, [selectedFarmer, selectedCustomer, recipientType, getPaymentsByFarmer, getPaymentsByCustomer, getCollectionsByFarmer, getDeliveriesByCustomer])
 
   // Calculate period total when filters or recipient change
   const calculatePeriodTotal = useCallback(async () => {
@@ -193,20 +186,17 @@ export function AddPaymentPage() {
     setIsCalculating(true)
     try {
       // Load existing payments to determine which records are already paid
-      const allPayments = await db.payments.toArray()
-      const personId = selected.id
-      const existingPaidPeriods = allPayments
-        .filter((p) => {
-          const matchesPerson = recipientType === 'farmer'
-            ? p.data.farmerId === personId
-            : p.data.customerId === personId
-          return matchesPerson && p.data.periodFromDate && p.data.periodToDate && p.data.periodFromShift && p.data.periodToShift
-        })
+      const allPayments = recipientType === 'farmer'
+        ? await getPaymentsByFarmer(selected.id)
+        : await getPaymentsByCustomer(selected.id)
+
+      const existingPaidPeriods = (allPayments as Array<typeof allPayments[0] & { periodFromDate?: string; periodFromShift?: Shift; periodToDate?: string; periodToShift?: Shift }>)
+        .filter((p) => p.periodFromDate && p.periodToDate && p.periodFromShift && p.periodToShift)
         .map((p) => ({
-          from: p.data.periodFromDate!,
-          fromShift: p.data.periodFromShift!,
-          to: p.data.periodToDate!,
-          toShift: p.data.periodToShift!,
+          from: p.periodFromDate!,
+          fromShift: p.periodFromShift!,
+          to: p.periodToDate!,
+          toShift: p.periodToShift!,
         }))
 
       const isAlreadyPaid = (date: string, shift: Shift) =>
@@ -218,35 +208,25 @@ export function AddPaymentPage() {
       let count = 0
 
       if (recipientType === 'farmer') {
-        const collections = await db.collections
-          .where('[data.date]')
-          .between([fromDate], [toDate], true, true)
-          .toArray()
-
+        const collections = await getCollectionsByFarmer(selected.id, fromDate, toDate)
         for (const c of collections) {
           if (
-            c.data.farmerId === selected.id &&
-            isInShiftRange(c.data.date, c.data.shift, fromDate, fromShift, toDate, toShift) &&
-            !isAlreadyPaid(c.data.date, c.data.shift)
+            isInShiftRange(c.date, c.shift, fromDate, fromShift, toDate, toShift) &&
+            !isAlreadyPaid(c.date, c.shift)
           ) {
-            total += c.data.totalAmount
+            total += Number(c.totalAmount)
             count++
           }
         }
       } else {
-        const deliveries = await db.deliveries
-          .where('[data.date]')
-          .between([fromDate], [toDate], true, true)
-          .toArray()
-
+        const deliveries = await getDeliveriesByCustomer(selected.id, fromDate, toDate)
         for (const d of deliveries) {
           if (
-            d.data.customerId === selected.id &&
-            d.data.status === 'DELIVERED' &&
-            isInShiftRange(d.data.date, d.data.shift, fromDate, fromShift, toDate, toShift) &&
-            !isAlreadyPaid(d.data.date, d.data.shift)
+            d.status === 'DELIVERED' &&
+            isInShiftRange(d.date, d.shift, fromDate, fromShift, toDate, toShift) &&
+            !isAlreadyPaid(d.date, d.shift)
           ) {
-            total += d.data.totalAmount
+            total += Number(d.totalAmount)
             count++
           }
         }
@@ -255,9 +235,8 @@ export function AddPaymentPage() {
       setPeriodAmount(total)
       setPeriodCount(count)
 
-      // Check for existing payment with overlapping period (reuse allPayments from above)
+      // Check for existing payment with overlapping period
       const hasDuplicate = existingPaidPeriods.some((pp) => {
-        // Two periods overlap unless one ends before the other starts
         const aEndBeforeBStart = toDate < pp.from
           || (toDate === pp.from && shiftOrd(toShift) < shiftOrd(pp.fromShift))
         const bEndBeforeAStart = pp.to < fromDate
@@ -274,7 +253,7 @@ export function AddPaymentPage() {
     } finally {
       setIsCalculating(false)
     }
-  }, [recipientType, selectedFarmer, selectedCustomer, fromDate, toDate, fromShift, toShift, isAdvance])
+  }, [recipientType, selectedFarmer, selectedCustomer, fromDate, toDate, fromShift, toShift, isAdvance, getPaymentsByFarmer, getPaymentsByCustomer, getCollectionsByFarmer, getDeliveriesByCustomer])
 
   useEffect(() => {
     calculatePeriodTotal()
@@ -290,14 +269,11 @@ export function AddPaymentPage() {
     try {
       setIsSubmitting(true)
 
-      const localId = generateLocalId()
-      const timestamp = now()
-
       const paymentType: PaymentType = recipientType === 'farmer'
         ? (isAdvance ? 'ADVANCE_TO_FARMER' : 'PAID_TO_FARMER')
         : (isAdvance ? 'ADVANCE_FROM_CUSTOMER' : 'RECEIVED_FROM_CUSTOMER')
 
-      const paymentData = {
+      await addPayment({
         farmerId: recipientType === 'farmer' ? selectedFarmer!.id : undefined,
         customerId: recipientType === 'customer' ? selectedCustomer!.id : undefined,
         date: paymentDate,
@@ -309,38 +285,8 @@ export function AddPaymentPage() {
         periodToDate: isAdvance ? undefined : toDate,
         periodFromShift: isAdvance ? undefined : fromShift,
         periodToShift: isAdvance ? undefined : toShift
-      }
-
-      // Add to local DB
-      await db.payments.add({
-        id: localId,
-        localId,
-        syncStatus: 'PENDING',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        data: paymentData
       })
 
-      // Update balance atomically
-      if (recipientType === 'farmer' && selectedFarmer) {
-        await db.farmers.where('id').equals(selectedFarmer.id).modify(f => {
-          f.data.balance -= amountNum
-          f.updatedAt = timestamp
-        })
-      } else if (recipientType === 'customer' && selectedCustomer) {
-        await db.customers.where('id').equals(selectedCustomer.id).modify(f => {
-          f.data.balance -= amountNum
-          f.updatedAt = timestamp
-        })
-      }
-
-      // Queue for sync
-      await syncService.queueSync('payments', localId, 'create', {
-        ...paymentData,
-        localId
-      })
-
-      addToast({ type: 'success', message: t('payment.paymentSaved') })
       navigate(searchParams.get('from') || '/payments')
     } catch (error) {
       console.error('Failed to add payment:', error)
@@ -352,8 +298,8 @@ export function AddPaymentPage() {
   const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
   const balance = selected
     ? recipientType === 'farmer'
-      ? (selected as LocalFarmer).data.balance
-      : (selected as LocalCustomer).data.balance
+      ? (selected as Farmer).balance
+      : (selected as Customer).balance
     : 0
 
   return (
@@ -375,7 +321,7 @@ export function AddPaymentPage() {
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-gray-900 dark:text-white">
-                    {selected.data.name}
+                    {selected.name}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {balance > 0
@@ -605,7 +551,7 @@ export function AddPaymentPage() {
                   <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
                     <div className="flex justify-between">
                       <span>{recipientType === 'farmer' ? t('payment.payFarmer') : t('payment.receiveCustomer')}</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{selected?.data.name}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{selected?.name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>{t('common.amount')}</span>

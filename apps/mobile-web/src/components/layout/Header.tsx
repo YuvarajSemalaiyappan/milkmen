@@ -2,7 +2,6 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, Menu, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
-import { SyncIndicator } from '@/components/common'
 
 export interface HeaderProps {
   title?: string
@@ -55,7 +54,6 @@ export function Header({
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          <SyncIndicator showLabel={false} />
           {rightAction || (
             <button
               onClick={() => navigate('/settings')}

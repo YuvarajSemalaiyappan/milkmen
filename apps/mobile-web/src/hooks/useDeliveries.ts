@@ -1,32 +1,42 @@
-import { useCallback, useMemo } from 'react'
-import Dexie from 'dexie'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db, generateLocalId, now } from '@/db/localDb'
-import { syncService } from '@/services/syncService'
+import { useState, useEffect, useCallback } from 'react'
+import { deliveriesApi } from '@/services/api'
 import { useAppStore } from '@/store'
 import { calculateTotal } from '@/utils/calculate'
 import { getToday } from '@/utils/format'
-import type { LocalDelivery, Shift, DeliveryStatus } from '@/types'
+import type { Delivery, Shift, DeliveryStatus, ApiResponse } from '@/types'
 
 export function useDeliveries() {
   const addToast = useAppStore((state) => state.addToast)
   const currentShift = useAppStore((state) => state.currentShift)
+  const [deliveries, setDeliveries] = useState<Delivery[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Today's deliveries
-  const todayDeliveries = useLiveQuery(async () => {
-    const today = getToday()
-    return db.deliveries
-      .filter((d) => d.data.date === today)
-      .toArray()
+  const fetchDeliveries = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const response = await deliveriesApi.list() as ApiResponse<Delivery[]>
+      if (response.success && response.data) {
+        setDeliveries(response.data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch deliveries:', error)
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
-  // All deliveries
-  const deliveries = useLiveQuery(
-    () => db.deliveries.orderBy('updatedAt').reverse().toArray(),
-    []
-  )
+  useEffect(() => {
+    fetchDeliveries()
+  }, [fetchDeliveries])
 
-  // Add new delivery
+  const todayDeliveries = deliveries.filter((d) => d.date === getToday())
+
+  const todayTotals = {
+    liters: todayDeliveries.reduce((sum, d) => sum + Number(d.quantity), 0),
+    amount: todayDeliveries.reduce((sum, d) => sum + Number(d.totalAmount), 0),
+    count: todayDeliveries.length
+  }
+
   const addDelivery = useCallback(
     async (data: {
       customerId: string
@@ -38,53 +48,32 @@ export function useDeliveries() {
       isSubscription?: boolean
       notes?: string
     }) => {
-      const localId = generateLocalId()
-      const timestamp = now()
-      const totalAmount = calculateTotal(data.quantity, data.ratePerLiter)
-
-      const delivery: LocalDelivery = {
-        id: localId,
-        localId,
-        syncStatus: 'PENDING',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        data: {
+      try {
+        const response = await deliveriesApi.create({
           customerId: data.customerId,
           date: data.date || getToday(),
           shift: data.shift || currentShift,
           quantity: data.quantity,
           ratePerLiter: data.ratePerLiter,
-          totalAmount,
           status: data.status || 'DELIVERED',
           isSubscription: data.isSubscription || false,
           notes: data.notes
+        }) as ApiResponse<Delivery>
+
+        if (response.success && response.data) {
+          addToast({ type: 'success', message: 'Delivery saved' })
+          await fetchDeliveries()
+          return response.data
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to save delivery'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      await db.deliveries.add(delivery)
-
-      // Update customer balance (they owe us)
-      const customer = await db.customers.get(data.customerId)
-      if (customer) {
-        await db.customers.update(data.customerId, {
-          'data.balance': customer.data.balance + totalAmount,
-          updatedAt: timestamp
-        })
-      }
-
-      // Queue for sync
-      await syncService.queueSync('deliveries', localId, 'create', {
-        ...delivery.data,
-        localId
-      })
-
-      addToast({ type: 'success', message: 'Delivery saved' })
-      return delivery
     },
-    [addToast, currentShift]
+    [addToast, currentShift, fetchDeliveries]
   )
 
-  // Update delivery
   const updateDelivery = useCallback(
     async (
       id: string,
@@ -95,147 +84,101 @@ export function useDeliveries() {
         notes?: string
       }>
     ) => {
-      const delivery = await db.deliveries.get(id)
-      if (!delivery) throw new Error('Delivery not found')
-
-      const timestamp = now()
-      const oldTotal = delivery.data.totalAmount
-
-      // Calculate new total if quantity or rate changed
-      const newQuantity = updates.quantity ?? delivery.data.quantity
-      const newRate = updates.ratePerLiter ?? delivery.data.ratePerLiter
-      const newTotal = calculateTotal(newQuantity, newRate)
-
-      const updatedDelivery: LocalDelivery = {
-        ...delivery,
-        syncStatus: 'PENDING',
-        updatedAt: timestamp,
-        data: {
-          ...delivery.data,
-          ...updates,
-          totalAmount: newTotal,
-          rateEditedAt: updates.ratePerLiter ? new Date().toISOString() : delivery.data.rateEditedAt,
-          originalRate: delivery.data.originalRate || delivery.data.ratePerLiter
+      try {
+        const response = await deliveriesApi.update(id, updates) as ApiResponse<Delivery>
+        if (response.success && response.data) {
+          addToast({ type: 'success', message: 'Delivery updated' })
+          await fetchDeliveries()
+          return response.data
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update delivery'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      await db.deliveries.put(updatedDelivery)
-
-      // Update customer balance (adjust for difference)
-      const customer = await db.customers.get(delivery.data.customerId)
-      if (customer) {
-        const balanceDiff = newTotal - oldTotal
-        await db.customers.update(delivery.data.customerId, {
-          'data.balance': customer.data.balance + balanceDiff,
-          updatedAt: timestamp
-        })
-      }
-
-      // Queue for sync
-      await syncService.queueSync('deliveries', delivery.localId, 'update', {
-        id: delivery.id,
-        ...updates,
-        totalAmount: newTotal
-      })
-
-      addToast({ type: 'success', message: 'Delivery updated' })
-      return updatedDelivery
     },
-    [addToast]
+    [addToast, fetchDeliveries]
   )
 
-  // Delete delivery
   const deleteDelivery = useCallback(
     async (id: string) => {
-      const delivery = await db.deliveries.get(id)
-      if (!delivery) throw new Error('Delivery not found')
-
-      // Update customer balance (subtract the amount)
-      const customer = await db.customers.get(delivery.data.customerId)
-      if (customer) {
-        await db.customers.update(delivery.data.customerId, {
-          'data.balance': customer.data.balance - delivery.data.totalAmount,
-          updatedAt: now()
-        })
+      try {
+        const response = await deliveriesApi.delete(id) as ApiResponse<void>
+        if (response.success) {
+          addToast({ type: 'success', message: 'Delivery deleted' })
+          await fetchDeliveries()
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete delivery'
+        addToast({ type: 'error', message })
+        throw error
       }
-
-      // Delete from local DB
-      await db.deliveries.delete(id)
-
-      // Queue for sync
-      await syncService.queueSync('deliveries', delivery.localId, 'delete', {
-        id: delivery.id
-      })
-
-      addToast({ type: 'success', message: 'Delivery deleted' })
     },
-    [addToast]
+    [addToast, fetchDeliveries]
   )
 
-  // Get deliveries by date
   const getDeliveriesByDate = useCallback(async (date: string) => {
-    return db.deliveries.filter((d) => d.data.date === date).toArray()
-  }, [])
-
-  // Get deliveries by customer
-  const getDeliveriesByCustomer = useCallback(
-    async (customerId: string, from?: string, to?: string, limit?: number) => {
-      let query = db.deliveries
-        .where('[data.customerId+data.date]')
-        .between(
-          [customerId, from || Dexie.minKey],
-          [customerId, to || Dexie.maxKey],
-          true,
-          true
-        )
-        .reverse()
-      if (limit) {
-        query = query.limit(limit)
+    try {
+      const response = await deliveriesApi.list({ date }) as ApiResponse<Delivery[]>
+      if (response.success && response.data) {
+        return response.data
       }
-      return query.toArray()
-    },
-    []
-  )
-
-  // Get deliveries by date range
-  const getDeliveriesByDateRange = useCallback(
-    async (from: string, to: string) => {
-      return db.deliveries
-        .filter((d) => d.data.date >= from && d.data.date <= to)
-        .toArray()
-    },
-    []
-  )
-
-  // Calculate today's totals
-  const todayTotals = useLiveQuery(async () => {
-    const today = getToday()
-    const deliveries = await db.deliveries
-      .filter((d) => d.data.date === today)
-      .toArray()
-
-    return {
-      liters: deliveries.reduce((sum, d) => sum + Number(d.data.quantity), 0),
-      amount: deliveries.reduce((sum, d) => sum + Number(d.data.totalAmount), 0),
-      count: deliveries.length
+      return []
+    } catch (error) {
+      console.error('Failed to fetch deliveries by date:', error)
+      return []
     }
   }, [])
 
-  const stableDeliveries = useMemo(() => deliveries ?? [], [deliveries])
-  const stableTodayDeliveries = useMemo(() => todayDeliveries ?? [], [todayDeliveries])
-  const stableTodayTotals = useMemo(() => todayTotals ?? { liters: 0, amount: 0, count: 0 }, [todayTotals])
+  const getDeliveriesByCustomer = useCallback(
+    async (customerId: string, from?: string, to?: string, limit?: number) => {
+      try {
+        const response = await deliveriesApi.list({ customerId }) as ApiResponse<Delivery[]>
+        if (response.success && response.data) {
+          let result = response.data
+          if (from) result = result.filter((d) => d.date >= from)
+          if (to) result = result.filter((d) => d.date <= to)
+          result.sort((a, b) => b.date.localeCompare(a.date))
+          if (limit) result = result.slice(0, limit)
+          return result
+        }
+        return []
+      } catch (error) {
+        console.error('Failed to fetch deliveries by customer:', error)
+        return []
+      }
+    },
+    []
+  )
+
+  const getDeliveriesByDateRange = useCallback(
+    async (from: string, to: string) => {
+      try {
+        const response = await deliveriesApi.list() as ApiResponse<Delivery[]>
+        if (response.success && response.data) {
+          return response.data.filter((d) => d.date >= from && d.date <= to)
+        }
+        return []
+      } catch (error) {
+        console.error('Failed to fetch deliveries by date range:', error)
+        return []
+      }
+    },
+    []
+  )
 
   return {
-    deliveries: stableDeliveries,
-    todayDeliveries: stableTodayDeliveries,
-    todayTotals: stableTodayTotals,
+    deliveries,
+    todayDeliveries,
+    todayTotals,
     addDelivery,
     updateDelivery,
     deleteDelivery,
     getDeliveriesByDate,
     getDeliveriesByCustomer,
     getDeliveriesByDateRange,
-    isLoading: deliveries === undefined
+    fetchDeliveries,
+    isLoading
   }
 }
 

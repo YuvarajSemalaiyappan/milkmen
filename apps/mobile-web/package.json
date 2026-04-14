@@ -17,8 +17,6 @@
     "@hookform/resolvers": "^5.2.2",
     "@tailwindcss/vite": "^4.1.18",
     "clsx": "^2.1.1",
-    "dexie": "^4.3.0",
-    "dexie-react-hooks": "^4.2.0",
     "i18next": "^25.8.0",
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",

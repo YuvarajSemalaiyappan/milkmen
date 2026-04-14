@@ -11,7 +11,7 @@ import { useAppStore } from '@/store'
 import { customersApi } from '@/services/api'
 import { formatCurrency, formatRate, getToday } from '@/utils/format'
 import { calculateTotal } from '@/utils/calculate'
-import type { LocalCustomer, ApiResponse, Customer } from '@/types'
+import type { Customer, ApiResponse } from '@/types'
 
 type Step = 'select-customer' | 'enter-quantity'
 
@@ -28,8 +28,8 @@ export function AddDeliveryPage() {
 
   const [step, setStep] = useState<Step>('select-customer')
   const [searchQuery, setSearchQuery] = useState('')
-  const [filteredCustomers, setFilteredCustomers] = useState<LocalCustomer[]>([])
-  const [selectedCustomer, setSelectedCustomer] = useState<LocalCustomer | null>(null)
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([])
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [quantity, setQuantity] = useState('')
   const [rate, setRate] = useState('')
   const [selectedDate, setSelectedDate] = useState(getToday())
@@ -54,25 +54,7 @@ export function AddDeliveryPage() {
       try {
         const response = await customersApi.get(customerId) as ApiResponse<Customer>
         if (response.success && response.data) {
-          const c = response.data
-          const local: LocalCustomer = {
-            id: c.id,
-            localId: c.id,
-            syncStatus: 'SYNCED',
-            createdAt: new Date(c.createdAt).getTime(),
-            updatedAt: new Date(c.updatedAt).getTime(),
-            data: {
-              name: c.name,
-              phone: c.phone,
-              address: c.address,
-              defaultRate: c.defaultRate,
-              subscriptionQtyAM: c.subscriptionQtyAM,
-              subscriptionQtyPM: c.subscriptionQtyPM,
-              isActive: c.isActive,
-              balance: c.balance,
-            },
-          }
-          selectCustomer(local)
+          selectCustomer(response.data)
         }
       } catch (error) {
         console.error('Failed to fetch customer:', error)
@@ -95,13 +77,13 @@ export function AddDeliveryPage() {
     setFilteredCustomers(activeCustomers)
   }, [activeCustomers])
 
-  const selectCustomer = (customer: LocalCustomer) => {
+  const selectCustomer = (customer: Customer) => {
     setSelectedCustomer(customer)
-    setRate(customer.data.defaultRate.toString())
+    setRate(customer.defaultRate.toString())
     // Pre-fill subscription quantity based on current shift
     const subscriptionQty = currentShift === 'MORNING'
-      ? customer.data.subscriptionQtyAM
-      : customer.data.subscriptionQtyPM
+      ? customer.subscriptionQtyAM
+      : customer.subscriptionQtyPM
     if (subscriptionQty) {
       setQuantity(subscriptionQty.toString())
     }
@@ -165,8 +147,8 @@ export function AddDeliveryPage() {
             <Card padding="none">
               <ul className="divide-y divide-gray-100 dark:divide-gray-700">
                 {filteredCustomers.map((customer) => {
-                  const hasAM = !!customer.data.subscriptionQtyAM
-                  const hasPM = !!customer.data.subscriptionQtyPM
+                  const hasAM = !!customer.subscriptionQtyAM
+                  const hasPM = !!customer.subscriptionQtyPM
                   const hasSubscription = hasAM || hasPM
                   const isCurrentShiftSubscribed = currentShift === 'MORNING' ? hasAM : hasPM
                   return (
@@ -190,17 +172,17 @@ export function AddDeliveryPage() {
                         </div>
                         <div className="flex-1 text-left">
                           <p className="font-medium text-gray-900 dark:text-white">
-                            {customer.data.name}
+                            {customer.name}
                           </p>
-                          {customer.data.address && (
+                          {customer.address && (
                             <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                              {customer.data.address}
+                              {customer.address}
                             </p>
                           )}
                         </div>
                         <div className="text-right flex flex-col items-end gap-1">
                           <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {formatRate(customer.data.defaultRate)}
+                            {formatRate(customer.defaultRate)}
                           </p>
                           {hasSubscription && (
                             <div className="flex items-center gap-1">
@@ -211,7 +193,7 @@ export function AddDeliveryPage() {
                                     : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
                                 }`}>
                                   <Sun className="w-3 h-3" />
-                                  {customer.data.subscriptionQtyAM}L
+                                  {customer.subscriptionQtyAM}L
                                 </span>
                               )}
                               {hasPM && (
@@ -221,7 +203,7 @@ export function AddDeliveryPage() {
                                     : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
                                 }`}>
                                   <Moon className="w-3 h-3" />
-                                  {customer.data.subscriptionQtyPM}L
+                                  {customer.subscriptionQtyPM}L
                                 </span>
                               )}
                             </div>
@@ -246,10 +228,10 @@ export function AddDeliveryPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 dark:text-white truncate">
-                    {selectedCustomer.data.name}
+                    {selectedCustomer.name}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {selectedCustomer.data.address}
+                    {selectedCustomer.address}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">

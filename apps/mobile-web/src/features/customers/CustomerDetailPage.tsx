@@ -20,9 +20,8 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useCustomers, useDeliveries, usePayments, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
-import { db } from '@/db/localDb'
 import { formatCurrency, formatDate } from '@/utils'
-import type { LocalCustomer, LocalDelivery } from '@/types'
+import type { Customer, Delivery, ApiResponse } from '@/types'
 
 const customerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -44,8 +43,8 @@ export function CustomerDetailPage() {
   const { getPaymentsByCustomer } = usePayments()
   const { routes } = useRoutes()
 
-  const [customer, setCustomer] = useState<LocalCustomer | null>(null)
-  const [deliveries, setDeliveries] = useState<LocalDelivery[]>([])
+  const [customer, setCustomer] = useState<Customer | null>(null)
+  const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [lastPaymentDate, setLastPaymentDate] = useState<string | null>(null)
   const [paidPeriods, setPaidPeriods] = useState<{ from: string; to: string }[]>([])
   const [isEditing, setIsEditing] = useState(false)
@@ -82,19 +81,19 @@ export function CustomerDetailPage() {
     if (data) {
       setCustomer(data)
       reset({
-        name: data.data.name,
-        phone: data.data.phone || '',
-        address: data.data.address || '',
-        defaultRate: data.data.defaultRate,
-        subscriptionQtyAM: data.data.subscriptionQtyAM || undefined,
-        subscriptionQtyPM: data.data.subscriptionQtyPM || undefined
+        name: data.name,
+        phone: data.phone || '',
+        address: data.address || '',
+        defaultRate: data.defaultRate,
+        subscriptionQtyAM: data.subscriptionQtyAM || undefined,
+        subscriptionQtyPM: data.subscriptionQtyPM || undefined
       })
 
-      // Load existing route/area assignment
-      const routeCustomer = await db.routeCustomers.where('customerId').equals(id).first()
-      if (routeCustomer) {
-        setSelectedRouteId(routeCustomer.routeId)
-        setSelectedAreaId(routeCustomer.areaId || null)
+      // Load existing route/area assignment from server response
+      const customerDetail = data as Customer & { routeCustomers?: Array<{ routeId: string; areaId?: string }> }
+      if (customerDetail.routeCustomers && customerDetail.routeCustomers.length > 0) {
+        setSelectedRouteId(customerDetail.routeCustomers[0].routeId)
+        setSelectedAreaId(customerDetail.routeCustomers[0].areaId || null)
       }
     }
   }
@@ -111,8 +110,8 @@ export function CustomerDetailPage() {
     if (payments.length > 0) {
       // Build sorted list of payment periods (exclude advance payments with no period)
       const periods = payments
-        .filter((p) => p.data.periodFromDate && p.data.periodToDate)
-        .map((p) => ({ from: p.data.periodFromDate!, to: p.data.periodToDate! }))
+        .filter((p) => p.periodFromDate && p.periodToDate)
+        .map((p) => ({ from: p.periodFromDate!, to: p.periodToDate! }))
         .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to))
 
       if (periods.length === 0) {
@@ -159,19 +158,9 @@ export function CustomerDetailPage() {
       })
 
       // Update route assignment if changed
-      if (selectedRouteId && !id.startsWith('local_')) {
+      if (selectedRouteId) {
         try {
           await routesApi.assignCustomers(selectedRouteId, [id], undefined, selectedAreaId ? { [id]: selectedAreaId } : undefined)
-          // Update local DB so it shows on next load without sync
-          const existing = await db.routeCustomers.where('customerId').equals(id).first()
-          if (existing) await db.routeCustomers.delete(existing.id)
-          await db.routeCustomers.add({
-            id: `${selectedRouteId}_${id}`,
-            routeId: selectedRouteId,
-            customerId: id,
-            areaId: selectedAreaId || undefined,
-            sortOrder: existing?.sortOrder || 0
-          })
         } catch {
           // Non-critical
         }
@@ -252,7 +241,7 @@ export function CustomerDetailPage() {
 
   return (
     <AppShell
-      title={isEditing ? t('customer.edit') : customer.data.name}
+      title={isEditing ? t('customer.edit') : customer.name}
       showBack
       rightAction={
         !isEditing && (
@@ -400,61 +389,61 @@ export function CustomerDetailPage() {
             <Card>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">{customer.data.name}</h2>
+                  <h2 className="text-xl font-semibold">{customer.name}</h2>
                   <Badge
-                    variant={customer.data.isActive ? 'success' : 'error'}
+                    variant={customer.isActive ? 'success' : 'error'}
                   >
-                    {customer.data.isActive ? t('common.active') : t('common.inactive')}
+                    {customer.isActive ? t('common.active') : t('common.inactive')}
                   </Badge>
                 </div>
 
-                {customer.data.phone && (
+                {customer.phone && (
                   <div className="flex items-center gap-2 text-gray-600">
                     <Phone className="w-4 h-4" />
-                    <a href={`tel:${customer.data.phone}`} className="text-primary-600">
-                      {customer.data.phone}
+                    <a href={`tel:${customer.phone}`} className="text-primary-600">
+                      {customer.phone}
                     </a>
                   </div>
                 )}
 
-                {customer.data.address && (
+                {customer.address && (
                   <div className="flex items-center gap-2 text-gray-600">
                     <MapPin className="w-4 h-4" />
-                    <span>{customer.data.address}</span>
+                    <span>{customer.address}</span>
                   </div>
                 )}
 
                 <div className="flex items-center gap-2 text-gray-600">
                   <IndianRupee className="w-4 h-4" />
                   <span>
-                    {t('customer.defaultRate')}: {formatCurrency(customer.data.defaultRate)}/L
+                    {t('customer.defaultRate')}: {formatCurrency(customer.defaultRate)}/L
                   </span>
                 </div>
               </div>
             </Card>
 
             {/* Subscription Card */}
-            {(customer.data.subscriptionQtyAM || customer.data.subscriptionQtyPM) && (
+            {(customer.subscriptionQtyAM || customer.subscriptionQtyPM) && (
               <Card className="bg-blue-50 border-blue-200">
                 <p className="text-sm text-gray-600 mb-2">{t('customer.subscription')}</p>
                 <div className="flex flex-wrap gap-3">
-                  {customer.data.subscriptionQtyAM && (
+                  {customer.subscriptionQtyAM && (
                     <div className="flex items-center gap-2">
                       <Badge variant="warning" className="flex items-center gap-1">
                         <Sun className="w-3 h-3" /> AM
                       </Badge>
                       <span className="text-lg font-bold text-blue-600">
-                        {customer.data.subscriptionQtyAM}L
+                        {customer.subscriptionQtyAM}L
                       </span>
                     </div>
                   )}
-                  {customer.data.subscriptionQtyPM && (
+                  {customer.subscriptionQtyPM && (
                     <div className="flex items-center gap-2">
                       <Badge variant="info" className="flex items-center gap-1">
                         <Moon className="w-3 h-3" /> PM
                       </Badge>
                       <span className="text-lg font-bold text-blue-600">
-                        {customer.data.subscriptionQtyPM}L
+                        {customer.subscriptionQtyPM}L
                       </span>
                     </div>
                   )}
@@ -463,17 +452,17 @@ export function CustomerDetailPage() {
             )}
 
             {/* Balance Card */}
-            <Card className={customer.data.balance > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}>
+            <Card className={customer.balance > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">{t('customer.balance')}</p>
-                  <p className={`text-2xl font-bold ${customer.data.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatCurrency(Math.abs(customer.data.balance))}
+                  <p className={`text-2xl font-bold ${customer.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(Math.abs(customer.balance))}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-500">
-                    {customer.data.balance > 0 ? t('customer.theyOwe') : t('customer.settled')}
+                    {customer.balance > 0 ? t('customer.theyOwe') : t('customer.settled')}
                   </p>
                 </div>
               </div>
@@ -516,7 +505,7 @@ export function CustomerDetailPage() {
 
             {/* Delete / Activate Button */}
             <div>
-              {!customer.data.isActive ? (
+              {!customer.isActive ? (
                 <Button
                   onClick={handleActivate}
                   isLoading={isDeleting}
@@ -589,22 +578,22 @@ export function CustomerDetailPage() {
                         <div className="flex items-center gap-2">
                           <Calendar className="w-3 h-3 text-gray-400" />
                           <span className="text-sm">
-                            {formatDate(delivery.data.date)}
+                            {formatDate(delivery.date)}
                           </span>
-                          <Badge size="sm" variant={delivery.data.shift === 'MORNING' ? 'warning' : 'info'}>
-                            {delivery.data.shift === 'MORNING' ? 'AM' : 'PM'}
+                          <Badge size="sm" variant={delivery.shift === 'MORNING' ? 'warning' : 'info'}>
+                            {delivery.shift === 'MORNING' ? 'AM' : 'PM'}
                           </Badge>
-                          {getStatusBadge(delivery.data.status)}
-                          <Badge size="sm" variant={isDatePaid(delivery.data.date) ? 'success' : 'error'}>
-                            {isDatePaid(delivery.data.date) ? t('reports.paid') : t('reports.unpaid')}
+                          {getStatusBadge(delivery.status)}
+                          <Badge size="sm" variant={isDatePaid(delivery.date) ? 'success' : 'error'}>
+                            {isDatePaid(delivery.date) ? t('reports.paid') : t('reports.unpaid')}
                           </Badge>
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          {delivery.data.quantity}L @ {formatCurrency(delivery.data.ratePerLiter)}/L
+                          {delivery.quantity}L @ {formatCurrency(delivery.ratePerLiter)}/L
                         </p>
                       </div>
                       <span className="font-semibold text-green-600">
-                        {formatCurrency(delivery.data.totalAmount)}
+                        {formatCurrency(delivery.totalAmount)}
                       </span>
                     </div>
                   ))}

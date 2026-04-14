@@ -33,8 +33,7 @@ export function AboutPage() {
               t('about.feature1'),
               t('about.feature2'),
               t('about.feature3'),
-              t('about.feature4'),
-              t('about.feature5')
+              t('about.feature4')
             ].map((feature, index) => (
               <li key={index} className="flex items-start gap-2">
                 <span className="w-1.5 h-1.5 bg-blue-600 dark:bg-blue-400 rounded-full mt-2" />

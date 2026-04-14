@@ -1,17 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { Phone, MapPin, ChevronRight, Users, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
 import { ShiftToggle, RouteFilter, SortableList } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
 import { useSortOrder } from '@/hooks/useSortOrder'
-import { routesApi } from '@/services/api'
-import { db } from '@/db/localDb'
+import { routesApi, deliveriesApi } from '@/services/api'
 import { getToday } from '@/utils/format'
-import type { ApiResponse } from '@/types'
+import type { ApiResponse, Delivery } from '@/types'
 
 interface RouteCustomerItem {
   id: string
@@ -47,13 +45,27 @@ export function DeliveriesPage() {
   const [isLoading, setIsLoading] = useState(false)
   const { applySortOrder, saveSortOrder } = useSortOrder('customer', currentShift)
 
+  const [completedCustomerIds, setCompletedCustomerIds] = useState<Set<string>>(new Set())
+
   // Track which customers already have a delivery today for the current shift
-  const completedCustomerIds = useLiveQuery(async () => {
-    const today = getToday()
-    const todayDeliveries = await db.deliveries
-      .filter((d) => d.data.date === today && d.data.shift === currentShift)
-      .toArray()
-    return new Set(todayDeliveries.map((d) => d.data.customerId))
+  useEffect(() => {
+    const fetchCompletedDeliveries = async () => {
+      try {
+        const today = getToday()
+        const response = await deliveriesApi.list({ date: today }) as ApiResponse<Delivery[]>
+        if (response.success && response.data) {
+          const ids = new Set(
+            response.data
+              .filter((d) => d.shift === currentShift)
+              .map((d) => d.customerId)
+          )
+          setCompletedCustomerIds(ids)
+        }
+      } catch (error) {
+        console.error('Failed to fetch today deliveries:', error)
+      }
+    }
+    fetchCompletedDeliveries()
   }, [currentShift])
 
   useEffect(() => {
@@ -88,7 +100,7 @@ export function DeliveriesPage() {
     const isSubscribed = currentShift === 'MORNING'
       ? !!rc.customer.subscriptionQtyAM
       : !!rc.customer.subscriptionQtyPM
-    return isSubscribed && !completedCustomerIds?.has(rc.customer.id)
+    return isSubscribed && !completedCustomerIds.has(rc.customer.id)
   })
 
   const customerMap = useMemo(() => {

@@ -1,6 +1,5 @@
 export { NumberPad, QuickPad, PinPad, type NumberPadProps, type QuickPadProps, type PinPadProps } from './NumberPad'
 export { ShiftToggle, type ShiftToggleProps } from './ShiftToggle'
-export { SyncIndicator, type SyncIndicatorProps } from './SyncIndicator'
 export { EmptyState, type EmptyStateProps } from './EmptyState'
 export { ToastContainer } from './Toast'
 export { RouteFilter } from './RouteFilter'

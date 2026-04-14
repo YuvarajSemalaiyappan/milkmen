@@ -2,15 +2,14 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, Search, UserCircle, Phone, MapPin, ChevronRight, Sun, Moon } from 'lucide-react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { EmptyState, RouteFilter } from '@/components/common'
 import { useCustomers } from '@/hooks'
 import { useRouteStore } from '@/store'
-import { db } from '@/db/localDb'
+import { routesApi } from '@/services/api'
 import { formatCurrency } from '@/utils'
-import type { LocalCustomer } from '@/types'
+import type { Customer, ApiResponse, RouteCustomer } from '@/types'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 
@@ -19,25 +18,37 @@ export function CustomersPage() {
   const navigate = useNavigate()
   const { customers: allCustomers, activeCustomers, searchCustomers, isLoading } = useCustomers()
   const [searchQuery, setSearchQuery] = useState('')
-  const [filteredCustomers, setFilteredCustomers] = useState<LocalCustomer[]>([])
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
 
   const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
   const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
 
-  // Live query for route-customer assignments
-  const routeCustomers = useLiveQuery(
-    () => selectedRouteId
-      ? db.routeCustomers.where('routeId').equals(selectedRouteId).toArray()
-      : undefined,
-    [selectedRouteId]
-  )
+  const [routeCustomers, setRouteCustomers] = useState<RouteCustomer[] | undefined>(undefined)
+
+  useEffect(() => {
+    if (!selectedRouteId) {
+      setRouteCustomers(undefined)
+      return
+    }
+    const fetchRouteAssignments = async () => {
+      try {
+        const response = await routesApi.get(selectedRouteId) as ApiResponse<{ routeCustomers: RouteCustomer[] }>
+        if (response.success && response.data) {
+          setRouteCustomers(response.data.routeCustomers)
+        }
+      } catch (error) {
+        console.error('Failed to fetch route customers:', error)
+      }
+    }
+    fetchRouteAssignments()
+  }, [selectedRouteId])
 
   // Get the base list based on status filter
   const baseCustomers = statusFilter === 'active'
     ? activeCustomers
     : statusFilter === 'inactive'
-      ? allCustomers.filter((c) => !c.data.isActive)
+      ? allCustomers.filter((c) => !c.isActive)
       : allCustomers
 
   useEffect(() => {
@@ -45,7 +56,7 @@ export function CustomersPage() {
       if (searchQuery) {
         const results = await searchCustomers(searchQuery, statusFilter === 'active')
         if (statusFilter === 'inactive') {
-          setFilteredCustomers(results.filter((c) => !c.data.isActive))
+          setFilteredCustomers(results.filter((c) => !c.isActive))
         } else {
           setFilteredCustomers(results)
         }
@@ -146,7 +157,7 @@ export function CustomersPage() {
               <Card
                 key={customer.id}
                 className={`cursor-pointer hover:shadow-md transition-shadow ${
-                  !customer.data.isActive ? 'opacity-60' : ''
+                  !customer.isActive ? 'opacity-60' : ''
                 }`}
                 onClick={() => navigate(`/customers/${customer.id}`)}
               >
@@ -154,52 +165,49 @@ export function CustomersPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                        {customer.data.name}
+                        {customer.name}
                       </h3>
-                      {!customer.data.isActive && (
+                      {!customer.isActive && (
                         <Badge size="sm" variant="default">{t('common.inactive')}</Badge>
-                      )}
-                      {customer.syncStatus === 'PENDING' && (
-                        <Badge size="sm" variant="warning">Pending</Badge>
                       )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      {customer.data.phone && (
+                      {customer.phone && (
                         <span className="flex items-center gap-1">
                           <Phone className="w-3 h-3" />
-                          {customer.data.phone}
+                          {customer.phone}
                         </span>
                       )}
-                      {customer.data.address && (
+                      {customer.address && (
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3 h-3" />
-                          {customer.data.address}
+                          {customer.address}
                         </span>
                       )}
                     </div>
 
                     <div className="flex items-center gap-3 mt-2">
                       {/* Subscription Info */}
-                      {customer.data.subscriptionQtyAM && (
+                      {customer.subscriptionQtyAM && (
                         <Badge variant="warning" className="flex items-center gap-1">
-                          <Sun className="w-3 h-3" /> {customer.data.subscriptionQtyAM}L
+                          <Sun className="w-3 h-3" /> {customer.subscriptionQtyAM}L
                         </Badge>
                       )}
-                      {customer.data.subscriptionQtyPM && (
+                      {customer.subscriptionQtyPM && (
                         <Badge variant="info" className="flex items-center gap-1">
-                          <Moon className="w-3 h-3" /> {customer.data.subscriptionQtyPM}L
+                          <Moon className="w-3 h-3" /> {customer.subscriptionQtyPM}L
                         </Badge>
                       )}
 
                       <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {formatCurrency(customer.data.defaultRate)}/L
+                        {formatCurrency(customer.defaultRate)}/L
                       </span>
 
                       {/* Balance Due */}
-                      {customer.data.balance > 0 && (
+                      {customer.balance > 0 && (
                         <Badge variant="error">
-                          {t('customer.due')}: {formatCurrency(customer.data.balance)}
+                          {t('customer.due')}: {formatCurrency(customer.balance)}
                         </Badge>
                       )}
                     </div>

@@ -7,10 +7,10 @@ import { Card, Button, Badge, Input } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useCustomers, useDeliveries, usePayments } from '@/hooks'
 import { formatCurrency, getToday } from '@/utils'
-import type { LocalCustomer } from '@/types'
+import type { Customer } from '@/types'
 
 interface CustomerDue {
-  customer: LocalCustomer
+  customer: Customer
   totalLiters: number
   totalAmount: number
   totalPaid: number
@@ -45,9 +45,9 @@ export function CustomerDuesReportPage() {
           const deliveries = await getDeliveriesByCustomer(customer.id, startDate, endDate)
           const paymentsSummary = await getCustomerPaymentsSummary(customer.id, startDate, endDate)
 
-          const deliveredItems = deliveries.filter((d) => d.data.status === 'DELIVERED')
-          const totalLiters = deliveredItems.reduce((sum, d) => sum + Number(d.data.quantity), 0)
-          const totalAmount = deliveredItems.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
+          const deliveredItems = deliveries.filter((d) => d.status === 'DELIVERED')
+          const totalLiters = deliveredItems.reduce((sum, d) => sum + Number(d.quantity), 0)
+          const totalAmount = deliveredItems.reduce((sum, d) => sum + Number(d.totalAmount), 0)
           const totalPaid = paymentsSummary.totalPayments
 
           return {
@@ -140,7 +140,7 @@ export function CustomerDuesReportPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{item.customer.data.name}</h3>
+                      <h3 className="font-semibold">{item.customer.name}</h3>
                       {item.balance > 0 && (
                         <Badge variant="error" size="sm">
                           {t('reports.due')}
@@ -148,8 +148,8 @@ export function CustomerDuesReportPage() {
                       )}
                     </div>
 
-                    {item.customer.data.address && (
-                      <p className="text-sm text-gray-500">{item.customer.data.address}</p>
+                    {item.customer.address && (
+                      <p className="text-sm text-gray-500">{item.customer.address}</p>
                     )}
 
                     <div className="grid grid-cols-3 gap-2 mt-2 text-sm">

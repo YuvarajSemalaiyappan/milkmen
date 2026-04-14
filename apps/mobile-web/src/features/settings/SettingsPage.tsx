@@ -6,7 +6,6 @@ import {
   Building2,
   Users,
   DollarSign,
-  RefreshCw,
   Info,
   LogOut,
   ChevronRight,
@@ -75,12 +74,6 @@ export function SettingsPage() {
       titleKey: 'settings.rates',
       path: '/settings/rates',
       color: 'bg-yellow-100 text-yellow-600'
-    },
-    {
-      icon: RefreshCw,
-      titleKey: 'settings.sync',
-      path: '/settings/sync',
-      color: 'bg-pink-100 text-pink-600'
     },
     {
       icon: Info,

@@ -5,7 +5,6 @@ import { Milk, Phone } from 'lucide-react'
 import { Button, Input, Card } from '@/components/ui'
 import { PinPad } from '@/components/common'
 import { useAuthStore, useAppStore } from '@/store'
-import { syncService } from '@/services/syncService'
 
 type Step = 'phone' | 'pin'
 
@@ -74,11 +73,6 @@ export function LoginPage() {
       addToast({
         type: 'success',
         message: t('auth.welcome')
-      })
-
-      // Pull data from server to populate local IndexedDB
-      syncService.pullChanges().catch((err) => {
-        console.error('Initial sync after login failed:', err)
       })
 
       navigate('/')

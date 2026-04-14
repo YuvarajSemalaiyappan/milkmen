@@ -314,10 +314,4 @@ export const subscriptionApi = {
   get: () => api.get('/settings/subscription')
 }
 
-// Sync API
-export const syncApi = {
-  push: (data: unknown) => api.post('/sync/push', data),
-  pull: (since: number) => api.get(`/sync/pull?since=${since}`)
-}
-
 export default api

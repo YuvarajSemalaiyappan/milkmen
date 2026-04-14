@@ -4,7 +4,6 @@ export type Shift = 'MORNING' | 'EVENING'
 export type DeliveryStatus = 'DELIVERED' | 'SKIPPED' | 'CANCELLED'
 export type PaymentType = 'PAID_TO_FARMER' | 'RECEIVED_FROM_CUSTOMER' | 'ADVANCE_TO_FARMER' | 'ADVANCE_FROM_CUSTOMER'
 export type PaymentMethod = 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'OTHER'
-export type SyncStatus = 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED'
 export type SubscriptionPlan = 'FREE' | 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'ANNUAL'
 
 export interface SubscriptionInfo {
@@ -13,15 +12,6 @@ export interface SubscriptionInfo {
   active: boolean
   endDate: string | null
   daysRemaining: number
-}
-
-// Base entity with sync support
-export interface SyncableEntity {
-  id: string
-  localId: string
-  syncStatus: SyncStatus
-  createdAt: number
-  updatedAt: number
 }
 
 // Business
@@ -64,21 +54,6 @@ export interface Farmer {
   updatedAt: string
 }
 
-export interface LocalFarmer extends SyncableEntity {
-  data: {
-    name: string
-    phone?: string
-    village?: string
-    defaultRate: number
-    collectAM?: boolean
-    collectPM?: boolean
-    subscriptionQtyAM?: number
-    subscriptionQtyPM?: number
-    isActive: boolean
-    balance: number
-  }
-}
-
 // Customer
 export interface Customer {
   id: string
@@ -93,19 +68,6 @@ export interface Customer {
   balance: number
   createdAt: string
   updatedAt: string
-}
-
-export interface LocalCustomer extends SyncableEntity {
-  data: {
-    name: string
-    phone?: string
-    address?: string
-    defaultRate: number
-    subscriptionQtyAM?: number
-    subscriptionQtyPM?: number
-    isActive: boolean
-    balance: number
-  }
 }
 
 // Collection (Purchase from Farmer)
@@ -128,21 +90,6 @@ export interface Collection {
   updatedAt: string
 }
 
-export interface LocalCollection extends SyncableEntity {
-  data: {
-    farmerId: string
-    date: string
-    shift: Shift
-    quantity: number
-    fatContent?: number
-    ratePerLiter: number
-    totalAmount: number
-    rateEditedAt?: string
-    originalRate?: number
-    notes?: string
-  }
-}
-
 // Delivery (Sale to Customer)
 export interface Delivery {
   id: string
@@ -163,22 +110,6 @@ export interface Delivery {
   updatedAt: string
 }
 
-export interface LocalDelivery extends SyncableEntity {
-  data: {
-    customerId: string
-    date: string
-    shift: Shift
-    quantity: number
-    ratePerLiter: number
-    totalAmount: number
-    rateEditedAt?: string
-    originalRate?: number
-    isSubscription: boolean
-    status: DeliveryStatus
-    notes?: string
-  }
-}
-
 // Payment
 export interface Payment {
   id: string
@@ -194,22 +125,6 @@ export interface Payment {
   createdAt: string
 }
 
-export interface LocalPayment extends SyncableEntity {
-  data: {
-    farmerId?: string
-    customerId?: string
-    date: string
-    amount: number
-    type: PaymentType
-    method: PaymentMethod
-    notes?: string
-    periodFromDate?: string
-    periodToDate?: string
-    periodFromShift?: Shift
-    periodToShift?: Shift
-  }
-}
-
 // Rate
 export interface Rate {
   id: string
@@ -221,17 +136,6 @@ export interface Rate {
   effectiveFrom: string
   effectiveTo?: string
   createdAt: string
-}
-
-export interface LocalRate extends SyncableEntity {
-  data: {
-    farmerId?: string
-    fatFrom: number
-    fatTo: number
-    ratePerLiter: number
-    effectiveFrom: string
-    effectiveTo?: string
-  }
 }
 
 // Route
@@ -291,36 +195,6 @@ export interface AreaWithCounts extends Area {
     routeFarmers: number
     routeCustomers: number
   }
-}
-
-// User sort orders
-export interface UserFarmerOrder {
-  id: string
-  odlocalId: string
-  userId: string
-  farmerId: string
-  sortOrder: number
-}
-
-export interface UserCustomerOrder {
-  id: string
-  localId: string
-  userId: string
-  customerId: string
-  shift?: Shift
-  sortOrder: number
-}
-
-// Sync Queue Item
-export interface SyncQueueItem {
-  id?: number
-  table: string
-  localId: string
-  operation: 'create' | 'update' | 'delete'
-  data: Record<string, unknown>
-  status: 'pending' | 'processing' | 'failed'
-  retryCount: number
-  createdAt: number
 }
 
 // Auth types

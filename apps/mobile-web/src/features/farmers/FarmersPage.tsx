@@ -2,15 +2,14 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, Search, Users, Phone, MapPin, ChevronRight } from 'lucide-react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { EmptyState, RouteFilter } from '@/components/common'
 import { useFarmers } from '@/hooks'
 import { useRouteStore } from '@/store'
-import { db } from '@/db/localDb'
+import { routesApi } from '@/services/api'
 import { formatCurrency } from '@/utils'
-import type { LocalFarmer } from '@/types'
+import type { Farmer, ApiResponse, RouteFarmer } from '@/types'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 
@@ -19,25 +18,37 @@ export function FarmersPage() {
   const navigate = useNavigate()
   const { farmers: allFarmers, activeFarmers, searchFarmers, isLoading } = useFarmers()
   const [searchQuery, setSearchQuery] = useState('')
-  const [filteredFarmers, setFilteredFarmers] = useState<LocalFarmer[]>([])
+  const [filteredFarmers, setFilteredFarmers] = useState<Farmer[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
 
   const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
   const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
 
-  // Live query for route-farmer assignments
-  const routeFarmers = useLiveQuery(
-    () => selectedRouteId
-      ? db.routeFarmers.where('routeId').equals(selectedRouteId).toArray()
-      : undefined,
-    [selectedRouteId]
-  )
+  const [routeFarmers, setRouteFarmers] = useState<RouteFarmer[] | undefined>(undefined)
+
+  useEffect(() => {
+    if (!selectedRouteId) {
+      setRouteFarmers(undefined)
+      return
+    }
+    const fetchRouteAssignments = async () => {
+      try {
+        const response = await routesApi.get(selectedRouteId) as ApiResponse<{ routeFarmers: RouteFarmer[] }>
+        if (response.success && response.data) {
+          setRouteFarmers(response.data.routeFarmers)
+        }
+      } catch (error) {
+        console.error('Failed to fetch route farmers:', error)
+      }
+    }
+    fetchRouteAssignments()
+  }, [selectedRouteId])
 
   // Get the base list based on status filter
   const baseFarmers = statusFilter === 'active'
     ? activeFarmers
     : statusFilter === 'inactive'
-      ? allFarmers.filter((f) => !f.data.isActive)
+      ? allFarmers.filter((f) => !f.isActive)
       : allFarmers
 
   useEffect(() => {
@@ -45,7 +56,7 @@ export function FarmersPage() {
       if (searchQuery) {
         const results = await searchFarmers(searchQuery, statusFilter === 'active')
         if (statusFilter === 'inactive') {
-          setFilteredFarmers(results.filter((f) => !f.data.isActive))
+          setFilteredFarmers(results.filter((f) => !f.isActive))
         } else {
           setFilteredFarmers(results)
         }
@@ -146,7 +157,7 @@ export function FarmersPage() {
               <Card
                 key={farmer.id}
                 className={`cursor-pointer hover:shadow-md transition-shadow ${
-                  !farmer.data.isActive ? 'opacity-60' : ''
+                  !farmer.isActive ? 'opacity-60' : ''
                 }`}
                 onClick={() => navigate(`/farmers/${farmer.id}`)}
               >
@@ -154,38 +165,35 @@ export function FarmersPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                        {farmer.data.name}
+                        {farmer.name}
                       </h3>
-                      {!farmer.data.isActive && (
+                      {!farmer.isActive && (
                         <Badge size="sm" variant="default">{t('common.inactive')}</Badge>
-                      )}
-                      {farmer.syncStatus === 'PENDING' && (
-                        <Badge size="sm" variant="warning">Pending</Badge>
                       )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      {farmer.data.phone && (
+                      {farmer.phone && (
                         <span className="flex items-center gap-1">
                           <Phone className="w-3 h-3" />
-                          {farmer.data.phone}
+                          {farmer.phone}
                         </span>
                       )}
-                      {farmer.data.village && (
+                      {farmer.village && (
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3 h-3" />
-                          {farmer.data.village}
+                          {farmer.village}
                         </span>
                       )}
                     </div>
 
                     <div className="flex items-center gap-4 mt-2">
                       <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {t('farmer.rate')}: {formatCurrency(farmer.data.defaultRate)}/L
+                        {t('farmer.rate')}: {formatCurrency(farmer.defaultRate)}/L
                       </span>
-                      {farmer.data.balance > 0 && (
+                      {farmer.balance > 0 && (
                         <Badge variant="warning">
-                          {t('farmer.due')}: {formatCurrency(farmer.data.balance)}
+                          {t('farmer.due')}: {formatCurrency(farmer.balance)}
                         </Badge>
                       )}
                     </div>

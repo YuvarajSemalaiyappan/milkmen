@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '@/store'
-import { syncService } from '@/services/syncService'
 
 // Feature pages
 import { DashboardPage } from '@/features/dashboard'
@@ -25,7 +24,6 @@ import {
   BusinessSettingsPage,
   StaffManagementPage,
   RateSettingsPage,
-  SyncSettingsPage,
   SubscriptionPage,
   AboutPage
 } from '@/features/settings'
@@ -53,25 +51,6 @@ function ProtectedRoute() {
   const subscription = useAuthStore((state) => state.subscription)
   const addToast = useAppStore((state) => state.addToast)
   const expiryWarningShown = useRef(false)
-
-  useEffect(() => {
-    if (!isAuthenticated) return
-
-    // Pull on initial load
-    syncService.sync().catch((err) => {
-      console.error('Auto-sync on app load failed:', err)
-    })
-
-    // Pull when tab/window regains focus (to get changes from other devices)
-    const onFocus = () => {
-      syncService.sync().catch((err) => {
-        console.error('Auto-sync on focus failed:', err)
-      })
-    }
-
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [isAuthenticated])
 
   // Show expiry warning toast
   useEffect(() => {
@@ -246,10 +225,6 @@ export const router = createBrowserRouter([
       {
         path: '/settings/rates',
         element: <RateSettingsPage />
-      },
-      {
-        path: '/settings/sync',
-        element: <SyncSettingsPage />
       },
       {
         path: '/settings/about',

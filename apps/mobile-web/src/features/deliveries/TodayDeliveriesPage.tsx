@@ -17,11 +17,11 @@ import { ShiftToggle, EmptyState } from '@/components/common'
 import { useCustomers, useDeliveries, usePayments } from '@/hooks'
 import { useAppStore } from '@/store'
 import { formatCurrency, getToday } from '@/utils'
-import type { LocalCustomer, LocalDelivery, Shift } from '@/types'
+import type { Customer, Delivery, Shift } from '@/types'
 
 interface DeliveryItem {
-  customer: LocalCustomer
-  delivery?: LocalDelivery
+  customer: Customer
+  delivery?: Delivery
   status: 'pending' | 'delivered' | 'skipped'
 }
 
@@ -51,14 +51,14 @@ export function TodayDeliveriesPage() {
       const items: DeliveryItem[] = subscribedCustomers.map((customer) => {
         const existingDelivery = todayDeliveries.find(
           (d) =>
-            d.data.customerId === customer.id && d.data.shift === currentShift
+            d.customerId === customer.id && d.shift === currentShift
         )
 
         return {
           customer,
           delivery: existingDelivery,
           status: existingDelivery
-            ? existingDelivery.data.status === 'DELIVERED'
+            ? existingDelivery.status === 'DELIVERED'
               ? 'delivered'
               : 'skipped'
             : 'pending'
@@ -79,8 +79,8 @@ export function TodayDeliveriesPage() {
 
   const handleMarkDelivered = async (item: DeliveryItem) => {
     const subscriptionQty = currentShift === 'MORNING'
-      ? item.customer.data.subscriptionQtyAM
-      : item.customer.data.subscriptionQtyPM
+      ? item.customer.subscriptionQtyAM
+      : item.customer.subscriptionQtyPM
     if (!subscriptionQty) return
     setProcessingId(item.customer.id)
 
@@ -95,7 +95,7 @@ export function TodayDeliveriesPage() {
           date: getToday(),
           shift: currentShift,
           quantity: subscriptionQty,
-          ratePerLiter: item.customer.data.defaultRate,
+          ratePerLiter: item.customer.defaultRate,
           status: 'DELIVERED',
           isSubscription: true
         })
@@ -117,7 +117,7 @@ export function TodayDeliveriesPage() {
           date: getToday(),
           shift: currentShift,
           quantity: 0,
-          ratePerLiter: item.customer.data.defaultRate,
+          ratePerLiter: item.customer.defaultRate,
           status: 'SKIPPED',
           isSubscription: true
         })
@@ -136,7 +136,7 @@ export function TodayDeliveriesPage() {
   const deliveredCount = deliveryItems.filter((i) => i.status === 'delivered').length
   const totalAmount = deliveryItems
     .filter((i) => i.status === 'delivered' && i.delivery)
-    .reduce((sum, i) => sum + (i.delivery?.data.totalAmount || 0), 0)
+    .reduce((sum, i) => sum + (i.delivery?.totalAmount || 0), 0)
 
   return (
     <AppShell
@@ -212,7 +212,7 @@ export function TodayDeliveriesPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">{item.customer.data.name}</h3>
+                        <h3 className="font-semibold">{item.customer.name}</h3>
                         {item.status === 'delivered' && (
                           <Badge variant="success" size="sm">
                             <Check className="w-3 h-3 mr-1" />
@@ -226,33 +226,33 @@ export function TodayDeliveriesPage() {
                         )}
                       </div>
 
-                      {item.customer.data.address && (
+                      {item.customer.address && (
                         <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
                           <MapPin className="w-3 h-3" />
-                          {item.customer.data.address}
+                          {item.customer.address}
                         </p>
                       )}
 
                       <div className="flex items-center gap-3 mt-1 text-sm">
                         <span className="text-gray-700">
                           {currentShift === 'MORNING'
-                            ? item.customer.data.subscriptionQtyAM
-                            : item.customer.data.subscriptionQtyPM}L @ {formatCurrency(item.customer.data.defaultRate)}/L
+                            ? item.customer.subscriptionQtyAM
+                            : item.customer.subscriptionQtyPM}L @ {formatCurrency(item.customer.defaultRate)}/L
                         </span>
                         <span className="font-semibold text-primary-600">
                           = {formatCurrency(
                             ((currentShift === 'MORNING'
-                              ? item.customer.data.subscriptionQtyAM
-                              : item.customer.data.subscriptionQtyPM) || 0) *
-                              item.customer.data.defaultRate
+                              ? item.customer.subscriptionQtyAM
+                              : item.customer.subscriptionQtyPM) || 0) *
+                              item.customer.defaultRate
                           )}
                         </span>
                       </div>
                     </div>
 
-                    {item.customer.data.phone && (
+                    {item.customer.phone && (
                       <a
-                        href={`tel:${item.customer.data.phone}`}
+                        href={`tel:${item.customer.phone}`}
                         className="p-2 text-primary-600 hover:bg-primary-50 rounded-full"
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -262,10 +262,10 @@ export function TodayDeliveriesPage() {
                   </div>
 
                   {/* Balance Due */}
-                  {item.customer.data.balance > 0 && (
+                  {item.customer.balance > 0 && (
                     <div className="bg-red-50 rounded-lg p-2 flex items-center justify-between">
                       <span className="text-sm text-red-700">
-                        {t('customer.balanceDue')}: {formatCurrency(item.customer.data.balance)}
+                        {t('customer.balanceDue')}: {formatCurrency(item.customer.balance)}
                       </span>
                       <Button
                         size="sm"

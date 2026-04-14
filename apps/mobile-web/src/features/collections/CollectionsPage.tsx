@@ -1,17 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { Phone, MapPin, ChevronRight, Users, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
 import { ShiftToggle, RouteFilter, SortableList } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
 import { useSortOrder } from '@/hooks/useSortOrder'
-import { routesApi } from '@/services/api'
-import { db } from '@/db/localDb'
+import { routesApi, collectionsApi } from '@/services/api'
 import { getToday } from '@/utils/format'
-import type { ApiResponse } from '@/types'
+import type { ApiResponse, Collection } from '@/types'
 
 interface RouteFarmerItem {
   id: string
@@ -49,13 +47,27 @@ export function CollectionsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const { applySortOrder, saveSortOrder } = useSortOrder('farmer')
 
+  const [completedFarmerIds, setCompletedFarmerIds] = useState<Set<string>>(new Set())
+
   // Track which farmers already have a collection today for the current shift
-  const completedFarmerIds = useLiveQuery(async () => {
-    const today = getToday()
-    const todayCollections = await db.collections
-      .filter((c) => c.data.date === today && c.data.shift === currentShift)
-      .toArray()
-    return new Set(todayCollections.map((c) => c.data.farmerId))
+  useEffect(() => {
+    const fetchCompletedCollections = async () => {
+      try {
+        const today = getToday()
+        const response = await collectionsApi.list({ date: today }) as ApiResponse<Collection[]>
+        if (response.success && response.data) {
+          const ids = new Set(
+            response.data
+              .filter((c) => c.shift === currentShift)
+              .map((c) => c.farmerId)
+          )
+          setCompletedFarmerIds(ids)
+        }
+      } catch (error) {
+        console.error('Failed to fetch today collections:', error)
+      }
+    }
+    fetchCompletedCollections()
   }, [currentShift])
 
   useEffect(() => {
@@ -87,7 +99,7 @@ export function CollectionsPage() {
 
   // Only show farmers who are pending (no collection yet today for this shift)
   const filteredFarmers = areaFilteredFarmers.filter(
-    (rf) => !completedFarmerIds?.has(rf.farmer.id)
+    (rf) => !completedFarmerIds.has(rf.farmer.id)
   )
 
   const farmerMap = useMemo(() => {
