@@ -9,16 +9,19 @@ export function useDeliveries() {
   const currentShift = useAppStore((state) => state.currentShift)
   const [todayDeliveries, setTodayDeliveries] = useState<Delivery[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   const fetchDeliveries = useCallback(async () => {
     try {
       setIsLoading(true)
+      setError(false)
       const response = await deliveriesApi.list({ date: getToday() }) as ApiResponse<Delivery[]>
       if (response.success && response.data) {
         setTodayDeliveries(response.data)
       }
-    } catch (error) {
-      console.error('Failed to fetch deliveries:', error)
+    } catch (err) {
+      console.error('Failed to fetch deliveries:', err)
+      setError(true)
     } finally {
       setIsLoading(false)
     }
@@ -173,7 +176,8 @@ export function useDeliveries() {
     getDeliveriesByCustomer,
     getDeliveriesByDateRange,
     fetchDeliveries,
-    isLoading
+    isLoading,
+    error
   }
 }
 

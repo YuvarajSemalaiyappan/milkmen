@@ -7,16 +7,19 @@ export function useCustomers() {
   const addToast = useAppStore((state) => state.addToast)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   const fetchCustomers = useCallback(async () => {
     try {
       setIsLoading(true)
+      setError(false)
       const response = await customersApi.list() as ApiResponse<Customer[]>
       if (response.success && response.data) {
         setCustomers(response.data)
       }
-    } catch (error) {
-      console.error('Failed to fetch customers:', error)
+    } catch (err) {
+      console.error('Failed to fetch customers:', err)
+      setError(true)
     } finally {
       setIsLoading(false)
     }
@@ -148,7 +151,8 @@ export function useCustomers() {
     searchCustomers,
     getSubscribedCustomers,
     fetchCustomers,
-    isLoading
+    isLoading,
+    error
   }
 }
 

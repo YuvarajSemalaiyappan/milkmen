@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Milk, Truck, CreditCard, Plus, Crown, AlertTriangle, Loader2 } from 'lucide-react'
+import { Milk, Truck, CreditCard, Plus, Crown, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout'
 import { Card, Badge } from '@/components/ui'
@@ -13,12 +13,20 @@ export function DashboardPage() {
   const user = useAuthStore((state) => state.user)
   const subscription = useAuthStore((state) => state.subscription)
 
-  const { todayTotals: collectionTotals, todayCollections, isLoading: collectionsLoading } = useCollections()
-  const { todayTotals: deliveryTotals, todayDeliveries, isLoading: deliveriesLoading } = useDeliveries()
-  const { activeFarmers, isLoading: farmersLoading } = useFarmers()
-  const { activeCustomers, isLoading: customersLoading } = useCustomers()
+  const { todayTotals: collectionTotals, todayCollections, isLoading: collectionsLoading, error: collectionsError, fetchCollections } = useCollections()
+  const { todayTotals: deliveryTotals, todayDeliveries, isLoading: deliveriesLoading, error: deliveriesError, fetchDeliveries } = useDeliveries()
+  const { activeFarmers, isLoading: farmersLoading, error: farmersError, fetchFarmers } = useFarmers()
+  const { activeCustomers, isLoading: customersLoading, error: customersError, fetchCustomers } = useCustomers()
 
   const isLoading = collectionsLoading || deliveriesLoading || farmersLoading || customersLoading
+  const hasError = collectionsError || deliveriesError || farmersError || customersError
+
+  const handleRetry = () => {
+    if (collectionsError) fetchCollections()
+    if (deliveriesError) fetchDeliveries()
+    if (farmersError) fetchFarmers()
+    if (customersError) fetchCustomers()
+  }
 
   // Calculate pending dues
   const farmerDues = activeFarmers.reduce((sum, f) => sum + Math.max(0, Number(f.balance) || 0), 0)
@@ -160,6 +168,25 @@ export function DashboardPage() {
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
+          </div>
+        ) : hasError ? (
+          <div className="text-center py-8">
+            <div className="w-14 h-14 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="w-7 h-7 text-red-600 dark:text-red-400" />
+            </div>
+            <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
+              {t('common.error', 'Failed to load data')}
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              {t('common.errorRetry', 'Some data could not be loaded. Please try again.')}
+            </p>
+            <button
+              onClick={handleRetry}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              {t('common.retry', 'Retry')}
+            </button>
           </div>
         ) : (
           <>

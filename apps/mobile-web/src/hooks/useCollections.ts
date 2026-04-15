@@ -10,16 +10,19 @@ export function useCollections() {
   const currentShift = useAppStore((state) => state.currentShift)
   const [todayCollections, setTodayCollections] = useState<Collection[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   const fetchCollections = useCallback(async () => {
     try {
       setIsLoading(true)
+      setError(false)
       const response = await collectionsApi.list({ date: getToday() }) as ApiResponse<Collection[]>
       if (response.success && response.data) {
         setTodayCollections(response.data)
       }
-    } catch (error) {
-      console.error('Failed to fetch collections:', error)
+    } catch (err) {
+      console.error('Failed to fetch collections:', err)
+      setError(true)
     } finally {
       setIsLoading(false)
     }
@@ -173,7 +176,8 @@ export function useCollections() {
     getCollectionsByFarmer,
     getCollectionsByDateRange,
     fetchCollections,
-    isLoading
+    isLoading,
+    error
   }
 }
 

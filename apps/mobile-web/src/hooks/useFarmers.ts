@@ -7,16 +7,19 @@ export function useFarmers() {
   const addToast = useAppStore((state) => state.addToast)
   const [farmers, setFarmers] = useState<Farmer[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   const fetchFarmers = useCallback(async () => {
     try {
       setIsLoading(true)
+      setError(false)
       const response = await farmersApi.list() as ApiResponse<Farmer[]>
       if (response.success && response.data) {
         setFarmers(response.data)
       }
-    } catch (error) {
-      console.error('Failed to fetch farmers:', error)
+    } catch (err) {
+      console.error('Failed to fetch farmers:', err)
+      setError(true)
     } finally {
       setIsLoading(false)
     }
@@ -139,7 +142,8 @@ export function useFarmers() {
     getFarmer,
     searchFarmers,
     fetchFarmers,
-    isLoading
+    isLoading,
+    error
   }
 }
 
