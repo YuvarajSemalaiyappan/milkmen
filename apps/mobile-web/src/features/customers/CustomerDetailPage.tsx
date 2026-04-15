@@ -215,14 +215,14 @@ export function CustomerDetailPage() {
     paidPeriods.some((p) => date >= p.from && date <= p.to)
 
   const unpaidDeliveries = deliveries.filter(
-    (d) => !isDatePaid(d.data.date)
+    (d) => !isDatePaid(d.date)
   )
   const unpaidQty = unpaidDeliveries.reduce(
-    (sum, d) => sum + Number(d.data.quantity),
+    (sum, d) => sum + Number(d.quantity),
     0
   )
   const unpaidAmount = unpaidDeliveries.reduce(
-    (sum, d) => sum + Number(d.data.totalAmount),
+    (sum, d) => sum + Number(d.totalAmount),
     0
   )
 

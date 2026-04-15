@@ -223,14 +223,14 @@ export function FarmerDetailPage() {
     paidPeriods.some((p) => date >= p.from && date <= p.to)
 
   const unpaidCollections = collections.filter(
-    (c) => !isDatePaid(c.data.date)
+    (c) => !isDatePaid(c.date)
   )
   const unpaidQty = unpaidCollections.reduce(
-    (sum, c) => sum + Number(c.data.quantity),
+    (sum, c) => sum + Number(c.quantity),
     0
   )
   const unpaidAmount = unpaidCollections.reduce(
-    (sum, c) => sum + Number(c.data.totalAmount),
+    (sum, c) => sum + Number(c.totalAmount),
     0
   )
 

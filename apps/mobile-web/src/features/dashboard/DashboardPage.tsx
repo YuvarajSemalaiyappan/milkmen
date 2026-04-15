@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Milk, Truck, CreditCard, Plus, Crown, AlertTriangle } from 'lucide-react'
+import { Milk, Truck, CreditCard, Plus, Crown, AlertTriangle, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout'
 import { Card, Badge } from '@/components/ui'
@@ -13,21 +13,23 @@ export function DashboardPage() {
   const user = useAuthStore((state) => state.user)
   const subscription = useAuthStore((state) => state.subscription)
 
-  const { todayTotals: collectionTotals, todayCollections } = useCollections()
-  const { todayTotals: deliveryTotals, todayDeliveries } = useDeliveries()
-  const { activeFarmers } = useFarmers()
-  const { activeCustomers } = useCustomers()
+  const { todayTotals: collectionTotals, todayCollections, isLoading: collectionsLoading } = useCollections()
+  const { todayTotals: deliveryTotals, todayDeliveries, isLoading: deliveriesLoading } = useDeliveries()
+  const { activeFarmers, isLoading: farmersLoading } = useFarmers()
+  const { activeCustomers, isLoading: customersLoading } = useCustomers()
+
+  const isLoading = collectionsLoading || deliveriesLoading || farmersLoading || customersLoading
 
   // Calculate pending dues
-  const farmerDues = activeFarmers.reduce((sum, f) => sum + Math.max(0, f.data.balance), 0)
-  const customerDues = activeCustomers.reduce((sum, c) => sum + Math.max(0, c.data.balance), 0)
+  const farmerDues = activeFarmers.reduce((sum, f) => sum + Math.max(0, Number(f.balance) || 0), 0)
+  const customerDues = activeCustomers.reduce((sum, c) => sum + Math.max(0, Number(c.balance) || 0), 0)
 
   // Calculate shift-specific totals for collections
   const calcShiftTotals = (items: typeof todayCollections | typeof todayDeliveries, shift: 'MORNING' | 'EVENING') => {
-    const filtered = items.filter(i => i.data.shift === shift)
+    const filtered = items.filter(i => i.shift === shift)
     return {
-      liters: filtered.reduce((sum, i) => sum + Number(i.data.quantity), 0),
-      amount: filtered.reduce((sum, i) => sum + Number(i.data.totalAmount), 0)
+      liters: filtered.reduce((sum, i) => sum + Number(i.quantity), 0),
+      amount: filtered.reduce((sum, i) => sum + Number(i.totalAmount), 0)
     }
   }
   const amCollection = calcShiftTotals(todayCollections, 'MORNING')
@@ -40,17 +42,17 @@ export function DashboardPage() {
     ...todayCollections.map((c) => ({
       type: 'collection' as const,
       id: c.id,
-      name: activeFarmers.find((f) => f.id === c.data.farmerId)?.data.name || 'Unknown',
-      quantity: c.data.quantity,
-      amount: c.data.totalAmount,
+      name: activeFarmers.find((f) => f.id === c.farmerId)?.name || 'Unknown',
+      quantity: c.quantity,
+      amount: c.totalAmount,
       time: c.createdAt
     })),
     ...todayDeliveries.map((d) => ({
       type: 'delivery' as const,
       id: d.id,
-      name: activeCustomers.find((c) => c.id === d.data.customerId)?.data.name || 'Unknown',
-      quantity: d.data.quantity,
-      amount: d.data.totalAmount,
+      name: activeCustomers.find((c) => c.id === d.customerId)?.name || 'Unknown',
+      quantity: d.quantity,
+      amount: d.totalAmount,
       time: d.createdAt
     }))
   ]
@@ -154,145 +156,154 @@ export function DashboardPage() {
           </div>
         )}
 
-        {/* Stats with AM/PM breakdown */}
-        <div className="space-y-3">
-          {/* Today's Collection */}
-          <Card>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 text-blue-600">
-                <Milk className="w-5 h-5" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">{t('dashboard.todayCollection')}</h3>
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">{t('common.morning')}</span>
-                <span className="font-medium text-gray-900 dark:text-white">{amCollection.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(amCollection.amount)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">{t('common.evening')}</span>
-                <span className="font-medium text-gray-900 dark:text-white">{pmCollection.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(pmCollection.amount)}</span>
-              </div>
-              <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
-                <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
-                <span className="text-blue-600 dark:text-blue-400">{Number(collectionTotals.liters).toFixed(1)}{t('common.liter')} &middot; {formatCurrency(collectionTotals.amount)}</span>
-              </div>
-            </div>
-          </Card>
-
-          {/* Today's Sales */}
-          <Card>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-green-50 to-green-100 text-green-600">
-                <Truck className="w-5 h-5" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">{t('dashboard.todaySales')}</h3>
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">{t('common.morning')}</span>
-                <span className="font-medium text-gray-900 dark:text-white">{amDelivery.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(amDelivery.amount)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">{t('common.evening')}</span>
-                <span className="font-medium text-gray-900 dark:text-white">{pmDelivery.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(pmDelivery.amount)}</span>
-              </div>
-              <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
-                <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
-                <span className="text-green-600 dark:text-green-400">{Number(deliveryTotals.liters).toFixed(1)}{t('common.liter')} &middot; {formatCurrency(deliveryTotals.amount)}</span>
-              </div>
-            </div>
-          </Card>
-
-          {/* Pending Dues */}
-          <Card>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-yellow-50 to-yellow-100 text-yellow-600">
-                <CreditCard className="w-5 h-5" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">{t('dashboard.pendingDues')}</h3>
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">{t('customer.title')}</span>
-                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(customerDues)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">{t('dashboard.toFarmers')}</span>
-                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(farmerDues)}</span>
-              </div>
-              <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
-                <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
-                <span className="text-yellow-600 dark:text-yellow-400">{formatCurrency(customerDues + farmerDues)}</span>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Quick Actions */}
-        <div>
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-            {t('dashboard.quickActions')}
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            {quickActions.map((action) => (
-              <button
-                key={action.path}
-                onClick={() => navigate(action.path)}
-                className="flex items-center gap-3 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-gray-200 dark:hover:border-gray-600 transition-all active:scale-[0.98]"
-              >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${action.color}`}>
-                  <action.icon className="w-5 h-5" />
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200 text-left leading-tight">
-                  {action.label}
-                </span>
-              </button>
-            ))}
+        {/* Loading State */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
           </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div>
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-            {t('dashboard.recentActivity')}
-          </h3>
-          <Card>
-            {recentActivity.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                {t('dashboard.noActivity')}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentActivity.map((item) => (
-                  <div
-                    key={`${item.type}-${item.id}`}
-                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
-                  >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      item.type === 'collection' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-green-100 dark:bg-green-900/50'
-                    }`}>
-                      {item.type === 'collection' ? (
-                        <Milk className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      ) : (
-                        <Truck className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 dark:text-white truncate">{item.name}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {Number(item.quantity).toFixed(1)}L - {formatCurrency(item.amount)}
-                      </p>
-                    </div>
-                    <Badge variant={item.type === 'collection' ? 'info' : 'success'} size="sm">
-                      {item.type === 'collection' ? t('common.buy') : t('common.sell')}
-                    </Badge>
+        ) : (
+          <>
+            {/* Stats with AM/PM breakdown */}
+            <div className="space-y-3">
+              {/* Today's Collection */}
+              <Card>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 text-blue-600">
+                    <Milk className="w-5 h-5" />
                   </div>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{t('dashboard.todayCollection')}</h3>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">{t('common.morning')}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{amCollection.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(amCollection.amount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">{t('common.evening')}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{pmCollection.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(pmCollection.amount)}</span>
+                  </div>
+                  <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
+                    <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
+                    <span className="text-blue-600 dark:text-blue-400">{Number(collectionTotals.liters).toFixed(1)}{t('common.liter')} &middot; {formatCurrency(collectionTotals.amount)}</span>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Today's Sales */}
+              <Card>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-green-50 to-green-100 text-green-600">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{t('dashboard.todaySales')}</h3>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">{t('common.morning')}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{amDelivery.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(amDelivery.amount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">{t('common.evening')}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{pmDelivery.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(pmDelivery.amount)}</span>
+                  </div>
+                  <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
+                    <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
+                    <span className="text-green-600 dark:text-green-400">{Number(deliveryTotals.liters).toFixed(1)}{t('common.liter')} &middot; {formatCurrency(deliveryTotals.amount)}</span>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Pending Dues */}
+              <Card>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-yellow-50 to-yellow-100 text-yellow-600">
+                    <CreditCard className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{t('dashboard.pendingDues')}</h3>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">{t('customer.title')}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(customerDues)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">{t('dashboard.toFarmers')}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(farmerDues)}</span>
+                  </div>
+                  <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
+                    <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
+                    <span className="text-yellow-600 dark:text-yellow-400">{formatCurrency(customerDues + farmerDues)}</span>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            {/* Quick Actions */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                {t('dashboard.quickActions')}
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.path}
+                    onClick={() => navigate(action.path)}
+                    className="flex items-center gap-3 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-gray-200 dark:hover:border-gray-600 transition-all active:scale-[0.98]"
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${action.color}`}>
+                      <action.icon className="w-5 h-5" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200 text-left leading-tight">
+                      {action.label}
+                    </span>
+                  </button>
                 ))}
               </div>
-            )}
-          </Card>
-        </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                {t('dashboard.recentActivity')}
+              </h3>
+              <Card>
+                {recentActivity.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    {t('dashboard.noActivity')}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {recentActivity.map((item) => (
+                      <div
+                        key={`${item.type}-${item.id}`}
+                        className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          item.type === 'collection' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-green-100 dark:bg-green-900/50'
+                        }`}>
+                          {item.type === 'collection' ? (
+                            <Milk className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                          ) : (
+                            <Truck className="w-5 h-5 text-green-600 dark:text-green-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-white truncate">{item.name}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {Number(item.quantity).toFixed(1)}L - {formatCurrency(item.amount)}
+                          </p>
+                        </div>
+                        <Badge variant={item.type === 'collection' ? 'info' : 'success'} size="sm">
+                          {item.type === 'collection' ? t('common.buy') : t('common.sell')}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+          </>
+        )}
       </div>
     </AppShell>
   )
