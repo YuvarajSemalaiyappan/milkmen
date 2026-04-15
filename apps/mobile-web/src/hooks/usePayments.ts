@@ -28,14 +28,23 @@ export function usePayments() {
 
   const getPaymentsByDateRange = useCallback(
     async (startDate: string, endDate: string) => {
-      return payments.filter((p) => p.date >= startDate && p.date <= endDate)
+      try {
+        const response = await paymentsApi.list({ from: startDate, to: endDate }) as ApiResponse<Payment[]>
+        if (response.success && response.data) {
+          return response.data
+        }
+        return []
+      } catch (error) {
+        console.error('Failed to fetch payments by date range:', error)
+        return []
+      }
     },
-    [payments]
+    []
   )
 
-  const getPaymentsByFarmer = useCallback(async (farmerId: string) => {
+  const getPaymentsByFarmer = useCallback(async (farmerId: string, from?: string, to?: string) => {
     try {
-      const response = await paymentsApi.list({ farmerId }) as ApiResponse<Payment[]>
+      const response = await paymentsApi.list({ farmerId, from, to }) as ApiResponse<Payment[]>
       if (response.success && response.data) {
         return response.data
       }
@@ -46,9 +55,9 @@ export function usePayments() {
     }
   }, [])
 
-  const getPaymentsByCustomer = useCallback(async (customerId: string) => {
+  const getPaymentsByCustomer = useCallback(async (customerId: string, from?: string, to?: string) => {
     try {
-      const response = await paymentsApi.list({ customerId }) as ApiResponse<Payment[]>
+      const response = await paymentsApi.list({ customerId, from, to }) as ApiResponse<Payment[]>
       if (response.success && response.data) {
         return response.data
       }
@@ -162,24 +171,18 @@ export function usePayments() {
 
   const getFarmerPaymentsSummary = useCallback(
     async (farmerId: string, startDate?: string, endDate?: string) => {
-      const farmerPayments = await getPaymentsByFarmer(farmerId)
-      let filtered = farmerPayments
-      if (startDate && endDate) {
-        filtered = farmerPayments.filter(
-          (p) => p.date >= startDate && p.date <= endDate
-        )
-      }
-      const totalPaid = filtered
+      const farmerPayments = await getPaymentsByFarmer(farmerId, startDate, endDate)
+      const totalPaid = farmerPayments
         .filter((p) => p.type === 'PAID_TO_FARMER')
         .reduce((sum, p) => sum + Number(p.amount), 0)
-      const totalAdvance = filtered
+      const totalAdvance = farmerPayments
         .filter((p) => p.type === 'ADVANCE_TO_FARMER')
         .reduce((sum, p) => sum + Number(p.amount), 0)
       return {
         totalPaid,
         totalAdvance,
         totalPayments: totalPaid + totalAdvance,
-        paymentCount: filtered.length
+        paymentCount: farmerPayments.length
       }
     },
     [getPaymentsByFarmer]
@@ -187,24 +190,18 @@ export function usePayments() {
 
   const getCustomerPaymentsSummary = useCallback(
     async (customerId: string, startDate?: string, endDate?: string) => {
-      const customerPayments = await getPaymentsByCustomer(customerId)
-      let filtered = customerPayments
-      if (startDate && endDate) {
-        filtered = customerPayments.filter(
-          (p) => p.date >= startDate && p.date <= endDate
-        )
-      }
-      const totalReceived = filtered
+      const customerPayments = await getPaymentsByCustomer(customerId, startDate, endDate)
+      const totalReceived = customerPayments
         .filter((p) => p.type === 'RECEIVED_FROM_CUSTOMER')
         .reduce((sum, p) => sum + Number(p.amount), 0)
-      const totalAdvance = filtered
+      const totalAdvance = customerPayments
         .filter((p) => p.type === 'ADVANCE_FROM_CUSTOMER')
         .reduce((sum, p) => sum + Number(p.amount), 0)
       return {
         totalReceived,
         totalAdvance,
         totalPayments: totalReceived + totalAdvance,
-        paymentCount: filtered.length
+        paymentCount: customerPayments.length
       }
     },
     [getPaymentsByCustomer]

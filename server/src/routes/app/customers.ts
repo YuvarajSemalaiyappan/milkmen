@@ -63,12 +63,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
     const customers = await prisma.customer.findMany({
       where,
-      orderBy: { name: 'asc' },
-      include: {
-        _count: {
-          select: { deliveries: true, payments: true }
-        }
-      }
+      orderBy: { name: 'asc' }
     })
 
     return res.json({

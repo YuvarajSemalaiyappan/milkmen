@@ -5,9 +5,10 @@ import { Milk, Calendar, User, ChevronRight, Filter, Download } from 'lucide-rea
 import { AppShell } from '@/components/layout'
 import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
-import { useFarmers, useCollections } from '@/hooks'
+import { useFarmers } from '@/hooks'
+import { reportsApi, collectionsApi } from '@/services/api'
 import { formatCurrency, formatDate, getToday, exportToExcel } from '@/utils'
-import type { Farmer, Collection } from '@/types'
+import type { Farmer, Collection, ApiResponse } from '@/types'
 
 interface CollectionWithFarmer extends Collection {
   farmerName: string
@@ -15,12 +16,20 @@ interface CollectionWithFarmer extends Collection {
 }
 
 interface FarmerSummary {
-  farmerId: string
+  id: string
   name: string
-  village?: string
-  totalLiters: number
-  totalAmount: number
+  village: string | null
+  liters: number
+  amount: number
   count: number
+}
+
+interface ReportData {
+  from: string
+  to: string
+  collections: (Collection & { farmer: { id: string; name: string; village: string | null } })[]
+  byFarmer: FarmerSummary[]
+  totals: { liters: number; amount: number; count: number }
 }
 
 const PAGE_SIZE = 50
@@ -31,7 +40,6 @@ export function CollectionsReportPage() {
   const [searchParams] = useSearchParams()
   const farmerIdParam = searchParams.get('farmerId')
   const { farmers: allFarmers } = useFarmers()
-  const { getCollectionsByDateRange } = useCollections()
 
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
@@ -42,6 +50,7 @@ export function CollectionsReportPage() {
   const [selectedFarmerId, setSelectedFarmerId] = useState<string>(farmerIdParam || '')
   const [collections, setCollections] = useState<CollectionWithFarmer[]>([])
   const [farmerSummaries, setFarmerSummaries] = useState<FarmerSummary[]>([])
+  const [totals, setTotals] = useState({ liters: 0, amount: 0, count: 0 })
   const [isLoading, setIsLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'list' | 'summary'>(farmerIdParam ? 'list' : 'summary')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -54,15 +63,9 @@ export function CollectionsReportPage() {
     return farmer?.name || ''
   }, [farmerIdParam, allFarmers])
 
-  const getFarmerMap = () => {
-    const map = new Map<string, Farmer>()
-    allFarmers.forEach(f => map.set(f.id, f))
-    return map
-  }
-
   useEffect(() => {
     loadCollections()
-  }, [startDate, endDate, selectedFarmerId, allFarmers.length])
+  }, [startDate, endDate, selectedFarmerId])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
@@ -71,62 +74,35 @@ export function CollectionsReportPage() {
   const loadCollections = async () => {
     setIsLoading(true)
     try {
-      let allCollections = await getCollectionsByDateRange(startDate, endDate)
+      const effectiveFarmerId = selectedFarmerId || farmerIdParam || undefined
 
-      // Filter by farmer if selected
-      if (selectedFarmerId) {
-        allCollections = allCollections.filter(c => c.farmerId === selectedFarmerId)
-      }
+      // Use report endpoint - returns collections with farmer info + summaries
+      const response = await reportsApi.collections(startDate, endDate, effectiveFarmerId) as ApiResponse<ReportData>
+      if (response.success && response.data) {
+        const data = response.data
 
-      const farmerMap = getFarmerMap()
+        const farmerMap = new Map<string, Farmer>()
+        allFarmers.forEach(f => farmerMap.set(f.id, f))
 
-      // Add farmer names to collections
-      const collectionsWithFarmers: CollectionWithFarmer[] = allCollections.map(c => {
-        const farmer = farmerMap.get(c.farmerId)
-        return {
+        // Map collections for list view
+        const items: CollectionWithFarmer[] = data.collections.map(c => ({
           ...c,
-          farmerName: farmer?.name || t('common.unknown'),
-          farmerVillage: farmer?.village
-        }
-      }).sort((a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime())
+          farmerName: c.farmer?.name || farmerMap.get(c.farmerId)?.name || t('common.unknown'),
+          farmerVillage: c.farmer?.village || farmerMap.get(c.farmerId)?.village
+        }))
 
-      setCollections(collectionsWithFarmers)
-
-      // Calculate farmer summaries
-      const summaryMap = new Map<string, FarmerSummary>()
-      allCollections.forEach(c => {
-        const farmerId = c.farmerId
-        const farmer = farmerMap.get(farmerId)
-
-        if (!summaryMap.has(farmerId)) {
-          summaryMap.set(farmerId, {
-            farmerId,
-            name: farmer?.name || t('common.unknown'),
-            village: farmer?.village,
-            totalLiters: 0,
-            totalAmount: 0,
-            count: 0
-          })
-        }
-
-        const summary = summaryMap.get(farmerId)!
-        summary.totalLiters += Number(c.quantity)
-        summary.totalAmount += Number(c.totalAmount)
-        summary.count++
-      })
-
-      const summaries = Array.from(summaryMap.values())
-        .sort((a, b) => b.totalAmount - a.totalAmount)
-
-      setFarmerSummaries(summaries)
+        setCollections(items)
+        setFarmerSummaries(data.byFarmer)
+        setTotals(data.totals)
+      }
+    } catch (error) {
+      console.error('Failed to load collections report:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const totalLiters = collections.reduce((sum, c) => sum + Number(c.quantity), 0)
-  const totalAmount = collections.reduce((sum, c) => sum + Number(c.totalAmount), 0)
-  const avgRate = totalLiters > 0 ? totalAmount / totalLiters : 0
+  const avgRate = totals.liters > 0 ? totals.amount / totals.liters : 0
 
   const visibleCollections = collections.slice(0, visibleCount)
   const hasMore = visibleCount < collections.length
@@ -211,11 +187,11 @@ export function CollectionsReportPage() {
         {/* Summary */}
         <div className="grid grid-cols-3 gap-3">
           <Card className="text-center p-3">
-            <p className="text-xl font-bold text-purple-600">{totalLiters.toFixed(1)}L</p>
+            <p className="text-xl font-bold text-purple-600">{totals.liters.toFixed(1)}L</p>
             <p className="text-xs text-gray-500">{t('reports.totalLiters')}</p>
           </Card>
           <Card className="text-center p-3">
-            <p className="text-xl font-bold text-green-600">{formatCurrency(totalAmount)}</p>
+            <p className="text-xl font-bold text-green-600">{formatCurrency(totals.amount)}</p>
             <p className="text-xs text-gray-500">{t('reports.totalAmount')}</p>
           </Card>
           <Card className="text-center p-3">
@@ -268,9 +244,9 @@ export function CollectionsReportPage() {
           <div className="space-y-3">
             {farmerSummaries.map((summary) => (
               <Card
-                key={summary.farmerId}
+                key={summary.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/farmers/${summary.farmerId}`)}
+                onClick={() => navigate(`/farmers/${summary.id}`)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -288,8 +264,8 @@ export function CollectionsReportPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-purple-600">{summary.totalLiters.toFixed(1)}L</p>
-                    <p className="text-green-600">{formatCurrency(summary.totalAmount)}</p>
+                    <p className="font-bold text-purple-600">{summary.liters.toFixed(1)}L</p>
+                    <p className="text-green-600">{formatCurrency(summary.amount)}</p>
                     <ChevronRight className="w-5 h-5 text-gray-400 ml-auto" />
                   </div>
                 </div>

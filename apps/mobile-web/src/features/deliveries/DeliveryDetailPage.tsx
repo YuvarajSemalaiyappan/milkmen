@@ -20,8 +20,9 @@ import {
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useDeliveries, useCustomers } from '@/hooks'
+import { deliveriesApi } from '@/services/api'
 import { formatCurrency, formatDate } from '@/utils'
-import type { Delivery, Customer, DeliveryStatus } from '@/types'
+import type { Delivery, Customer, DeliveryStatus, ApiResponse } from '@/types'
 
 const deliverySchema = z.object({
   quantity: z.number().min(0.1, 'Quantity must be at least 0.1'),
@@ -36,7 +37,7 @@ export function DeliveryDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { deliveries, updateDelivery, deleteDelivery } = useDeliveries()
+  const { updateDelivery, deleteDelivery } = useDeliveries()
   const { getCustomer } = useCustomers()
 
   const [delivery, setDelivery] = useState<Delivery | null>(null)
@@ -66,23 +67,28 @@ export function DeliveryDetailPage() {
     if (id) {
       loadDelivery()
     }
-  }, [id, deliveries])
+  }, [id])
 
   const loadDelivery = async () => {
     if (!id) return
-    const found = deliveries.find(d => d.id === id)
-    if (found) {
-      setDelivery(found)
-      reset({
-        quantity: found.quantity,
-        ratePerLiter: found.ratePerLiter,
-        status: found.status,
-        notes: found.notes || ''
-      })
+    try {
+      const response = await deliveriesApi.get(id) as ApiResponse<Delivery>
+      if (response.success && response.data) {
+        const found = response.data
+        setDelivery(found)
+        reset({
+          quantity: found.quantity,
+          ratePerLiter: found.ratePerLiter,
+          status: found.status,
+          notes: found.notes || ''
+        })
 
-      // Load customer details
-      const customerData = await getCustomer(found.customerId)
-      setCustomer(customerData)
+        // Load customer details
+        const customerData = await getCustomer(found.customerId)
+        setCustomer(customerData)
+      }
+    } catch (error) {
+      console.error('Failed to load delivery:', error)
     }
   }
 

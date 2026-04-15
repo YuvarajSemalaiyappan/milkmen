@@ -169,10 +169,6 @@ model Rate {
 model Collection {
   id String @id @default(cuid())
 
-  // Offline sync fields
-  localId    String?    @unique // Client-generated ID for offline
-  syncStatus SyncStatus @default(SYNCED)
-
   businessId String
   business   Business @relation(fields: [businessId], references: [id])
 
@@ -205,10 +201,6 @@ model Collection {
 
 model Delivery {
   id String @id @default(cuid())
-
-  // Offline sync fields
-  localId    String?    @unique
-  syncStatus SyncStatus @default(SYNCED)
 
   businessId String
   business   Business @relation(fields: [businessId], references: [id])
@@ -255,10 +247,6 @@ enum DeliveryStatus {
 model Payment {
   id String @id @default(cuid())
 
-  // Offline sync fields
-  localId    String?    @unique
-  syncStatus SyncStatus @default(SYNCED)
-
   businessId String
   business   Business @relation(fields: [businessId], references: [id])
 
@@ -304,13 +292,6 @@ enum PaymentMethod {
   UPI
   BANK_TRANSFER
   OTHER
-}
-
-enum SyncStatus {
-  PENDING  // Created offline, needs sync
-  SYNCING  // Currently syncing
-  SYNCED   // Successfully synced
-  FAILED   // Sync failed, needs retry
 }
 
 // ============================================

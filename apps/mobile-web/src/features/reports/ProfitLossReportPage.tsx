@@ -11,8 +11,9 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Input, Badge } from '@/components/ui'
-import { useCollections, useDeliveries, usePayments } from '@/hooks'
+import { reportsApi } from '@/services/api'
 import { formatCurrency, formatDate, getToday } from '@/utils'
+import type { ApiResponse } from '@/types'
 
 interface DailyData {
   date: string
@@ -21,11 +22,18 @@ interface DailyData {
   profit: number
 }
 
+interface ProfitLossData {
+  from: string
+  to: string
+  collections: { count: number; liters: number; amount: number; avgRate: number }
+  deliveries: { count: number; liters: number; amount: number; avgRate: number }
+  payments: { paidToFarmers: number; receivedFromCustomers: number; netCashFlow: number }
+  profit: { grossProfit: number; profitMargin: number; rateSpread: number }
+  dailyBreakdown: DailyData[]
+}
+
 export function ProfitLossReportPage() {
   const { t } = useTranslation()
-  const { getCollectionsByDateRange } = useCollections()
-  const { getDeliveriesByDateRange } = useDeliveries()
-  const { getPaymentsByDateRange } = usePayments()
 
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
@@ -39,6 +47,9 @@ export function ProfitLossReportPage() {
   const [deliveryStats, setDeliveryStats] = useState({ liters: 0, amount: 0, count: 0, avgRate: 0 })
   const [paymentStats, setPaymentStats] = useState({ paidToFarmers: 0, receivedFromCustomers: 0 })
   const [dailyData, setDailyData] = useState<DailyData[]>([])
+  const [grossProfit, setGrossProfit] = useState(0)
+  const [profitMargin, setProfitMargin] = useState(0)
+  const [rateSpread, setRateSpread] = useState(0)
 
   useEffect(() => {
     loadReport()
@@ -47,80 +58,37 @@ export function ProfitLossReportPage() {
   const loadReport = async () => {
     setIsLoading(true)
     try {
-      const [collections, deliveries, payments] = await Promise.all([
-        getCollectionsByDateRange(startDate, endDate),
-        getDeliveriesByDateRange(startDate, endDate),
-        getPaymentsByDateRange(startDate, endDate)
-      ])
-
-      // Filter deliveries to only delivered status
-      const deliveredItems = deliveries.filter(d => d.data.status === 'DELIVERED')
-
-      // Collection stats
-      const collectionLiters = collections.reduce((sum, c) => sum + Number(c.data.quantity), 0)
-      const collectionAmount = collections.reduce((sum, c) => sum + Number(c.data.totalAmount), 0)
-      setCollectionStats({
-        liters: collectionLiters,
-        amount: collectionAmount,
-        count: collections.length,
-        avgRate: collectionLiters > 0 ? collectionAmount / collectionLiters : 0
-      })
-
-      // Delivery stats
-      const deliveryLiters = deliveredItems.reduce((sum, d) => sum + Number(d.data.quantity), 0)
-      const deliveryAmount = deliveredItems.reduce((sum, d) => sum + Number(d.data.totalAmount), 0)
-      setDeliveryStats({
-        liters: deliveryLiters,
-        amount: deliveryAmount,
-        count: deliveredItems.length,
-        avgRate: deliveryLiters > 0 ? deliveryAmount / deliveryLiters : 0
-      })
-
-      // Payment stats
-      const paidToFarmers = payments
-        .filter(p => p.data.type === 'PAID_TO_FARMER')
-        .reduce((sum, p) => sum + p.data.amount, 0)
-      const receivedFromCustomers = payments
-        .filter(p => p.data.type === 'RECEIVED_FROM_CUSTOMER')
-        .reduce((sum, p) => sum + p.data.amount, 0)
-      setPaymentStats({ paidToFarmers, receivedFromCustomers })
-
-      // Daily breakdown
-      const dailyMap = new Map<string, DailyData>()
-
-      collections.forEach(c => {
-        const date = c.data.date
-        if (!dailyMap.has(date)) {
-          dailyMap.set(date, { date, collected: 0, delivered: 0, profit: 0 })
-        }
-        dailyMap.get(date)!.collected += c.data.totalAmount
-      })
-
-      deliveredItems.forEach(d => {
-        const date = d.data.date
-        if (!dailyMap.has(date)) {
-          dailyMap.set(date, { date, collected: 0, delivered: 0, profit: 0 })
-        }
-        dailyMap.get(date)!.delivered += d.data.totalAmount
-      })
-
-      // Calculate profit for each day
-      dailyMap.forEach(day => {
-        day.profit = day.delivered - day.collected
-      })
-
-      const sortedDaily = Array.from(dailyMap.values())
-        .sort((a, b) => b.date.localeCompare(a.date))
-
-      setDailyData(sortedDaily)
+      const response = await reportsApi.profitLoss(startDate, endDate) as ApiResponse<ProfitLossData>
+      if (response.success && response.data) {
+        const data = response.data
+        setCollectionStats({
+          liters: data.collections.liters,
+          amount: data.collections.amount,
+          count: data.collections.count,
+          avgRate: data.collections.avgRate
+        })
+        setDeliveryStats({
+          liters: data.deliveries.liters,
+          amount: data.deliveries.amount,
+          count: data.deliveries.count,
+          avgRate: data.deliveries.avgRate
+        })
+        setPaymentStats({
+          paidToFarmers: data.payments.paidToFarmers,
+          receivedFromCustomers: data.payments.receivedFromCustomers
+        })
+        setGrossProfit(data.profit.grossProfit)
+        setProfitMargin(data.profit.profitMargin)
+        setRateSpread(data.profit.rateSpread)
+        setDailyData(data.dailyBreakdown.sort((a, b) => b.date.localeCompare(a.date)))
+      }
+    } catch (error) {
+      console.error('Failed to load profit/loss report:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const grossProfit = deliveryStats.amount - collectionStats.amount
-  const profitMargin = deliveryStats.amount > 0 ? (grossProfit / deliveryStats.amount) * 100 : 0
-  const rateSpread = deliveryStats.avgRate - collectionStats.avgRate
   const netCashFlow = paymentStats.receivedFromCustomers - paymentStats.paidToFarmers
 
   return (

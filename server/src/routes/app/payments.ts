@@ -13,7 +13,6 @@ function shiftOrd(shift: 'MORNING' | 'EVENING'): number {
 
 // Validation schemas
 const createPaymentSchema = z.object({
-  localId: z.string().optional(),
   farmerId: z.string().optional(),
   customerId: z.string().optional(),
   date: z.string(), // ISO date string
@@ -251,7 +250,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { localId, farmerId, customerId, date, amount, type, method, notes, periodFromDate, periodToDate, periodFromShift, periodToShift } = validation.data
+    const { farmerId, customerId, date, amount, type, method, notes, periodFromDate, periodToDate, periodFromShift, periodToShift } = validation.data
 
     // Verify farmer/customer belongs to business
     if (farmerId) {
@@ -274,20 +273,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         return res.status(400).json({
           success: false,
           error: 'Customer not found'
-        })
-      }
-    }
-
-    // Check for duplicate localId
-    if (localId) {
-      const existing = await prisma.payment.findUnique({
-        where: { localId }
-      })
-      if (existing) {
-        return res.json({
-          success: true,
-          data: existing,
-          message: 'Payment already synced'
         })
       }
     }
@@ -346,7 +331,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const payment = await tx.payment.create({
         data: {
-          localId,
           businessId,
           farmerId,
           customerId,
@@ -359,8 +343,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           periodFromDate: periodFromDate ? new Date(periodFromDate) : undefined,
           periodToDate: periodToDate ? new Date(periodToDate) : undefined,
           periodFromShift: periodFromShift || undefined,
-          periodToShift: periodToShift || undefined,
-          syncStatus: 'SYNCED'
+          periodToShift: periodToShift || undefined
         },
         include: {
           farmer: farmerId ? {

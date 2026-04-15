@@ -8,7 +8,6 @@ const router = Router()
 
 // Validation schemas
 const createDeliverySchema = z.object({
-  localId: z.string().optional(),
   customerId: z.string(),
   date: z.string(), // ISO date string
   shift: z.enum(['MORNING', 'EVENING']),
@@ -39,7 +38,11 @@ const bulkUpdateSchema = z.object({
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
-    const { date, customerId, shift, status, from, to, routeId } = req.query
+    const { date, customerId, shift, status, from, to, routeId, page: pageStr, limit: limitStr } = req.query
+
+    const page = Math.max(1, parseInt(pageStr as string) || 1)
+    const limit = Math.min(500, Math.max(1, parseInt(limitStr as string) || 200))
+    const skip = (page - 1) * limit
 
     const where: Prisma.DeliveryWhereInput = { businessId }
 
@@ -76,22 +79,30 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const deliveries = await prisma.delivery.findMany({
-      where,
-      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-      include: {
-        customer: {
-          select: { id: true, name: true, phone: true, address: true }
-        },
-        user: {
-          select: { id: true, name: true }
+    const [deliveries, total] = await Promise.all([
+      prisma.delivery.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: limit,
+        include: {
+          customer: {
+            select: { id: true, name: true, phone: true, address: true }
+          },
+          user: {
+            select: { id: true, name: true }
+          }
         }
-      }
-    })
+      }),
+      prisma.delivery.count({ where })
+    ])
 
     return res.json({
       success: true,
-      data: deliveries
+      data: deliveries,
+      total,
+      page,
+      limit
     })
   } catch (error) {
     console.error('List deliveries error:', error)
@@ -209,7 +220,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { localId, customerId, date, shift, quantity, ratePerLiter, isSubscription, status, notes } = validation.data
+    const { customerId, date, shift, quantity, ratePerLiter, isSubscription, status, notes } = validation.data
 
     // Verify customer belongs to business
     const customer = await prisma.customer.findFirst({
@@ -223,20 +234,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Check for duplicate localId
-    if (localId) {
-      const existing = await prisma.delivery.findUnique({
-        where: { localId }
-      })
-      if (existing) {
-        return res.json({
-          success: true,
-          data: existing,
-          message: 'Delivery already synced'
-        })
-      }
-    }
-
     const totalAmount = quantity * ratePerLiter
     const deliveryStatus = status || 'DELIVERED'
 
@@ -244,7 +241,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const delivery = await tx.delivery.create({
         data: {
-          localId,
           businessId,
           customerId,
           deliveredBy: userId,
@@ -256,8 +252,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           originalRate: ratePerLiter,
           isSubscription: isSubscription || false,
           status: deliveryStatus,
-          notes,
-          syncStatus: 'SYNCED'
+          notes
         },
         include: {
           customer: {
@@ -351,8 +346,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
           totalAmount: newTotal,
           status: newStatus,
           notes: notes !== undefined ? notes : existing.notes,
-          rateEditedAt: ratePerLiter ? new Date() : existing.rateEditedAt,
-          syncStatus: 'SYNCED'
+          rateEditedAt: ratePerLiter ? new Date() : existing.rateEditedAt
         }
       })
 

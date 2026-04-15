@@ -17,8 +17,9 @@ import {
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useCollections, useFarmers } from '@/hooks'
+import { collectionsApi } from '@/services/api'
 import { formatCurrency, formatDate } from '@/utils'
-import type { Collection, Farmer } from '@/types'
+import type { Collection, Farmer, ApiResponse } from '@/types'
 
 const collectionSchema = z.object({
   quantity: z.number().min(0.1, 'Quantity must be at least 0.1'),
@@ -33,7 +34,7 @@ export function CollectionDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { collections, updateCollection, deleteCollection } = useCollections()
+  const { updateCollection, deleteCollection } = useCollections()
   const { getFarmer } = useFarmers()
 
   const [collection, setCollection] = useState<Collection | null>(null)
@@ -61,23 +62,28 @@ export function CollectionDetailPage() {
     if (id) {
       loadCollection()
     }
-  }, [id, collections])
+  }, [id])
 
   const loadCollection = async () => {
     if (!id) return
-    const found = collections.find(c => c.id === id)
-    if (found) {
-      setCollection(found)
-      reset({
-        quantity: found.quantity,
-        fatContent: found.fatContent,
-        ratePerLiter: found.ratePerLiter,
-        notes: found.notes || ''
-      })
+    try {
+      const response = await collectionsApi.get(id) as ApiResponse<Collection>
+      if (response.success && response.data) {
+        const found = response.data
+        setCollection(found)
+        reset({
+          quantity: found.quantity,
+          fatContent: found.fatContent,
+          ratePerLiter: found.ratePerLiter,
+          notes: found.notes || ''
+        })
 
-      // Load farmer details
-      const farmerData = await getFarmer(found.farmerId)
-      setFarmer(farmerData)
+        // Load farmer details
+        const farmerData = await getFarmer(found.farmerId)
+        setFarmer(farmerData)
+      }
+    } catch (error) {
+      console.error('Failed to load collection:', error)
     }
   }
 

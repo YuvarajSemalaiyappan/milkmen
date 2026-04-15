@@ -1,22 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { deliveriesApi } from '@/services/api'
 import { useAppStore } from '@/store'
-import { calculateTotal } from '@/utils/calculate'
 import { getToday } from '@/utils/format'
 import type { Delivery, Shift, DeliveryStatus, ApiResponse } from '@/types'
 
 export function useDeliveries() {
   const addToast = useAppStore((state) => state.addToast)
   const currentShift = useAppStore((state) => state.currentShift)
-  const [deliveries, setDeliveries] = useState<Delivery[]>([])
+  const [todayDeliveries, setTodayDeliveries] = useState<Delivery[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchDeliveries = useCallback(async () => {
     try {
       setIsLoading(true)
-      const response = await deliveriesApi.list() as ApiResponse<Delivery[]>
+      const response = await deliveriesApi.list({ date: getToday() }) as ApiResponse<Delivery[]>
       if (response.success && response.data) {
-        setDeliveries(response.data)
+        setTodayDeliveries(response.data)
       }
     } catch (error) {
       console.error('Failed to fetch deliveries:', error)
@@ -28,8 +27,6 @@ export function useDeliveries() {
   useEffect(() => {
     fetchDeliveries()
   }, [fetchDeliveries])
-
-  const todayDeliveries = deliveries.filter((d) => d.date === getToday())
 
   const todayTotals = {
     liters: todayDeliveries.reduce((sum, d) => sum + Number(d.quantity), 0),
@@ -133,11 +130,9 @@ export function useDeliveries() {
   const getDeliveriesByCustomer = useCallback(
     async (customerId: string, from?: string, to?: string, limit?: number) => {
       try {
-        const response = await deliveriesApi.list({ customerId }) as ApiResponse<Delivery[]>
+        const response = await deliveriesApi.list({ customerId, from, to }) as ApiResponse<Delivery[]>
         if (response.success && response.data) {
           let result = response.data
-          if (from) result = result.filter((d) => d.date >= from)
-          if (to) result = result.filter((d) => d.date <= to)
           result.sort((a, b) => b.date.localeCompare(a.date))
           if (limit) result = result.slice(0, limit)
           return result
@@ -154,9 +149,9 @@ export function useDeliveries() {
   const getDeliveriesByDateRange = useCallback(
     async (from: string, to: string) => {
       try {
-        const response = await deliveriesApi.list() as ApiResponse<Delivery[]>
+        const response = await deliveriesApi.list({ from, to }) as ApiResponse<Delivery[]>
         if (response.success && response.data) {
-          return response.data.filter((d) => d.date >= from && d.date <= to)
+          return response.data
         }
         return []
       } catch (error) {
@@ -168,7 +163,7 @@ export function useDeliveries() {
   )
 
   return {
-    deliveries,
+    deliveries: todayDeliveries,
     todayDeliveries,
     todayTotals,
     addDelivery,

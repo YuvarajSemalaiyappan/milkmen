@@ -182,10 +182,17 @@ export const customersApi = {
     api.put('/customers/sort-order', { orders })
 }
 
+// Helper to build query string from optional params
+function buildQuery(params?: Record<string, string | undefined>): string {
+  if (!params) return ''
+  const filtered = Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+  return filtered.length ? `?${new URLSearchParams(filtered)}` : ''
+}
+
 // Collections API
 export const collectionsApi = {
-  list: (params?: { date?: string; farmerId?: string }) =>
-    api.get(`/collections${params ? `?${new URLSearchParams(params as Record<string, string>)}` : ''}`),
+  list: (params?: { date?: string; farmerId?: string; from?: string; to?: string }) =>
+    api.get(`/collections${buildQuery(params)}`),
   get: (id: string) => api.get(`/collections/${id}`),
   create: (data: {
     farmerId: string
@@ -195,7 +202,6 @@ export const collectionsApi = {
     fatContent?: number
     ratePerLiter: number
     notes?: string
-    localId?: string
   }) => api.post('/collections', data),
   update: (id: string, data: Partial<{
     quantity: number
@@ -203,14 +209,13 @@ export const collectionsApi = {
     ratePerLiter: number
     notes?: string
   }>) => api.put(`/collections/${id}`, data),
-  delete: (id: string) => api.delete(`/collections/${id}`),
-  bulkSync: (collections: unknown[]) => api.post('/collections/bulk', { collections })
+  delete: (id: string) => api.delete(`/collections/${id}`)
 }
 
 // Deliveries API
 export const deliveriesApi = {
-  list: (params?: { date?: string; customerId?: string }) =>
-    api.get(`/deliveries${params ? `?${new URLSearchParams(params as Record<string, string>)}` : ''}`),
+  list: (params?: { date?: string; customerId?: string; from?: string; to?: string; shift?: string; status?: string }) =>
+    api.get(`/deliveries${buildQuery(params)}`),
   get: (id: string) => api.get(`/deliveries/${id}`),
   today: (shift?: string) =>
     api.get(`/deliveries/today${shift ? `?shift=${shift}` : ''}`),
@@ -223,7 +228,6 @@ export const deliveriesApi = {
     isSubscription?: boolean
     status?: string
     notes?: string
-    localId?: string
   }) => api.post('/deliveries', data),
   update: (id: string, data: Partial<{
     quantity: number
@@ -238,8 +242,8 @@ export const deliveriesApi = {
 
 // Payments API
 export const paymentsApi = {
-  list: (params?: { date?: string; farmerId?: string; customerId?: string }) =>
-    api.get(`/payments${params ? `?${new URLSearchParams(params as Record<string, string>)}` : ''}`),
+  list: (params?: { date?: string; farmerId?: string; customerId?: string; from?: string; to?: string; type?: string }) =>
+    api.get(`/payments${buildQuery(params)}`),
   get: (id: string) => api.get(`/payments/${id}`),
   create: (data: {
     farmerId?: string
@@ -249,7 +253,6 @@ export const paymentsApi = {
     type: string
     method: string
     notes?: string
-    localId?: string
   }) => api.post('/payments', data),
   update: (id: string, data: Partial<{
     amount: number
@@ -270,8 +273,8 @@ export const reportsApi = {
     api.get(`/reports/collections?from=${from}&to=${to}${farmerId ? `&farmerId=${farmerId}` : ''}`),
   deliveries: (from: string, to: string, customerId?: string) =>
     api.get(`/reports/deliveries?from=${from}&to=${to}${customerId ? `&customerId=${customerId}` : ''}`),
-  profit: (from: string, to: string) =>
-    api.get(`/reports/profit?from=${from}&to=${to}`)
+  profitLoss: (from: string, to: string) =>
+    api.get(`/reports/profit-loss?from=${from}&to=${to}`)
 }
 
 // Areas API

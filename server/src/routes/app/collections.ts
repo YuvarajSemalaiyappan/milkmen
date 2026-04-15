@@ -8,7 +8,6 @@ const router = Router()
 
 // Validation schemas
 const createCollectionSchema = z.object({
-  localId: z.string().optional(),
   farmerId: z.string(),
   date: z.string(), // ISO date string
   shift: z.enum(['MORNING', 'EVENING']),
@@ -29,7 +28,11 @@ const updateCollectionSchema = z.object({
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
-    const { date, farmerId, shift, from, to, routeId } = req.query
+    const { date, farmerId, shift, from, to, routeId, page: pageStr, limit: limitStr } = req.query
+
+    const page = Math.max(1, parseInt(pageStr as string) || 1)
+    const limit = Math.min(500, Math.max(1, parseInt(limitStr as string) || 200))
+    const skip = (page - 1) * limit
 
     const where: Prisma.CollectionWhereInput = { businessId }
 
@@ -62,22 +65,30 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const collections = await prisma.collection.findMany({
-      where,
-      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-      include: {
-        farmer: {
-          select: { id: true, name: true, phone: true, village: true }
-        },
-        user: {
-          select: { id: true, name: true }
+    const [collections, total] = await Promise.all([
+      prisma.collection.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: limit,
+        include: {
+          farmer: {
+            select: { id: true, name: true, phone: true, village: true }
+          },
+          user: {
+            select: { id: true, name: true }
+          }
         }
-      }
-    })
+      }),
+      prisma.collection.count({ where })
+    ])
 
     return res.json({
       success: true,
-      data: collections
+      data: collections,
+      total,
+      page,
+      limit
     })
   } catch (error) {
     console.error('List collections error:', error)
@@ -192,7 +203,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { localId, farmerId, date, shift, quantity, fatContent, ratePerLiter, notes } = validation.data
+    const { farmerId, date, shift, quantity, fatContent, ratePerLiter, notes } = validation.data
 
     // Verify farmer belongs to business
     const farmer = await prisma.farmer.findFirst({
@@ -206,27 +217,12 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Check for duplicate localId
-    if (localId) {
-      const existing = await prisma.collection.findUnique({
-        where: { localId }
-      })
-      if (existing) {
-        return res.json({
-          success: true,
-          data: existing,
-          message: 'Collection already synced'
-        })
-      }
-    }
-
     const totalAmount = quantity * ratePerLiter
 
     // Create collection and update farmer balance in a transaction
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const collection = await tx.collection.create({
         data: {
-          localId,
           businessId,
           farmerId,
           collectedBy: userId,
@@ -237,8 +233,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           ratePerLiter,
           totalAmount,
           originalRate: ratePerLiter,
-          notes,
-          syncStatus: 'SYNCED'
+          notes
         },
         include: {
           farmer: {
@@ -315,8 +310,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
           totalAmount: newTotal,
           notes: notes !== undefined ? notes : existing.notes,
           rateEditedAt: ratePerLiter ? new Date() : existing.rateEditedAt,
-          rateEditedBy: ratePerLiter ? userId : existing.rateEditedBy,
-          syncStatus: 'SYNCED'
+          rateEditedBy: ratePerLiter ? userId : existing.rateEditedBy
         }
       })
 

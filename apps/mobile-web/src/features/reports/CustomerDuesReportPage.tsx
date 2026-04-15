@@ -5,9 +5,10 @@ import { UserCircle, IndianRupee, ChevronRight, Calendar } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Button, Badge, Input } from '@/components/ui'
 import { EmptyState } from '@/components/common'
-import { useCustomers, useDeliveries, usePayments } from '@/hooks'
+import { useCustomers } from '@/hooks'
+import { deliveriesApi, paymentsApi } from '@/services/api'
 import { formatCurrency, getToday } from '@/utils'
-import type { Customer } from '@/types'
+import type { Customer, Delivery, Payment, ApiResponse } from '@/types'
 
 interface CustomerDue {
   customer: Customer
@@ -21,8 +22,6 @@ export function CustomerDuesReportPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { activeCustomers } = useCustomers()
-  const { getDeliveriesByCustomer } = useDeliveries()
-  const { getCustomerPaymentsSummary } = usePayments()
 
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
@@ -34,35 +33,61 @@ export function CustomerDuesReportPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    loadCustomerDues()
+    if (activeCustomers.length > 0) {
+      loadCustomerDues()
+    }
   }, [activeCustomers, startDate, endDate])
 
   const loadCustomerDues = async () => {
     setIsLoading(true)
     try {
-      const dues: CustomerDue[] = await Promise.all(
-        activeCustomers.map(async (customer) => {
-          const deliveries = await getDeliveriesByCustomer(customer.id, startDate, endDate)
-          const paymentsSummary = await getCustomerPaymentsSummary(customer.id, startDate, endDate)
+      // 2 bulk API calls instead of N+1 per customer
+      const [deliveriesRes, paymentsRes] = await Promise.all([
+        deliveriesApi.list({ from: startDate, to: endDate }) as Promise<ApiResponse<Delivery[]>>,
+        paymentsApi.list({ from: startDate, to: endDate }) as Promise<ApiResponse<Payment[]>>
+      ])
 
-          const deliveredItems = deliveries.filter((d) => d.status === 'DELIVERED')
-          const totalLiters = deliveredItems.reduce((sum, d) => sum + Number(d.quantity), 0)
-          const totalAmount = deliveredItems.reduce((sum, d) => sum + Number(d.totalAmount), 0)
-          const totalPaid = paymentsSummary.totalPayments
+      const allDeliveries = deliveriesRes.success && deliveriesRes.data ? deliveriesRes.data : []
+      const allPayments = paymentsRes.success && paymentsRes.data ? paymentsRes.data : []
 
-          return {
-            customer,
-            totalLiters,
-            totalAmount,
-            totalPaid,
-            balance: totalAmount - totalPaid
-          }
+      // Group deliveries by customer
+      const deliveryByCustomer = new Map<string, { liters: number; amount: number }>()
+      allDeliveries
+        .filter(d => d.status === 'DELIVERED')
+        .forEach(d => {
+          const existing = deliveryByCustomer.get(d.customerId) || { liters: 0, amount: 0 }
+          existing.liters += Number(d.quantity)
+          existing.amount += Number(d.totalAmount)
+          deliveryByCustomer.set(d.customerId, existing)
         })
-      )
+
+      // Group payments by customer
+      const paymentByCustomer = new Map<string, number>()
+      allPayments
+        .filter(p => p.customerId && (p.type === 'RECEIVED_FROM_CUSTOMER' || p.type === 'ADVANCE_FROM_CUSTOMER'))
+        .forEach(p => {
+          const existing = paymentByCustomer.get(p.customerId!) || 0
+          paymentByCustomer.set(p.customerId!, existing + Number(p.amount))
+        })
+
+      // Build dues list
+      const dues: CustomerDue[] = activeCustomers.map(customer => {
+        const deliveryData = deliveryByCustomer.get(customer.id) || { liters: 0, amount: 0 }
+        const totalPaid = paymentByCustomer.get(customer.id) || 0
+        return {
+          customer,
+          totalLiters: deliveryData.liters,
+          totalAmount: deliveryData.amount,
+          totalPaid,
+          balance: deliveryData.amount - totalPaid
+        }
+      })
 
       // Sort by balance (highest first)
       dues.sort((a, b) => b.balance - a.balance)
       setCustomerDues(dues)
+    } catch (error) {
+      console.error('Failed to load customer dues:', error)
     } finally {
       setIsLoading(false)
     }

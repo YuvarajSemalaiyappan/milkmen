@@ -5,9 +5,10 @@ import { Truck, Calendar, UserCircle, ChevronRight, Filter, Download } from 'luc
 import { AppShell } from '@/components/layout'
 import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
-import { useCustomers, useDeliveries } from '@/hooks'
+import { useCustomers } from '@/hooks'
+import { reportsApi, deliveriesApi } from '@/services/api'
 import { formatCurrency, formatDate, getToday, exportToExcel } from '@/utils'
-import type { Customer, Delivery } from '@/types'
+import type { Customer, Delivery, ApiResponse } from '@/types'
 
 interface DeliveryWithCustomer extends Delivery {
   customerName: string
@@ -15,12 +16,20 @@ interface DeliveryWithCustomer extends Delivery {
 }
 
 interface CustomerSummary {
-  customerId: string
+  id: string
   name: string
-  address?: string
-  totalLiters: number
-  totalAmount: number
+  address: string | null
+  liters: number
+  amount: number
   count: number
+}
+
+interface ReportData {
+  from: string
+  to: string
+  deliveries: (Delivery & { customer: { id: string; name: string; address: string | null } })[]
+  byCustomer: CustomerSummary[]
+  totals: { liters: number; amount: number; count: number }
 }
 
 const PAGE_SIZE = 50
@@ -31,7 +40,6 @@ export function DeliveriesReportPage() {
   const [searchParams] = useSearchParams()
   const customerIdParam = searchParams.get('customerId')
   const { customers: allCustomers } = useCustomers()
-  const { getDeliveriesByDateRange } = useDeliveries()
 
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
@@ -42,6 +50,7 @@ export function DeliveriesReportPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customerIdParam || '')
   const [deliveries, setDeliveries] = useState<DeliveryWithCustomer[]>([])
   const [customerSummaries, setCustomerSummaries] = useState<CustomerSummary[]>([])
+  const [totals, setTotals] = useState({ liters: 0, amount: 0, count: 0 })
   const [isLoading, setIsLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'list' | 'summary'>(customerIdParam ? 'list' : 'summary')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -54,15 +63,9 @@ export function DeliveriesReportPage() {
     return customer?.name || ''
   }, [customerIdParam, allCustomers])
 
-  const getCustomerMap = () => {
-    const map = new Map<string, Customer>()
-    allCustomers.forEach(c => map.set(c.id, c))
-    return map
-  }
-
   useEffect(() => {
     loadDeliveries()
-  }, [startDate, endDate, selectedCustomerId, allCustomers.length])
+  }, [startDate, endDate, selectedCustomerId])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
@@ -71,67 +74,60 @@ export function DeliveriesReportPage() {
   const loadDeliveries = async () => {
     setIsLoading(true)
     try {
-      let allDeliveries = await getDeliveriesByDateRange(startDate, endDate)
+      const effectiveCustomerId = selectedCustomerId || customerIdParam || undefined
 
-      // In person mode, show all statuses; otherwise only DELIVERED
-      if (!isPersonMode) {
-        allDeliveries = allDeliveries.filter(d => d.status === 'DELIVERED')
-      }
+      if (isPersonMode) {
+        // Person mode: fetch all statuses for this customer
+        const response = await deliveriesApi.list({
+          from: startDate,
+          to: endDate,
+          customerId: effectiveCustomerId
+        }) as ApiResponse<Delivery[]>
+        if (response.success && response.data) {
+          const customerMap = new Map<string, Customer>()
+          allCustomers.forEach(c => customerMap.set(c.id, c))
 
-      // Filter by customer if selected
-      if (selectedCustomerId) {
-        allDeliveries = allDeliveries.filter(d => d.customerId === selectedCustomerId)
-      }
+          const items: DeliveryWithCustomer[] = response.data.map(d => {
+            const customer = customerMap.get(d.customerId)
+            return {
+              ...d,
+              customerName: customer?.name || t('common.unknown'),
+              customerAddress: customer?.address
+            }
+          }).sort((a, b) => b.date.localeCompare(a.date))
 
-      const customerMap = getCustomerMap()
-
-      // Add customer names to deliveries
-      const deliveriesWithCustomers: DeliveryWithCustomer[] = allDeliveries.map(d => {
-        const customer = customerMap.get(d.customerId)
-        return {
-          ...d,
-          customerName: customer?.name || t('common.unknown'),
-          customerAddress: customer?.address
+          setDeliveries(items)
+          const totalLiters = items.reduce((sum, d) => sum + Number(d.quantity), 0)
+          const totalAmount = items.reduce((sum, d) => sum + Number(d.totalAmount), 0)
+          setTotals({ liters: totalLiters, amount: totalAmount, count: items.length })
+          setCustomerSummaries([])
         }
-      }).sort((a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime())
+      } else {
+        // Report mode: use the report endpoint (only DELIVERED status)
+        const response = await reportsApi.deliveries(startDate, endDate, effectiveCustomerId) as ApiResponse<ReportData>
+        if (response.success && response.data) {
+          const data = response.data
 
-      setDeliveries(deliveriesWithCustomers)
+          // Map deliveries for list view
+          const items: DeliveryWithCustomer[] = data.deliveries.map(d => ({
+            ...d,
+            customerName: d.customer?.name || t('common.unknown'),
+            customerAddress: d.customer?.address
+          }))
 
-      // Calculate customer summaries
-      const summaryMap = new Map<string, CustomerSummary>()
-      allDeliveries.forEach(d => {
-        const customerId = d.customerId
-        const customer = customerMap.get(customerId)
-
-        if (!summaryMap.has(customerId)) {
-          summaryMap.set(customerId, {
-            customerId,
-            name: customer?.name || t('common.unknown'),
-            address: customer?.address,
-            totalLiters: 0,
-            totalAmount: 0,
-            count: 0
-          })
+          setDeliveries(items)
+          setCustomerSummaries(data.byCustomer)
+          setTotals(data.totals)
         }
-
-        const summary = summaryMap.get(customerId)!
-        summary.totalLiters += Number(d.quantity)
-        summary.totalAmount += Number(d.totalAmount)
-        summary.count++
-      })
-
-      const summaries = Array.from(summaryMap.values())
-        .sort((a, b) => b.totalAmount - a.totalAmount)
-
-      setCustomerSummaries(summaries)
+      }
+    } catch (error) {
+      console.error('Failed to load deliveries report:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const totalLiters = deliveries.reduce((sum, d) => sum + Number(d.quantity), 0)
-  const totalAmount = deliveries.reduce((sum, d) => sum + Number(d.totalAmount), 0)
-  const avgRate = totalLiters > 0 ? totalAmount / totalLiters : 0
+  const avgRate = totals.liters > 0 ? totals.amount / totals.liters : 0
 
   const visibleDeliveries = deliveries.slice(0, visibleCount)
   const hasMore = visibleCount < deliveries.length
@@ -231,11 +227,11 @@ export function DeliveriesReportPage() {
         {/* Summary */}
         <div className="grid grid-cols-3 gap-3">
           <Card className="text-center p-3">
-            <p className="text-xl font-bold text-pink-600">{totalLiters.toFixed(1)}L</p>
+            <p className="text-xl font-bold text-pink-600">{totals.liters.toFixed(1)}L</p>
             <p className="text-xs text-gray-500">{t('reports.totalLiters')}</p>
           </Card>
           <Card className="text-center p-3">
-            <p className="text-xl font-bold text-green-600">{formatCurrency(totalAmount)}</p>
+            <p className="text-xl font-bold text-green-600">{formatCurrency(totals.amount)}</p>
             <p className="text-xs text-gray-500">{t('reports.totalAmount')}</p>
           </Card>
           <Card className="text-center p-3">
@@ -288,9 +284,9 @@ export function DeliveriesReportPage() {
           <div className="space-y-3">
             {customerSummaries.map((summary) => (
               <Card
-                key={summary.customerId}
+                key={summary.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/customers/${summary.customerId}`)}
+                onClick={() => navigate(`/customers/${summary.id}`)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -308,8 +304,8 @@ export function DeliveriesReportPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-pink-600">{summary.totalLiters.toFixed(1)}L</p>
-                    <p className="text-green-600">{formatCurrency(summary.totalAmount)}</p>
+                    <p className="font-bold text-pink-600">{summary.liters.toFixed(1)}L</p>
+                    <p className="text-green-600">{formatCurrency(summary.amount)}</p>
                     <ChevronRight className="w-5 h-5 text-gray-400 ml-auto" />
                   </div>
                 </div>

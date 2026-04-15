@@ -5,9 +5,10 @@ import { Users, IndianRupee, ChevronRight, Calendar } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Button, Badge, Input } from '@/components/ui'
 import { EmptyState } from '@/components/common'
-import { useFarmers, useCollections, usePayments } from '@/hooks'
-import { formatCurrency, formatDate, getToday } from '@/utils'
-import type { Farmer } from '@/types'
+import { useFarmers } from '@/hooks'
+import { collectionsApi, paymentsApi } from '@/services/api'
+import { formatCurrency, getToday } from '@/utils'
+import type { Farmer, Collection, Payment, ApiResponse } from '@/types'
 
 interface FarmerDue {
   farmer: Farmer
@@ -21,8 +22,6 @@ export function FarmerDuesReportPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { activeFarmers } = useFarmers()
-  const { getCollectionsByFarmer } = useCollections()
-  const { getFarmerPaymentsSummary } = usePayments()
 
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
@@ -34,34 +33,59 @@ export function FarmerDuesReportPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    loadFarmerDues()
+    if (activeFarmers.length > 0) {
+      loadFarmerDues()
+    }
   }, [activeFarmers, startDate, endDate])
 
   const loadFarmerDues = async () => {
     setIsLoading(true)
     try {
-      const dues: FarmerDue[] = await Promise.all(
-        activeFarmers.map(async (farmer) => {
-          const collections = await getCollectionsByFarmer(farmer.id, startDate, endDate)
-          const paymentsSummary = await getFarmerPaymentsSummary(farmer.id, startDate, endDate)
+      // 2 bulk API calls instead of N+1 per farmer
+      const [collectionsRes, paymentsRes] = await Promise.all([
+        collectionsApi.list({ from: startDate, to: endDate }) as Promise<ApiResponse<Collection[]>>,
+        paymentsApi.list({ from: startDate, to: endDate }) as Promise<ApiResponse<Payment[]>>
+      ])
 
-          const totalLiters = collections.reduce((sum, c) => sum + Number(c.quantity), 0)
-          const totalAmount = collections.reduce((sum, c) => sum + Number(c.totalAmount), 0)
-          const totalPaid = paymentsSummary.totalPayments
+      const allCollections = collectionsRes.success && collectionsRes.data ? collectionsRes.data : []
+      const allPayments = paymentsRes.success && paymentsRes.data ? paymentsRes.data : []
 
-          return {
-            farmer,
-            totalLiters,
-            totalAmount,
-            totalPaid,
-            balance: totalAmount - totalPaid
-          }
+      // Group collections by farmer
+      const collectionByFarmer = new Map<string, { liters: number; amount: number }>()
+      allCollections.forEach(c => {
+        const existing = collectionByFarmer.get(c.farmerId) || { liters: 0, amount: 0 }
+        existing.liters += Number(c.quantity)
+        existing.amount += Number(c.totalAmount)
+        collectionByFarmer.set(c.farmerId, existing)
+      })
+
+      // Group payments by farmer
+      const paymentByFarmer = new Map<string, number>()
+      allPayments
+        .filter(p => p.farmerId && (p.type === 'PAID_TO_FARMER' || p.type === 'ADVANCE_TO_FARMER'))
+        .forEach(p => {
+          const existing = paymentByFarmer.get(p.farmerId!) || 0
+          paymentByFarmer.set(p.farmerId!, existing + Number(p.amount))
         })
-      )
+
+      // Build dues list
+      const dues: FarmerDue[] = activeFarmers.map(farmer => {
+        const collectionData = collectionByFarmer.get(farmer.id) || { liters: 0, amount: 0 }
+        const totalPaid = paymentByFarmer.get(farmer.id) || 0
+        return {
+          farmer,
+          totalLiters: collectionData.liters,
+          totalAmount: collectionData.amount,
+          totalPaid,
+          balance: collectionData.amount - totalPaid
+        }
+      })
 
       // Sort by balance (highest first)
       dues.sort((a, b) => b.balance - a.balance)
       setFarmerDues(dues)
+    } catch (error) {
+      console.error('Failed to load farmer dues:', error)
     } finally {
       setIsLoading(false)
     }

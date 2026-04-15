@@ -8,15 +8,15 @@ import type { Collection, Shift, ApiResponse } from '@/types'
 export function useCollections() {
   const addToast = useAppStore((state) => state.addToast)
   const currentShift = useAppStore((state) => state.currentShift)
-  const [collections, setCollections] = useState<Collection[]>([])
+  const [todayCollections, setTodayCollections] = useState<Collection[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchCollections = useCallback(async () => {
     try {
       setIsLoading(true)
-      const response = await collectionsApi.list() as ApiResponse<Collection[]>
+      const response = await collectionsApi.list({ date: getToday() }) as ApiResponse<Collection[]>
       if (response.success && response.data) {
-        setCollections(response.data)
+        setTodayCollections(response.data)
       }
     } catch (error) {
       console.error('Failed to fetch collections:', error)
@@ -28,8 +28,6 @@ export function useCollections() {
   useEffect(() => {
     fetchCollections()
   }, [fetchCollections])
-
-  const todayCollections = collections.filter((c) => c.date === getToday())
 
   const todayTotals = {
     liters: todayCollections.reduce((sum, c) => sum + Number(c.quantity), 0),
@@ -132,11 +130,9 @@ export function useCollections() {
   const getCollectionsByFarmer = useCallback(
     async (farmerId: string, from?: string, to?: string, limit?: number) => {
       try {
-        const response = await collectionsApi.list({ farmerId }) as ApiResponse<Collection[]>
+        const response = await collectionsApi.list({ farmerId, from, to }) as ApiResponse<Collection[]>
         if (response.success && response.data) {
           let result = response.data
-          if (from) result = result.filter((c) => c.date >= from)
-          if (to) result = result.filter((c) => c.date <= to)
           result.sort((a, b) => b.date.localeCompare(a.date))
           if (limit) result = result.slice(0, limit)
           return result
@@ -153,9 +149,9 @@ export function useCollections() {
   const getCollectionsByDateRange = useCallback(
     async (from: string, to: string) => {
       try {
-        const response = await collectionsApi.list() as ApiResponse<Collection[]>
+        const response = await collectionsApi.list({ from, to }) as ApiResponse<Collection[]>
         if (response.success && response.data) {
-          return response.data.filter((c) => c.date >= from && c.date <= to)
+          return response.data
         }
         return []
       } catch (error) {
@@ -167,7 +163,7 @@ export function useCollections() {
   )
 
   return {
-    collections,
+    collections: todayCollections,
     todayCollections,
     todayTotals,
     addCollection,

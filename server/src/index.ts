@@ -17,7 +17,6 @@ import collectionRoutes from './routes/app/collections.js'
 import deliveryRoutes from './routes/app/deliveries.js'
 import paymentRoutes from './routes/app/payments.js'
 import reportRoutes from './routes/app/reports.js'
-import syncRoutes from './routes/app/sync.js'
 import settingsRoutes from './routes/app/settings.js'
 import ratesRoutes from './routes/app/rates.js'
 import routesRoutes from './routes/app/routes.js'
@@ -54,7 +53,6 @@ app.use('/api/collections', collectionRoutes)
 app.use('/api/deliveries', deliveryRoutes)
 app.use('/api/payments', paymentRoutes)
 app.use('/api/reports', reportRoutes)
-app.use('/api/sync', syncRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/rates', ratesRoutes)
 app.use('/api/routes', routesRoutes)

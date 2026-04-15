@@ -60,12 +60,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
     const farmers = await prisma.farmer.findMany({
       where,
-      orderBy: { name: 'asc' },
-      include: {
-        _count: {
-          select: { collections: true, payments: true }
-        }
-      }
+      orderBy: { name: 'asc' }
     })
 
     return res.json({

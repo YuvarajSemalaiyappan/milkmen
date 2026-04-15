@@ -116,7 +116,13 @@
       "Bash(git commit:*)",
       "Bash(npm ci:*)",
       "Bash(render services:*)",
-      "Bash(neonctl:*)"
+      "Bash(neonctl:*)",
+      "Bash(git push:*)",
+      "Bash(grep -i \"payment\" /workspaces/milkmen/apps/mobile-web/src/i18n/locales/*.json)",
+      "Bash(ls -la /tmp/claude-1000/-workspaces-milkmen/tasks/*.output 2>/dev/null | tail -10)",
+      "Bash(npm uninstall:*)",
+      "Bash(cat)",
+      "Read(//tmp/**)"
     ]
   }
 }
