@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { createBrowserRouter, Navigate, Outlet, ScrollRestoration } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '@/store'
 
 // Feature pages
@@ -50,6 +50,7 @@ function ProtectedRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const subscription = useAuthStore((state) => state.subscription)
   const addToast = useAppStore((state) => state.addToast)
+  const location = useLocation()
   const expiryWarningShown = useRef(false)
 
   // Show expiry warning toast
@@ -71,7 +72,7 @@ function ProtectedRoute() {
   return (
     <>
       <ScrollRestoration />
-      <Outlet />
+      <Outlet key={location.pathname} />
     </>
   )
 }
