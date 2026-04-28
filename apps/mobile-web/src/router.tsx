@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, ScrollRestoration } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '@/store'
 
 // Feature pages
@@ -68,7 +68,12 @@ function ProtectedRoute() {
     return <Navigate to="/login" replace />
   }
 
-  return <Outlet />
+  return (
+    <>
+      <ScrollRestoration />
+      <Outlet />
+    </>
+  )
 }
 
 // Public route wrapper (redirect to home if authenticated)
