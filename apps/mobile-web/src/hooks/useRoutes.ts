@@ -92,78 +92,84 @@ export function useRoutes() {
       const response = await routesApi.assignUsers(routeId, userIds) as ApiResponse<void>
       if (response.success) {
         addToast({ type: 'success', message: 'Users assigned' })
+        await fetchRoutes()
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to assign users'
       addToast({ type: 'error', message })
       throw error
     }
-  }, [addToast])
+  }, [addToast, fetchRoutes])
 
   const removeUser = useCallback(async (routeId: string, userId: string) => {
     try {
       const response = await routesApi.removeUser(routeId, userId) as ApiResponse<void>
       if (response.success) {
         addToast({ type: 'success', message: 'User removed' })
+        await fetchRoutes()
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove user'
       addToast({ type: 'error', message })
       throw error
     }
-  }, [addToast])
+  }, [addToast, fetchRoutes])
 
   const assignFarmers = useCallback(async (routeId: string, farmerIds: string[], sortOrders?: Record<string, number>) => {
     try {
       const response = await routesApi.assignFarmers(routeId, farmerIds, sortOrders) as ApiResponse<void>
       if (response.success) {
         addToast({ type: 'success', message: 'Farmers assigned' })
+        await fetchRoutes()
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to assign farmers'
       addToast({ type: 'error', message })
       throw error
     }
-  }, [addToast])
+  }, [addToast, fetchRoutes])
 
   const removeFarmer = useCallback(async (routeId: string, farmerId: string) => {
     try {
       const response = await routesApi.removeFarmer(routeId, farmerId) as ApiResponse<void>
       if (response.success) {
         addToast({ type: 'success', message: 'Farmer removed' })
+        await fetchRoutes()
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove farmer'
       addToast({ type: 'error', message })
       throw error
     }
-  }, [addToast])
+  }, [addToast, fetchRoutes])
 
   const assignCustomers = useCallback(async (routeId: string, customerIds: string[], sortOrders?: Record<string, number>) => {
     try {
       const response = await routesApi.assignCustomers(routeId, customerIds, sortOrders) as ApiResponse<void>
       if (response.success) {
         addToast({ type: 'success', message: 'Customers assigned' })
+        await fetchRoutes()
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to assign customers'
       addToast({ type: 'error', message })
       throw error
     }
-  }, [addToast])
+  }, [addToast, fetchRoutes])
 
   const removeCustomer = useCallback(async (routeId: string, customerId: string) => {
     try {
       const response = await routesApi.removeCustomer(routeId, customerId) as ApiResponse<void>
       if (response.success) {
         addToast({ type: 'success', message: 'Customer removed' })
+        await fetchRoutes()
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove customer'
       addToast({ type: 'error', message })
       throw error
     }
-  }, [addToast])
+  }, [addToast, fetchRoutes])
 
   return {
     routes,
