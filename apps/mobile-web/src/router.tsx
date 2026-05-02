@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '@/store'
 
 // Feature pages
@@ -64,6 +64,7 @@ function ProtectedRoute() {
   const subscription = useAuthStore((state) => state.subscription)
   const addToast = useAppStore((state) => state.addToast)
   const location = useLocation()
+  const navigate = useNavigate()
   const expiryWarningShown = useRef(false)
   const renderCount = useRef(0)
   renderCount.current++
@@ -87,6 +88,7 @@ function ProtectedRoute() {
     <>
       <div data-debug style={{ position: 'fixed', top: 0, right: 0, background: 'red', color: 'white', padding: '4px 8px', fontSize: 11, zIndex: 9999, fontFamily: 'monospace' }}>
         r#{renderCount.current} loc={location.pathname} t={Date.now() % 100000}
+        <button data-debug-nav style={{ marginLeft: 8 }} onClick={() => navigate('/customers')}>NAV→/customers</button>
       </div>
       <Outlet />
     </>
