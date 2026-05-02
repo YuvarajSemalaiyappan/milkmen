@@ -1,5 +1,4 @@
-import { RouterProvider } from 'react-router-dom'
-import { router } from './router'
+import { AppRoutes } from './router'
 import { useTheme } from './hooks'
 import { ErrorBoundary } from './components/common'
 
@@ -12,7 +11,7 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <RouterProvider router={router} />
+      <AppRoutes />
     </ErrorBoundary>
   )
 }

@@ -1,14 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '@/store'
-
-function ScrollToTop() {
-  const location = useLocation()
-  useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [location.pathname])
-  return null
-}
 
 // Feature pages
 import { DashboardPage } from '@/features/dashboard'
@@ -53,14 +45,20 @@ import {
 import { MorePage } from '@/features/more'
 import { LoginPage, RegisterPage } from '@/features/auth'
 
-// Protected route wrapper
+function ScrollToTop() {
+  const location = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname])
+  return null
+}
+
 function ProtectedRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const subscription = useAuthStore((state) => state.subscription)
   const addToast = useAppStore((state) => state.addToast)
   const expiryWarningShown = useRef(false)
 
-  // Show expiry warning toast
   useEffect(() => {
     if (!subscription || expiryWarningShown.current) return
     expiryWarningShown.current = true
@@ -76,15 +74,9 @@ function ProtectedRoute() {
     return <Navigate to="/login" replace />
   }
 
-  return (
-    <>
-      <ScrollToTop />
-      <Outlet />
-    </>
-  )
+  return <Outlet />
 }
 
-// Public route wrapper (redirect to home if authenticated)
 function PublicRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
@@ -95,208 +87,65 @@ function PublicRoute() {
   return <Outlet />
 }
 
-export const router = createBrowserRouter([
-  // Public routes
-  {
-    element: <PublicRoute />,
-    children: [
-      {
-        path: '/login',
-        element: <LoginPage />
-      },
-      {
-        path: '/register',
-        element: <RegisterPage />
-      }
-    ]
-  },
+export function AppRoutes() {
+  return (
+    <BrowserRouter>
+      <ScrollToTop />
+      <Routes>
+        <Route element={<PublicRoute />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+        </Route>
 
-  // Protected routes
-  {
-    element: <ProtectedRoute />,
-    children: [
-      {
-        path: '/',
-        element: <DashboardPage />
-      },
-      {
-        path: '/collect',
-        element: <CollectionsPage />
-      },
-      {
-        path: '/collect/add',
-        element: <AddCollectionPage />
-      },
-      {
-        path: '/collect/:id',
-        element: <CollectionDetailPage />
-      },
-      {
-        path: '/deliver',
-        element: <DeliveriesPage />
-      },
-      {
-        path: '/deliver/today',
-        element: <TodayDeliveriesPage />
-      },
-      {
-        path: '/deliver/add',
-        element: <AddDeliveryPage />
-      },
-      {
-        path: '/deliver/edit/:id',
-        element: <DeliveryDetailPage />
-      },
-      {
-        path: '/deliver/:id',
-        element: <DeliveryDetailPage />
-      },
-      {
-        path: '/farmers',
-        element: <FarmersPage />
-      },
-      {
-        path: '/farmers/add',
-        element: <AddFarmerPage />
-      },
-      {
-        path: '/farmers/:id',
-        element: <FarmerDetailPage />
-      },
-      {
-        path: '/customers',
-        element: <CustomersPage />
-      },
-      {
-        path: '/customers/add',
-        element: <AddCustomerPage />
-      },
-      {
-        path: '/customers/:id',
-        element: <CustomerDetailPage />
-      },
-      {
-        path: '/payments',
-        element: <PaymentsPage />
-      },
-      {
-        path: '/payments/add',
-        element: <AddPaymentPage />
-      },
-      {
-        path: '/payments/history',
-        element: <PaymentHistoryPage />
-      },
-      {
-        path: '/reports',
-        element: <ReportsPage />
-      },
-      {
-        path: '/reports/daily',
-        element: <DailyReportPage />
-      },
-      {
-        path: '/reports/farmer-dues',
-        element: <FarmerDuesReportPage />
-      },
-      {
-        path: '/reports/customer-dues',
-        element: <CustomerDuesReportPage />
-      },
-      {
-        path: '/reports/collections',
-        element: <CollectionsReportPage />
-      },
-      {
-        path: '/reports/deliveries',
-        element: <DeliveriesReportPage />
-      },
-      {
-        path: '/reports/profit-loss',
-        element: <ProfitLossReportPage />
-      },
-      {
-        path: '/settings',
-        element: <SettingsPage />
-      },
-      {
-        path: '/settings/profile',
-        element: <ProfilePage />
-      },
-      {
-        path: '/settings/business',
-        element: <BusinessSettingsPage />
-      },
-      {
-        path: '/settings/staff',
-        element: <StaffManagementPage />
-      },
-      {
-        path: '/settings/subscription',
-        element: <SubscriptionPage />
-      },
-      {
-        path: '/settings/rates',
-        element: <RateSettingsPage />
-      },
-      {
-        path: '/settings/about',
-        element: <AboutPage />
-      },
-      {
-        path: '/routes',
-        element: <RoutesPage />
-      },
-      {
-        path: '/routes/add',
-        element: <AddRoutePage />
-      },
-      {
-        path: '/routes/:id',
-        element: <RouteDetailPage />
-      },
-      {
-        path: '/routes/:id/assign-users',
-        element: <RouteAssignUsersPage />
-      },
-      {
-        path: '/routes/:id/assign-farmers',
-        element: <RouteAssignFarmersPage />
-      },
-      {
-        path: '/routes/:id/assign-customers',
-        element: <RouteAssignCustomersPage />
-      },
-      {
-        path: '/routes/:routeId/areas',
-        element: <AreasPage />
-      },
-      {
-        path: '/routes/:routeId/areas/add',
-        element: <AddAreaPage />
-      },
-      {
-        path: '/routes/:routeId/areas/:areaId',
-        element: <AreaDetailPage />
-      },
-      {
-        path: '/routes/:routeId/areas/:areaId/assign-customers',
-        element: <AreaAssignCustomersPage />
-      },
-      {
-        path: '/routes/:routeId/areas/:areaId/assign-farmers',
-        element: <AreaAssignFarmersPage />
-      },
-      {
-        path: '/more',
-        element: <MorePage />
-      }
-    ]
-  },
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/collect" element={<CollectionsPage />} />
+          <Route path="/collect/add" element={<AddCollectionPage />} />
+          <Route path="/collect/:id" element={<CollectionDetailPage />} />
+          <Route path="/deliver" element={<DeliveriesPage />} />
+          <Route path="/deliver/today" element={<TodayDeliveriesPage />} />
+          <Route path="/deliver/add" element={<AddDeliveryPage />} />
+          <Route path="/deliver/edit/:id" element={<DeliveryDetailPage />} />
+          <Route path="/deliver/:id" element={<DeliveryDetailPage />} />
+          <Route path="/farmers" element={<FarmersPage />} />
+          <Route path="/farmers/add" element={<AddFarmerPage />} />
+          <Route path="/farmers/:id" element={<FarmerDetailPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/customers/add" element={<AddCustomerPage />} />
+          <Route path="/customers/:id" element={<CustomerDetailPage />} />
+          <Route path="/payments" element={<PaymentsPage />} />
+          <Route path="/payments/add" element={<AddPaymentPage />} />
+          <Route path="/payments/history" element={<PaymentHistoryPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/reports/daily" element={<DailyReportPage />} />
+          <Route path="/reports/farmer-dues" element={<FarmerDuesReportPage />} />
+          <Route path="/reports/customer-dues" element={<CustomerDuesReportPage />} />
+          <Route path="/reports/collections" element={<CollectionsReportPage />} />
+          <Route path="/reports/deliveries" element={<DeliveriesReportPage />} />
+          <Route path="/reports/profit-loss" element={<ProfitLossReportPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/profile" element={<ProfilePage />} />
+          <Route path="/settings/business" element={<BusinessSettingsPage />} />
+          <Route path="/settings/staff" element={<StaffManagementPage />} />
+          <Route path="/settings/subscription" element={<SubscriptionPage />} />
+          <Route path="/settings/rates" element={<RateSettingsPage />} />
+          <Route path="/settings/about" element={<AboutPage />} />
+          <Route path="/routes" element={<RoutesPage />} />
+          <Route path="/routes/add" element={<AddRoutePage />} />
+          <Route path="/routes/:id" element={<RouteDetailPage />} />
+          <Route path="/routes/:id/assign-users" element={<RouteAssignUsersPage />} />
+          <Route path="/routes/:id/assign-farmers" element={<RouteAssignFarmersPage />} />
+          <Route path="/routes/:id/assign-customers" element={<RouteAssignCustomersPage />} />
+          <Route path="/routes/:routeId/areas" element={<AreasPage />} />
+          <Route path="/routes/:routeId/areas/add" element={<AddAreaPage />} />
+          <Route path="/routes/:routeId/areas/:areaId" element={<AreaDetailPage />} />
+          <Route path="/routes/:routeId/areas/:areaId/assign-customers" element={<AreaAssignCustomersPage />} />
+          <Route path="/routes/:routeId/areas/:areaId/assign-farmers" element={<AreaAssignFarmersPage />} />
+          <Route path="/more" element={<MorePage />} />
+        </Route>
 
-  // Catch all - redirect to home
-  {
-    path: '*',
-    element: <Navigate to="/" replace />
-  }
-])
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
