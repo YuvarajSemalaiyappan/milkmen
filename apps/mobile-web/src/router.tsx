@@ -1,6 +1,14 @@
 import { useEffect, useRef } from 'react'
-import { createBrowserRouter, Navigate, Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '@/store'
+
+function ScrollToTop() {
+  const location = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname])
+  return null
+}
 
 // Feature pages
 import { DashboardPage } from '@/features/dashboard'
@@ -50,7 +58,6 @@ function ProtectedRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const subscription = useAuthStore((state) => state.subscription)
   const addToast = useAppStore((state) => state.addToast)
-  const location = useLocation()
   const expiryWarningShown = useRef(false)
 
   // Show expiry warning toast
@@ -71,10 +78,8 @@ function ProtectedRoute() {
 
   return (
     <>
-      <ScrollRestoration />
-      <div key={location.pathname}>
-        <Outlet />
-      </div>
+      <ScrollToTop />
+      <Outlet />
     </>
   )
 }
