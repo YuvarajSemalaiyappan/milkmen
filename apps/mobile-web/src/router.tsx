@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
+import type { Action, Location, To } from 'react-router-dom'
+import { Router, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '@/store'
 
 // Feature pages
@@ -45,29 +46,109 @@ import {
 import { MorePage } from '@/features/more'
 import { LoginPage, RegisterPage } from '@/features/auth'
 
+// Custom history + subscriber registry. We bypass BrowserRouter's internal
+// subscription (which was failing to fire for navigations between protected
+// routes) and feed React state directly via useSyncExternalStore.
+
+type RouterLocation = Location
+
+const subscribers = new Set<() => void>()
+
+function buildLocation(state: unknown): RouterLocation {
+  const s = (state as { key?: string; usr?: unknown } | null) ?? null
+  return {
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash,
+    state: s?.usr ?? null,
+    key: s?.key ?? 'default'
+  }
+}
+
+let action: Action = 'POP' as Action
+let snapshot = { action, location: buildLocation(window.history.state) }
+
+function notify(nextAction: Action, nextState: unknown) {
+  action = nextAction
+  snapshot = { action: nextAction, location: buildLocation(nextState) }
+  subscribers.forEach((fn) => fn())
+}
+
+const origPush = window.history.pushState.bind(window.history)
+const origReplace = window.history.replaceState.bind(window.history)
+window.history.pushState = function (state, ...rest) {
+  origPush(state, ...rest)
+  notify('PUSH' as Action, state)
+}
+window.history.replaceState = function (state, ...rest) {
+  origReplace(state, ...rest)
+  notify('REPLACE' as Action, state)
+}
+window.addEventListener('popstate', () => {
+  notify('POP' as Action, window.history.state)
+})
+
+const navigator = {
+  createHref: (to: To) => (typeof to === 'string' ? to : `${to.pathname ?? ''}${to.search ?? ''}${to.hash ?? ''}`),
+  encodeLocation: (to: To): { pathname: string; search: string; hash: string } => {
+    if (typeof to === 'string') {
+      const url = new URL(to, window.location.origin)
+      return { pathname: url.pathname, search: url.search, hash: url.hash }
+    }
+    return { pathname: to.pathname ?? '', search: to.search ?? '', hash: to.hash ?? '' }
+  },
+  push: (to: To, state?: unknown) => {
+    const key = Math.random().toString(36).slice(2, 10)
+    const href = typeof to === 'string' ? to : `${to.pathname ?? ''}${to.search ?? ''}${to.hash ?? ''}`
+    origPush({ usr: state ?? null, key, idx: 0 }, '', href)
+    notify('PUSH' as Action, { usr: state ?? null, key })
+  },
+  replace: (to: To, state?: unknown) => {
+    const key = Math.random().toString(36).slice(2, 10)
+    const href = typeof to === 'string' ? to : `${to.pathname ?? ''}${to.search ?? ''}${to.hash ?? ''}`
+    origReplace({ usr: state ?? null, key, idx: 0 }, '', href)
+    notify('REPLACE' as Action, { usr: state ?? null, key })
+  },
+  go: (delta: number) => window.history.go(delta)
+}
+
+function subscribe(fn: () => void) {
+  subscribers.add(fn)
+  return () => {
+    subscribers.delete(fn)
+  }
+}
+function getSnapshot() {
+  return snapshot
+}
+
+function HistoryRouter({ children }: { children: React.ReactNode }) {
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return (
+    <Router
+      basename=""
+      location={state.location}
+      navigationType={state.action}
+      navigator={navigator}
+    >
+      {children}
+    </Router>
+  )
+}
+
 function ScrollToTop() {
   const location = useLocation()
-  const renderCount = useRef(0)
-  renderCount.current++
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [location.pathname])
-  return (
-    <div data-debug-stt style={{ position: 'fixed', top: 56, right: 0, background: 'green', color: 'white', padding: '4px 8px', fontSize: 11, zIndex: 9999, fontFamily: 'monospace' }}>
-      STT r#{renderCount.current} loc={location.pathname}
-    </div>
-  )
+  return null
 }
 
 function ProtectedRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const subscription = useAuthStore((state) => state.subscription)
   const addToast = useAppStore((state) => state.addToast)
-  const location = useLocation()
-  const navigate = useNavigate()
   const expiryWarningShown = useRef(false)
-  const renderCount = useRef(0)
-  renderCount.current++
 
   useEffect(() => {
     if (!subscription || expiryWarningShown.current) return
@@ -84,40 +165,22 @@ function ProtectedRoute() {
     return <Navigate to="/login" replace />
   }
 
-  return (
-    <>
-      <div data-debug style={{ position: 'fixed', top: 0, right: 0, background: 'red', color: 'white', padding: '4px 8px', fontSize: 11, zIndex: 9999, fontFamily: 'monospace' }}>
-        r#{renderCount.current} loc={location.pathname} t={Date.now() % 100000}
-        <button data-debug-nav style={{ marginLeft: 8 }} onClick={() => navigate('/customers')}>NAV→/customers</button>
-      </div>
-      <Outlet />
-    </>
-  )
+  return <Outlet />
 }
 
 function PublicRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-  const location = useLocation()
-  const renderCount = useRef(0)
-  renderCount.current++
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />
   }
 
-  return (
-    <>
-      <div data-debug-public style={{ position: 'fixed', top: 28, right: 0, background: 'blue', color: 'white', padding: '4px 8px', fontSize: 11, zIndex: 9999, fontFamily: 'monospace' }}>
-        PUB r#{renderCount.current} loc={location.pathname}
-      </div>
-      <Outlet />
-    </>
-  )
+  return <Outlet />
 }
 
 export function AppRoutes() {
   return (
-    <BrowserRouter>
+    <HistoryRouter>
       <ScrollToTop />
       <Routes>
         <Route element={<PublicRoute />}>
@@ -174,6 +237,6 @@ export function AppRoutes() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+    </HistoryRouter>
   )
 }
