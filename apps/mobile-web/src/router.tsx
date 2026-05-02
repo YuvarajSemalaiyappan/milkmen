@@ -72,7 +72,9 @@ function ProtectedRoute() {
   return (
     <>
       <ScrollRestoration />
-      <Outlet key={location.pathname} />
+      <div key={location.pathname}>
+        <Outlet />
+      </div>
     </>
   )
 }
