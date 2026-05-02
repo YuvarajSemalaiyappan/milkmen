@@ -57,7 +57,10 @@ function ProtectedRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const subscription = useAuthStore((state) => state.subscription)
   const addToast = useAppStore((state) => state.addToast)
+  const location = useLocation()
   const expiryWarningShown = useRef(false)
+  const renderCount = useRef(0)
+  renderCount.current++
 
   useEffect(() => {
     if (!subscription || expiryWarningShown.current) return
@@ -74,7 +77,14 @@ function ProtectedRoute() {
     return <Navigate to="/login" replace />
   }
 
-  return <Outlet />
+  return (
+    <>
+      <div data-debug style={{ position: 'fixed', top: 0, right: 0, background: 'red', color: 'white', padding: '4px 8px', fontSize: 11, zIndex: 9999, fontFamily: 'monospace' }}>
+        r#{renderCount.current} loc={location.pathname} t={Date.now() % 100000}
+      </div>
+      <Outlet />
+    </>
+  )
 }
 
 function PublicRoute() {
