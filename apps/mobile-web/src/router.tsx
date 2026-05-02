@@ -47,10 +47,16 @@ import { LoginPage, RegisterPage } from '@/features/auth'
 
 function ScrollToTop() {
   const location = useLocation()
+  const renderCount = useRef(0)
+  renderCount.current++
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [location.pathname])
-  return null
+  return (
+    <div data-debug-stt style={{ position: 'fixed', top: 56, right: 0, background: 'green', color: 'white', padding: '4px 8px', fontSize: 11, zIndex: 9999, fontFamily: 'monospace' }}>
+      STT r#{renderCount.current} loc={location.pathname}
+    </div>
+  )
 }
 
 function ProtectedRoute() {
