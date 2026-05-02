@@ -89,12 +89,22 @@ function ProtectedRoute() {
 
 function PublicRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const location = useLocation()
+  const renderCount = useRef(0)
+  renderCount.current++
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />
   }
 
-  return <Outlet />
+  return (
+    <>
+      <div data-debug-public style={{ position: 'fixed', top: 28, right: 0, background: 'blue', color: 'white', padding: '4px 8px', fontSize: 11, zIndex: 9999, fontFamily: 'monospace' }}>
+        PUB r#{renderCount.current} loc={location.pathname}
+      </div>
+      <Outlet />
+    </>
+  )
 }
 
 export function AppRoutes() {
