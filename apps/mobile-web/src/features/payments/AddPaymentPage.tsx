@@ -16,11 +16,18 @@ function getToday(): string {
   return new Date().toISOString().split('T')[0]
 }
 
+// API returns dates as full ISO strings (e.g. "2026-05-05T00:00:00.000Z").
+// All date logic + <input type="date"> need plain YYYY-MM-DD.
+function toDateOnly(d: string): string {
+  return d.slice(0, 10)
+}
+
 function nextShift(date: string, shift: Shift): { date: string; shift: Shift } {
+  const dateOnly = toDateOnly(date)
   if (shift === 'MORNING') {
-    return { date, shift: 'EVENING' }
+    return { date: dateOnly, shift: 'EVENING' }
   }
-  const d = new Date(date + 'T00:00:00')
+  const d = new Date(dateOnly + 'T00:00:00')
   d.setDate(d.getDate() + 1)
   return { date: d.toISOString().split('T')[0], shift: 'MORNING' }
 }
@@ -114,11 +121,13 @@ export function AddPaymentPage() {
 
       if (personPayments.length > 0) {
         const descByEnd = [...personPayments].sort((a, b) => {
-          if (a.periodToDate! > b.periodToDate!) return -1
-          if (a.periodToDate! < b.periodToDate!) return 1
+          const aTo = toDateOnly(a.periodToDate!)
+          const bTo = toDateOnly(b.periodToDate!)
+          if (aTo > bTo) return -1
+          if (aTo < bTo) return 1
           return shiftOrd(b.periodToShift!) - shiftOrd(a.periodToShift!)
         })
-        const lastPaidDate = descByEnd[0].periodToDate!
+        const lastPaidDate = toDateOnly(descByEnd[0].periodToDate!)
         const lastPaidShift = descByEnd[0].periodToShift!
 
         const next = nextShift(lastPaidDate, lastPaidShift)
@@ -132,23 +141,27 @@ export function AddPaymentPage() {
         if (recipientType === 'farmer') {
           const collections = await getCollectionsByFarmer(selected.id)
           const sorted = collections.sort((a, b) => {
-            if (a.date < b.date) return -1
-            if (a.date > b.date) return 1
+            const ad = toDateOnly(a.date)
+            const bd = toDateOnly(b.date)
+            if (ad < bd) return -1
+            if (ad > bd) return 1
             return a.shift === 'MORNING' ? -1 : 1
           })
           if (sorted.length > 0) {
-            firstDate = sorted[0].date
+            firstDate = toDateOnly(sorted[0].date)
             firstShift = sorted[0].shift
           }
         } else {
           const deliveries = await getDeliveriesByCustomer(selected.id)
           const sorted = deliveries.sort((a, b) => {
-            if (a.date < b.date) return -1
-            if (a.date > b.date) return 1
+            const ad = toDateOnly(a.date)
+            const bd = toDateOnly(b.date)
+            if (ad < bd) return -1
+            if (ad > bd) return 1
             return a.shift === 'MORNING' ? -1 : 1
           })
           if (sorted.length > 0) {
-            firstDate = sorted[0].date
+            firstDate = toDateOnly(sorted[0].date)
             firstShift = sorted[0].shift
           }
         }
@@ -193,9 +206,9 @@ export function AddPaymentPage() {
       const existingPaidPeriods = allPayments
         .filter((p) => p.periodFromDate && p.periodToDate && p.periodFromShift && p.periodToShift)
         .map((p) => ({
-          from: p.periodFromDate!,
+          from: toDateOnly(p.periodFromDate!),
           fromShift: p.periodFromShift!,
-          to: p.periodToDate!,
+          to: toDateOnly(p.periodToDate!),
           toShift: p.periodToShift!,
         }))
 
@@ -210,9 +223,10 @@ export function AddPaymentPage() {
       if (recipientType === 'farmer') {
         const collections = await getCollectionsByFarmer(selected.id, fromDate, toDate)
         for (const c of collections) {
+          const cDate = toDateOnly(c.date)
           if (
-            isInShiftRange(c.date, c.shift, fromDate, fromShift, toDate, toShift) &&
-            !isAlreadyPaid(c.date, c.shift)
+            isInShiftRange(cDate, c.shift, fromDate, fromShift, toDate, toShift) &&
+            !isAlreadyPaid(cDate, c.shift)
           ) {
             total += Number(c.totalAmount)
             count++
@@ -221,10 +235,11 @@ export function AddPaymentPage() {
       } else {
         const deliveries = await getDeliveriesByCustomer(selected.id, fromDate, toDate)
         for (const d of deliveries) {
+          const dDate = toDateOnly(d.date)
           if (
             d.status === 'DELIVERED' &&
-            isInShiftRange(d.date, d.shift, fromDate, fromShift, toDate, toShift) &&
-            !isAlreadyPaid(d.date, d.shift)
+            isInShiftRange(dDate, d.shift, fromDate, fromShift, toDate, toShift) &&
+            !isAlreadyPaid(dDate, d.shift)
           ) {
             total += Number(d.totalAmount)
             count++
