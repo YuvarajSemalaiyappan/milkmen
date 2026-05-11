@@ -13,8 +13,8 @@ const createFarmerSchema = z.object({
   defaultRate: z.number().positive(),
   collectAM: z.boolean().optional(),
   collectPM: z.boolean().optional(),
-  subscriptionQtyAM: z.number().positive().optional().nullable(),
-  subscriptionQtyPM: z.number().positive().optional().nullable()
+  subscriptionQtyAM: z.number().nonnegative().optional().nullable(),
+  subscriptionQtyPM: z.number().nonnegative().optional().nullable()
 })
 
 const updateFarmerSchema = z.object({
@@ -24,8 +24,8 @@ const updateFarmerSchema = z.object({
   defaultRate: z.number().positive().optional(),
   collectAM: z.boolean().optional(),
   collectPM: z.boolean().optional(),
-  subscriptionQtyAM: z.number().positive().optional().nullable(),
-  subscriptionQtyPM: z.number().positive().optional().nullable(),
+  subscriptionQtyAM: z.number().nonnegative().optional().nullable(),
+  subscriptionQtyPM: z.number().nonnegative().optional().nullable(),
   isActive: z.boolean().optional()
 })
 
@@ -112,6 +112,25 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch farmer'
+    })
+  }
+})
+
+// GET /api/farmers/sort-order - Get current user's farmer sort order map
+// NOTE: Must be before /:id routes to avoid "sort-order" matching as an ID
+router.get('/sort-order', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.user!
+    const rows = await prisma.userFarmerOrder.findMany({
+      where: { userId },
+      select: { farmerId: true, sortOrder: true }
+    })
+    return res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('Get farmer sort order error:', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch sort order'
     })
   }
 })

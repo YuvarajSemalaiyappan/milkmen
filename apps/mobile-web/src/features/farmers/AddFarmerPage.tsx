@@ -17,8 +17,8 @@ const farmerSchema = z.object({
   defaultRate: z.number().min(1, 'Rate must be greater than 0'),
   collectAM: z.boolean(),
   collectPM: z.boolean(),
-  subscriptionQtyAM: z.number().positive().optional(),
-  subscriptionQtyPM: z.number().positive().optional()
+  subscriptionQtyAM: z.number().nonnegative().optional(),
+  subscriptionQtyPM: z.number().nonnegative().optional()
 })
 
 type FarmerFormData = z.infer<typeof farmerSchema>

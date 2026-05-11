@@ -153,7 +153,8 @@ export const farmersApi = {
     api.put(`/farmers/${id}`, data),
   delete: (id: string) => api.delete(`/farmers/${id}`),
   updateSortOrder: (orders: { farmerId: string; sortOrder: number }[]) =>
-    api.put('/farmers/sort-order', { orders })
+    api.put('/farmers/sort-order', { orders }),
+  getSortOrder: () => api.get('/farmers/sort-order')
 }
 
 // Customers API
@@ -179,7 +180,9 @@ export const customersApi = {
   }>) => api.put(`/customers/${id}`, data),
   delete: (id: string) => api.delete(`/customers/${id}`),
   updateSortOrder: (orders: { customerId: string; shift?: string; sortOrder: number }[]) =>
-    api.put('/customers/sort-order', { orders })
+    api.put('/customers/sort-order', { orders }),
+  getSortOrder: (shift?: string) =>
+    api.get(`/customers/sort-order${shift ? `?shift=${shift}` : ''}`)
 }
 
 // Helper to build query string from optional params

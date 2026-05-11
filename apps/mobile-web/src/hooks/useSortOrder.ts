@@ -1,19 +1,47 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '@/store'
 import { farmersApi, customersApi } from '@/services/api'
-import type { Shift } from '@/types'
+import type { Shift, ApiResponse } from '@/types'
 
 type OrderType = 'customer' | 'farmer'
+
+type FarmerOrderRow = { farmerId: string; sortOrder: number }
+type CustomerOrderRow = { customerId: string; sortOrder: number; shift: Shift | null }
 
 export function useSortOrder(type: OrderType, shift?: Shift) {
   const userId = useAuthStore((s) => s.user?.id)
   const [orderMap, setOrderMap] = useState<Map<string, number>>(new Map())
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Sort order is returned as part of route data, not as a separate endpoint.
-  // For now, we just maintain local state updated via save calls.
   useEffect(() => {
-    setIsLoaded(true)
+    if (!userId) {
+      setOrderMap(new Map())
+      setIsLoaded(true)
+      return
+    }
+    let cancelled = false
+    setIsLoaded(false)
+    ;(async () => {
+      try {
+        const newMap = new Map<string, number>()
+        if (type === 'farmer') {
+          const res = (await farmersApi.getSortOrder()) as ApiResponse<FarmerOrderRow[]>
+          res.data?.forEach((row) => newMap.set(row.farmerId, row.sortOrder))
+        } else {
+          const res = (await customersApi.getSortOrder(shift)) as ApiResponse<CustomerOrderRow[]>
+          res.data?.forEach((row) => newMap.set(row.customerId, row.sortOrder))
+        }
+        if (!cancelled) setOrderMap(newMap)
+      } catch (error) {
+        console.error('Failed to load sort order:', error)
+        if (!cancelled) setOrderMap(new Map())
+      } finally {
+        if (!cancelled) setIsLoaded(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [userId, type, shift])
 
   const applySortOrder = useCallback(<T extends { id: string }>(items: T[]): T[] => {

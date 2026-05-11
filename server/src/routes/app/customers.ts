@@ -159,6 +159,31 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   }
 })
 
+// GET /api/customers/sort-order - Get current user's customer sort order map
+// Optional ?shift=MORNING|EVENING to scope by shift (null shift returned when omitted)
+// NOTE: Must be before /:id routes to avoid "sort-order" matching as an ID
+router.get('/sort-order', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.user!
+    const shiftParam = req.query.shift
+    const shiftValue =
+      shiftParam === 'MORNING' || shiftParam === 'EVENING'
+        ? (shiftParam as 'MORNING' | 'EVENING')
+        : null
+    const rows = await prisma.userCustomerOrder.findMany({
+      where: { userId, shift: shiftValue },
+      select: { customerId: true, sortOrder: true, shift: true }
+    })
+    return res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('Get customer sort order error:', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch sort order'
+    })
+  }
+})
+
 // PUT /api/customers/sort-order - Bulk update sort order for customers
 // NOTE: Must be before /:id routes to avoid "sort-order" matching as an ID
 router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Response) => {
