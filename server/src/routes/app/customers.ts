@@ -8,7 +8,7 @@ const router = Router()
 // Validation schemas
 const createCustomerSchema = z.object({
   name: z.string().min(2).max(100),
-  phone: z.string().min(10).max(15).optional(),
+  phone: z.string().regex(/^\d+$/, 'Phone must contain only digits').max(15).optional(),
   address: z.string().max(200).optional(),
   defaultRate: z.number().positive(),
   subscriptionQtyAM: z.number().positive().optional(),
@@ -17,7 +17,7 @@ const createCustomerSchema = z.object({
 
 const updateCustomerSchema = z.object({
   name: z.string().min(2).max(100).optional(),
-  phone: z.string().min(10).max(15).optional().nullable(),
+  phone: z.string().regex(/^\d+$/, 'Phone must contain only digits').max(15).optional().nullable(),
   address: z.string().max(200).optional().nullable(),
   defaultRate: z.number().positive().optional(),
   subscriptionQtyAM: z.number().positive().optional().nullable(),
@@ -119,46 +119,6 @@ router.get('/subscribed', authenticateToken, async (req: AuthRequest, res: Respo
   }
 })
 
-// GET /api/customers/:id - Get a single customer
-router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
-  try {
-    const { businessId } = req.user!
-    const id = req.params.id as string
-
-    const customer = await prisma.customer.findFirst({
-      where: { id, businessId },
-      include: {
-        deliveries: {
-          orderBy: { date: 'desc' },
-          take: 10
-        },
-        payments: {
-          orderBy: { date: 'desc' },
-          take: 10
-        }
-      }
-    })
-
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        error: 'Customer not found'
-      })
-    }
-
-    return res.json({
-      success: true,
-      data: customer
-    })
-  } catch (error) {
-    console.error('Get customer error:', error)
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch customer'
-    })
-  }
-})
-
 // GET /api/customers/sort-order - Get current user's customer sort order map
 // Optional ?shift=MORNING|EVENING to scope by shift (null shift returned when omitted)
 // NOTE: Must be before /:id routes to avoid "sort-order" matching as an ID
@@ -228,6 +188,46 @@ router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Respo
     return res.status(500).json({
       success: false,
       error: 'Failed to update sort orders'
+    })
+  }
+})
+
+// GET /api/customers/:id - Get a single customer
+router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId } = req.user!
+    const id = req.params.id as string
+
+    const customer = await prisma.customer.findFirst({
+      where: { id, businessId },
+      include: {
+        deliveries: {
+          orderBy: { date: 'desc' },
+          take: 10
+        },
+        payments: {
+          orderBy: { date: 'desc' },
+          take: 10
+        }
+      }
+    })
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Customer not found'
+      })
+    }
+
+    return res.json({
+      success: true,
+      data: customer
+    })
+  } catch (error) {
+    console.error('Get customer error:', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch customer'
     })
   }
 })

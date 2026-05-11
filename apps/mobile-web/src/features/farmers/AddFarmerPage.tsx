@@ -12,7 +12,10 @@ import { routesApi } from '@/services/api'
 
 const farmerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  phone: z.string().optional(),
+  phone: z.string().optional().refine(
+    (v) => !v || /^\d+$/.test(v),
+    'Phone must contain only digits'
+  ),
   village: z.string().optional(),
   defaultRate: z.number().min(1, 'Rate must be greater than 0'),
   collectAM: z.boolean(),
@@ -102,7 +105,7 @@ export function AddFarmerPage() {
             <Input
               label={t('common.phone')}
               type="tel"
-              placeholder="10-digit phone number"
+              placeholder="Phone number"
               error={errors.phone?.message}
               {...register('phone')}
             />

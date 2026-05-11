@@ -8,7 +8,7 @@ const router = Router()
 // Validation schemas
 const createFarmerSchema = z.object({
   name: z.string().min(2).max(100),
-  phone: z.string().min(10).max(15).optional(),
+  phone: z.string().regex(/^\d+$/, 'Phone must contain only digits').max(15).optional(),
   village: z.string().max(100).optional(),
   defaultRate: z.number().positive(),
   collectAM: z.boolean().optional(),
@@ -19,7 +19,7 @@ const createFarmerSchema = z.object({
 
 const updateFarmerSchema = z.object({
   name: z.string().min(2).max(100).optional(),
-  phone: z.string().min(10).max(15).optional().nullable(),
+  phone: z.string().regex(/^\d+$/, 'Phone must contain only digits').max(15).optional().nullable(),
   village: z.string().max(100).optional().nullable(),
   defaultRate: z.number().positive().optional(),
   collectAM: z.boolean().optional(),
@@ -72,46 +72,6 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch farmers'
-    })
-  }
-})
-
-// GET /api/farmers/:id - Get a single farmer
-router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
-  try {
-    const { businessId } = req.user!
-    const id = req.params.id as string
-
-    const farmer = await prisma.farmer.findFirst({
-      where: { id, businessId },
-      include: {
-        collections: {
-          orderBy: { date: 'desc' },
-          take: 10
-        },
-        payments: {
-          orderBy: { date: 'desc' },
-          take: 10
-        }
-      }
-    })
-
-    if (!farmer) {
-      return res.status(404).json({
-        success: false,
-        error: 'Farmer not found'
-      })
-    }
-
-    return res.json({
-      success: true,
-      data: farmer
-    })
-  } catch (error) {
-    console.error('Get farmer error:', error)
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch farmer'
     })
   }
 })
@@ -176,6 +136,46 @@ router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Respo
     return res.status(500).json({
       success: false,
       error: 'Failed to update sort orders'
+    })
+  }
+})
+
+// GET /api/farmers/:id - Get a single farmer
+router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId } = req.user!
+    const id = req.params.id as string
+
+    const farmer = await prisma.farmer.findFirst({
+      where: { id, businessId },
+      include: {
+        collections: {
+          orderBy: { date: 'desc' },
+          take: 10
+        },
+        payments: {
+          orderBy: { date: 'desc' },
+          take: 10
+        }
+      }
+    })
+
+    if (!farmer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Farmer not found'
+      })
+    }
+
+    return res.json({
+      success: true,
+      data: farmer
+    })
+  } catch (error) {
+    console.error('Get farmer error:', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch farmer'
     })
   }
 })
