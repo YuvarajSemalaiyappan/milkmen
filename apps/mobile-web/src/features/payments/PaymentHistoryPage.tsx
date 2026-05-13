@@ -5,7 +5,7 @@ import { IndianRupee, Trash2, Calendar, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Button } from '@/components/ui'
 import { useFarmers, useCustomers, usePayments } from '@/hooks'
-import { formatCurrency } from '@/utils'
+import { formatCurrency, formatDateDMY } from '@/utils'
 import type { Payment } from '@/types'
 
 export function PaymentHistoryPage() {
@@ -126,17 +126,17 @@ export function PaymentHistoryPage() {
                     <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {p.date}
+                        {formatDateDMY(p.date)}
                       </span>
                       <span>{methodLabel(p.method)}</span>
                     </div>
                     {p.periodFromDate && p.periodToDate && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
                         <span>{t('payment.dateFilter')}:</span>
-                        <span>{p.periodFromDate}</span>
+                        <span>{formatDateDMY(p.periodFromDate)}</span>
                         {p.periodFromShift && shiftBadge(p.periodFromShift)}
                         <span>→</span>
-                        <span>{p.periodToDate}</span>
+                        <span>{formatDateDMY(p.periodToDate)}</span>
                         {p.periodToShift && shiftBadge(p.periodToShift)}
                       </div>
                     )}

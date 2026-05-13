@@ -26,6 +26,24 @@ export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOpt
   })
 }
 
+// Format date as dd-mm-yyyy. Accepts ISO strings ("2026-02-08T00:00:00.000Z"),
+// date-only strings ("2026-02-08"), or Date objects. For ISO/date-only strings
+// the date portion is used as-is to avoid timezone shifts.
+export function formatDateDMY(date: string | Date): string {
+  if (typeof date === 'string') {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      const [, y, m, d] = match
+      return `${d}-${m}-${y}`
+    }
+  }
+  const d = typeof date === 'string' ? new Date(date) : date
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}-${month}-${year}`
+}
+
 // Time formatting
 export function formatTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
