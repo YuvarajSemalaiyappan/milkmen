@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { farmersApi } from '@/services/api'
 import { useAppStore } from '@/store'
 import type { Farmer, ApiResponse } from '@/types'
@@ -29,7 +29,7 @@ export function useFarmers() {
     fetchFarmers()
   }, [fetchFarmers])
 
-  const activeFarmers = farmers.filter((f) => f.isActive)
+  const activeFarmers = useMemo(() => farmers.filter((f) => f.isActive), [farmers])
 
   const addFarmer = useCallback(
     async (data: {

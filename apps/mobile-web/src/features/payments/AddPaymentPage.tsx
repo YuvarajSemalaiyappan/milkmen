@@ -8,6 +8,7 @@ import { NumberPad, ShiftToggle } from '@/components/common'
 import { useFarmers, useCustomers, usePayments, useCollections, useDeliveries } from '@/hooks'
 import { useAppStore } from '@/store'
 import { formatCurrency } from '@/utils/format'
+import { isInShiftRange, shiftOrd } from '@/utils/paymentPeriod'
 import type { Farmer, Customer, PaymentType, PaymentMethod, Shift } from '@/types'
 
 type RecipientType = 'farmer' | 'customer'
@@ -30,27 +31,6 @@ function nextShift(date: string, shift: Shift): { date: string; shift: Shift } {
   const d = new Date(dateOnly + 'T00:00:00')
   d.setDate(d.getDate() + 1)
   return { date: d.toISOString().split('T')[0], shift: 'MORNING' }
-}
-
-function shiftOrd(shift: Shift): number {
-  return shift === 'MORNING' ? 0 : 1
-}
-
-function isInShiftRange(
-  recordDate: string,
-  recordShift: Shift,
-  fromDate: string,
-  fromShift: Shift,
-  toDate: string,
-  toShift: Shift
-): boolean {
-  if (recordDate > fromDate && recordDate < toDate) return true
-  if (recordDate === fromDate && recordDate === toDate) {
-    return shiftOrd(recordShift) >= shiftOrd(fromShift) && shiftOrd(recordShift) <= shiftOrd(toShift)
-  }
-  if (recordDate === fromDate) return shiftOrd(recordShift) >= shiftOrd(fromShift)
-  if (recordDate === toDate) return shiftOrd(recordShift) <= shiftOrd(toShift)
-  return false
 }
 
 export function AddPaymentPage() {
@@ -210,10 +190,16 @@ export function AddPaymentPage() {
           fromShift: p.periodFromShift!,
           to: toDateOnly(p.periodToDate!),
           toShift: p.periodToShift!,
+          paymentCreatedAt: p.createdAt,
         }))
 
-      const isAlreadyPaid = (date: string, shift: Shift) =>
+      // An entry is already paid only if some payment's period covers it AND
+      // the entry existed when that payment was recorded. The createdAt cutoff
+      // ensures back-dated entries added after a payment still appear as
+      // selectable for a fresh payment over the same period.
+      const isAlreadyPaid = (date: string, shift: Shift, createdAt: string) =>
         existingPaidPeriods.some((pp) =>
+          createdAt <= pp.paymentCreatedAt &&
           isInShiftRange(date, shift, pp.from, pp.fromShift, pp.to, pp.toShift)
         )
 
@@ -226,7 +212,7 @@ export function AddPaymentPage() {
           const cDate = toDateOnly(c.date)
           if (
             isInShiftRange(cDate, c.shift, fromDate, fromShift, toDate, toShift) &&
-            !isAlreadyPaid(cDate, c.shift)
+            !isAlreadyPaid(cDate, c.shift, c.createdAt)
           ) {
             total += Number(c.totalAmount)
             count++
@@ -239,7 +225,7 @@ export function AddPaymentPage() {
           if (
             d.status === 'DELIVERED' &&
             isInShiftRange(dDate, d.shift, fromDate, fromShift, toDate, toShift) &&
-            !isAlreadyPaid(dDate, d.shift)
+            !isAlreadyPaid(dDate, d.shift, d.createdAt)
           ) {
             total += Number(d.totalAmount)
             count++

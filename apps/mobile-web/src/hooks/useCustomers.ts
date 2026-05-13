@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { customersApi } from '@/services/api'
 import { useAppStore } from '@/store'
 import type { Customer, ApiResponse } from '@/types'
@@ -29,7 +29,7 @@ export function useCustomers() {
     fetchCustomers()
   }, [fetchCustomers])
 
-  const activeCustomers = customers.filter((c) => c.isActive)
+  const activeCustomers = useMemo(() => customers.filter((c) => c.isActive), [customers])
 
   const addCustomer = useCallback(
     async (data: {

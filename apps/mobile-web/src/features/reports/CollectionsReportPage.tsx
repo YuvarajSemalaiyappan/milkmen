@@ -6,9 +6,10 @@ import { AppShell } from '@/components/layout'
 import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useFarmers } from '@/hooks'
-import { reportsApi, collectionsApi } from '@/services/api'
-import { formatCurrency, formatDate, getToday, exportToExcel } from '@/utils'
-import type { Farmer, Collection, ApiResponse } from '@/types'
+import { reportsApi, collectionsApi, paymentsApi } from '@/services/api'
+import { formatCurrency, formatDate, getToday, exportToExcel, isEntryPaid } from '@/utils'
+import type { Farmer, Collection, Payment, ApiResponse } from '@/types'
+import type { PaidPeriodPayment } from '@/utils/paymentPeriod'
 
 interface CollectionWithFarmer extends Collection {
   farmerName: string
@@ -54,6 +55,7 @@ export function CollectionsReportPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'list' | 'summary'>(farmerIdParam ? 'list' : 'summary')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [paymentsByFarmer, setPaymentsByFarmer] = useState<Map<string, PaidPeriodPayment[]>>(new Map())
 
   const isPersonMode = !!farmerIdParam
 
@@ -65,11 +67,49 @@ export function CollectionsReportPage() {
 
   useEffect(() => {
     loadCollections()
+    loadPaidPeriods()
   }, [startDate, endDate, selectedFarmerId])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
   }, [startDate, endDate, selectedFarmerId])
+
+  const loadPaidPeriods = async () => {
+    try {
+      const effectiveFarmerId = selectedFarmerId || farmerIdParam || undefined
+      const response = await paymentsApi.list(
+        effectiveFarmerId ? { farmerId: effectiveFarmerId } : {}
+      ) as ApiResponse<Payment[]>
+      if (!response.success || !response.data) {
+        setPaymentsByFarmer(new Map())
+        return
+      }
+
+      const grouped = new Map<string, PaidPeriodPayment[]>()
+      response.data
+        .filter(p => p.farmerId && p.periodFromDate && p.periodToDate)
+        .forEach(p => {
+          const arr = grouped.get(p.farmerId!) || []
+          arr.push({
+            periodFromDate: p.periodFromDate,
+            periodToDate: p.periodToDate,
+            periodFromShift: p.periodFromShift,
+            periodToShift: p.periodToShift,
+            createdAt: p.createdAt
+          })
+          grouped.set(p.farmerId!, arr)
+        })
+      setPaymentsByFarmer(grouped)
+    } catch (error) {
+      console.error('Failed to load payment periods:', error)
+    }
+  }
+
+  const isCollectionPaid = (c: CollectionWithFarmer) => {
+    const payments = paymentsByFarmer.get(c.farmerId)
+    if (!payments || payments.length === 0) return false
+    return isEntryPaid(c.date, c.shift, c.createdAt, payments)
+  }
 
   const loadCollections = async () => {
     setIsLoading(true)
@@ -286,7 +326,12 @@ export function CollectionsReportPage() {
                       <Milk className="w-5 h-5 text-purple-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{collection.farmerName}</h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-gray-900">{collection.farmerName}</h3>
+                        <Badge size="sm" variant={isCollectionPaid(collection) ? 'success' : 'error'}>
+                          {isCollectionPaid(collection) ? t('reports.paid') : t('reports.unpaid')}
+                        </Badge>
+                      </div>
                       <p className="text-sm text-gray-500">
                         {formatDate(collection.date)} - {t(`shifts.${collection.shift.toLowerCase()}`)}
                       </p>

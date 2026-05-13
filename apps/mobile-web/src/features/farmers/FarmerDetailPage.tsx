@@ -20,8 +20,9 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useFarmers, useCollections, usePayments, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
-import { formatCurrency, formatDate } from '@/utils'
+import { formatCurrency, formatDate, isEntryPaid } from '@/utils'
 import type { Farmer, Collection, ApiResponse } from '@/types'
+import type { PaidPeriodPayment } from '@/utils/paymentPeriod'
 
 const farmerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -48,7 +49,7 @@ export function FarmerDetailPage() {
   const [farmer, setFarmer] = useState<Farmer | null>(null)
   const [collections, setCollections] = useState<Collection[]>([])
   const [lastPaymentDate, setLastPaymentDate] = useState<string | null>(null)
-  const [paidPeriods, setPaidPeriods] = useState<{ from: string; to: string }[]>([])
+  const [paidPayments, setPaidPayments] = useState<PaidPeriodPayment[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -113,41 +114,35 @@ export function FarmerDetailPage() {
   const loadLastPaymentDate = async () => {
     if (!id) return
     const payments = await getPaymentsByFarmer(id)
-    if (payments.length > 0) {
-      // Build sorted list of payment periods (exclude advance payments with no period)
-      const paymentsWithPeriod = payments as Array<typeof payments[0] & { periodFromDate?: string; periodToDate?: string }>
-      const periods = paymentsWithPeriod
-        .filter((p) => p.periodFromDate && p.periodToDate)
-        .map((p) => ({ from: p.periodFromDate!, to: p.periodToDate! }))
-        .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to))
-
-      if (periods.length === 0) {
-        setLastPaymentDate(null)
-        setPaidPeriods([])
-        return
-      }
-
-      // Merge contiguous/overlapping periods
-      // Two periods are contiguous if the next starts within 1 day of current end
-      const merged: { from: string; to: string }[] = [{ ...periods[0] }]
-      for (let i = 1; i < periods.length; i++) {
-        const current = merged[merged.length - 1]
-        const nextDay = new Date(current.to + 'T00:00:00')
-        nextDay.setDate(nextDay.getDate() + 1)
-        const nextDayStr = nextDay.toISOString().slice(0, 10)
-        if (periods[i].from <= nextDayStr) {
-          if (periods[i].to > current.to) current.to = periods[i].to
-        } else {
-          merged.push({ ...periods[i] })
-        }
-      }
-      setPaidPeriods(merged)
-      const paidTill = merged.reduce((max, p) => p.to > max ? p.to : max, merged[0].to)
-      setLastPaymentDate(paidTill)
-    } else {
+    if (payments.length === 0) {
       setLastPaymentDate(null)
-      setPaidPeriods([])
+      setPaidPayments([])
+      return
     }
+
+    const toDateOnly = (d: string) => d.slice(0, 10)
+    const withPeriod = payments
+      .filter((p) => p.periodFromDate && p.periodToDate)
+      .map((p) => ({
+        periodFromDate: p.periodFromDate,
+        periodToDate: p.periodToDate,
+        periodFromShift: p.periodFromShift,
+        periodToShift: p.periodToShift,
+        createdAt: p.createdAt
+      })) as PaidPeriodPayment[]
+
+    setPaidPayments(withPeriod)
+
+    if (withPeriod.length === 0) {
+      setLastPaymentDate(null)
+      return
+    }
+
+    const paidTill = withPeriod.reduce(
+      (max, p) => (toDateOnly(p.periodToDate!) > max ? toDateOnly(p.periodToDate!) : max),
+      toDateOnly(withPeriod[0].periodToDate!)
+    )
+    setLastPaymentDate(paidTill)
   }
 
   const onSubmit = async (data: FarmerFormData) => {
@@ -219,12 +214,10 @@ export function FarmerDetailPage() {
     )
   }
 
-  const isDatePaid = (date: string) =>
-    paidPeriods.some((p) => date >= p.from && date <= p.to)
+  const isCollectionPaid = (c: Collection) =>
+    isEntryPaid(c.date, c.shift, c.createdAt, paidPayments)
 
-  const unpaidCollections = collections.filter(
-    (c) => !isDatePaid(c.date)
-  )
+  const unpaidCollections = collections.filter((c) => !isCollectionPaid(c))
   const unpaidQty = unpaidCollections.reduce(
     (sum, c) => sum + Number(c.quantity),
     0
@@ -582,8 +575,8 @@ export function FarmerDetailPage() {
                           <Badge size="sm" variant={collection.shift === 'MORNING' ? 'info' : 'warning'}>
                             {collection.shift === 'MORNING' ? 'AM' : 'PM'}
                           </Badge>
-                          <Badge size="sm" variant={isDatePaid(collection.date) ? 'success' : 'error'}>
-                            {isDatePaid(collection.date) ? t('reports.paid') : t('reports.unpaid')}
+                          <Badge size="sm" variant={isCollectionPaid(collection) ? 'success' : 'error'}>
+                            {isCollectionPaid(collection) ? t('reports.paid') : t('reports.unpaid')}
                           </Badge>
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
