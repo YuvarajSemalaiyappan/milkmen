@@ -13,7 +13,7 @@ export function PaymentHistoryPage() {
   const [searchParams] = useSearchParams()
   const { getFarmer } = useFarmers()
   const { getCustomer } = useCustomers()
-  const { getPaymentsByFarmer, getPaymentsByCustomer, deletePayment } = usePayments()
+  const { getPaymentsByFarmer, getPaymentsByCustomer, deletePayment } = usePayments({ skipInitialFetch: true })
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [person, setPerson] = useState<{ name: string; type: 'farmer' | 'customer' } | null>(null)

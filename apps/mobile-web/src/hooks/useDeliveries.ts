@@ -4,11 +4,12 @@ import { useAppStore } from '@/store'
 import { getToday } from '@/utils/format'
 import type { Delivery, Shift, DeliveryStatus, ApiResponse } from '@/types'
 
-export function useDeliveries() {
+export function useDeliveries(options?: { skipInitialFetch?: boolean }) {
+  const skipInitialFetch = options?.skipInitialFetch ?? false
   const addToast = useAppStore((state) => state.addToast)
   const currentShift = useAppStore((state) => state.currentShift)
   const [todayDeliveries, setTodayDeliveries] = useState<Delivery[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(!skipInitialFetch)
   const [error, setError] = useState(false)
 
   const fetchDeliveries = useCallback(async () => {
@@ -28,8 +29,9 @@ export function useDeliveries() {
   }, [])
 
   useEffect(() => {
+    if (skipInitialFetch) return
     fetchDeliveries()
-  }, [fetchDeliveries])
+  }, [fetchDeliveries, skipInitialFetch])
 
   const todayTotals = {
     liters: todayDeliveries.reduce((sum, d) => sum + Number(d.quantity), 0),

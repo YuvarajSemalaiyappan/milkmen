@@ -19,9 +19,9 @@ interface DailySummary {
 
 export function DailyReportPage() {
   const { t } = useTranslation()
-  const { getCollectionsByDate } = useCollections()
-  const { getDeliveriesByDate } = useDeliveries()
-  const { getPaymentsByDateRange } = usePayments()
+  const { getCollectionsByDate } = useCollections({ skipInitialFetch: true })
+  const { getDeliveriesByDate } = useDeliveries({ skipInitialFetch: true })
+  const { getPaymentsByDateRange } = usePayments({ skipInitialFetch: true })
 
   const [selectedDate, setSelectedDate] = useState(getToday())
   const [summary, setSummary] = useState<DailySummary | null>(null)

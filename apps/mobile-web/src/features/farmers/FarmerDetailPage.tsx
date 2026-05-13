@@ -42,8 +42,8 @@ export function FarmerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { getFarmer, updateFarmer, deleteFarmer } = useFarmers()
-  const { getCollectionsByFarmer } = useCollections()
-  const { getPaymentsByFarmer } = usePayments()
+  const { getCollectionsByFarmer } = useCollections({ skipInitialFetch: true })
+  const { getPaymentsByFarmer } = usePayments({ skipInitialFetch: true })
   const { routes } = useRoutes()
 
   const [farmer, setFarmer] = useState<Farmer | null>(null)

@@ -3,10 +3,13 @@ import { paymentsApi } from '@/services/api'
 import { useAppStore } from '@/store'
 import type { Payment, PaymentType, PaymentMethod, ApiResponse } from '@/types'
 
-export function usePayments() {
+export function usePayments(options?: { skipInitialFetch?: boolean }) {
+  const skipInitialFetch = options?.skipInitialFetch ?? false
   const addToast = useAppStore((state) => state.addToast)
   const [payments, setPayments] = useState<Payment[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  // When skipping the initial fetch, callers don't need the payments list,
+  // so we shouldn't pretend to be loading.
+  const [isLoading, setIsLoading] = useState(!skipInitialFetch)
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -23,8 +26,9 @@ export function usePayments() {
   }, [])
 
   useEffect(() => {
+    if (skipInitialFetch) return
     fetchPayments()
-  }, [fetchPayments])
+  }, [fetchPayments, skipInitialFetch])
 
   const getPaymentsByDateRange = useCallback(
     async (startDate: string, endDate: string) => {

@@ -31,7 +31,7 @@ export function TodayDeliveriesPage() {
   const { currentShift, setCurrentShift } = useAppStore()
   const { getSubscribedCustomers, activeCustomers } = useCustomers()
   const { todayDeliveries, addDelivery, updateDelivery } = useDeliveries()
-  const { addPayment } = usePayments()
+  const { addPayment } = usePayments({ skipInitialFetch: true })
 
   const [deliveryItems, setDeliveryItems] = useState<DeliveryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)

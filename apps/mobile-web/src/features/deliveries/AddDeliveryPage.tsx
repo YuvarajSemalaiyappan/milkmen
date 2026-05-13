@@ -24,7 +24,7 @@ export function AddDeliveryPage() {
   const setCurrentShift = useAppStore((state) => state.setCurrentShift)
 
   const { activeCustomers, searchCustomers, isLoading } = useCustomers()
-  const { addDelivery } = useDeliveries()
+  const { addDelivery } = useDeliveries({ skipInitialFetch: true })
 
   const [step, setStep] = useState<Step>('select-customer')
   const [searchQuery, setSearchQuery] = useState('')

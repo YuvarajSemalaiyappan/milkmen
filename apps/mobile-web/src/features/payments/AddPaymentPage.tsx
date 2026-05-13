@@ -43,9 +43,9 @@ export function AddPaymentPage() {
 
   const { activeFarmers } = useFarmers()
   const { activeCustomers } = useCustomers()
-  const { addPayment, getPaymentsByFarmer, getPaymentsByCustomer } = usePayments()
-  const { getCollectionsByFarmer } = useCollections()
-  const { getDeliveriesByCustomer } = useDeliveries()
+  const { addPayment, getPaymentsByFarmer, getPaymentsByCustomer } = usePayments({ skipInitialFetch: true })
+  const { getCollectionsByFarmer } = useCollections({ skipInitialFetch: true })
+  const { getDeliveriesByCustomer } = useDeliveries({ skipInitialFetch: true })
 
   const recipientType: RecipientType = (searchParams.get('type') as RecipientType) || 'farmer'
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null)
@@ -68,6 +68,13 @@ export function AddPaymentPage() {
   const [isCalculating, setIsCalculating] = useState(false)
   const [existingPaymentForPeriod, setExistingPaymentForPeriod] = useState(false)
 
+  // Cached payments for the selected person. Populated once by the
+  // auto-select effect and reused by the period-total calculation so we
+  // don't fetch /payments twice on every render cycle.
+  type CachedPayment = Awaited<ReturnType<typeof getPaymentsByFarmer>>[number]
+  const [cachedPayments, setCachedPayments] = useState<CachedPayment[]>([])
+  const [autoSelectDone, setAutoSelectDone] = useState(false)
+
   // Pre-select from URL params
   useEffect(() => {
     const farmerId = searchParams.get('farmerId')
@@ -86,15 +93,24 @@ export function AddPaymentPage() {
     }
   }, [searchParams, activeFarmers, activeCustomers])
 
-  // Auto-select date range based on last payment for this person
+  // Auto-select date range based on last payment for this person.
+  // Also caches the fetched payments so calculatePeriodTotal can reuse them
+  // instead of refetching.
   useEffect(() => {
     const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
-    if (!selected) return
+    if (!selected) {
+      setCachedPayments([])
+      setAutoSelectDone(false)
+      return
+    }
+
+    setAutoSelectDone(false)
 
     const autoSelectDates = async () => {
       const allPayments = recipientType === 'farmer'
         ? await getPaymentsByFarmer(selected.id)
         : await getPaymentsByCustomer(selected.id)
+      setCachedPayments(allPayments)
 
       const personPayments = allPayments
         .filter((p) => p.periodFromDate && p.periodFromShift && p.periodToDate && p.periodToShift)
@@ -156,6 +172,7 @@ export function AddPaymentPage() {
       }
       setToDate(getToday())
       setToShift(initialShiftRef.current)
+      setAutoSelectDone(true)
     }
     autoSelectDates()
   }, [selectedFarmer, selectedCustomer, recipientType, getPaymentsByFarmer, getPaymentsByCustomer, getCollectionsByFarmer, getDeliveriesByCustomer])
@@ -176,12 +193,15 @@ export function AddPaymentPage() {
       return
     }
 
+    // Wait for auto-select to populate cachedPayments and the real
+    // from/to range; otherwise we'd issue a redundant calculation against
+    // the default (today→today) range.
+    if (!autoSelectDone) return
+
     setIsCalculating(true)
     try {
-      // Load existing payments to determine which records are already paid
-      const allPayments = recipientType === 'farmer'
-        ? await getPaymentsByFarmer(selected.id)
-        : await getPaymentsByCustomer(selected.id)
+      // Use cached payments populated by autoSelectDates instead of refetching.
+      const allPayments = cachedPayments
 
       const existingPaidPeriods = allPayments
         .filter((p) => p.periodFromDate && p.periodToDate && p.periodFromShift && p.periodToShift)
@@ -254,7 +274,7 @@ export function AddPaymentPage() {
     } finally {
       setIsCalculating(false)
     }
-  }, [recipientType, selectedFarmer, selectedCustomer, fromDate, toDate, fromShift, toShift, isAdvance, getPaymentsByFarmer, getPaymentsByCustomer, getCollectionsByFarmer, getDeliveriesByCustomer])
+  }, [recipientType, selectedFarmer, selectedCustomer, fromDate, toDate, fromShift, toShift, isAdvance, autoSelectDone, cachedPayments, getCollectionsByFarmer, getDeliveriesByCustomer])
 
   useEffect(() => {
     calculatePeriodTotal()

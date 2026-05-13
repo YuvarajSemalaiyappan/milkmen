@@ -40,8 +40,8 @@ export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { getCustomer, updateCustomer, deleteCustomer } = useCustomers()
-  const { getDeliveriesByCustomer } = useDeliveries()
-  const { getPaymentsByCustomer } = usePayments()
+  const { getDeliveriesByCustomer } = useDeliveries({ skipInitialFetch: true })
+  const { getPaymentsByCustomer } = usePayments({ skipInitialFetch: true })
   const { routes } = useRoutes()
 
   const [customer, setCustomer] = useState<Customer | null>(null)

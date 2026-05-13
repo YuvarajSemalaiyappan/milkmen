@@ -34,7 +34,7 @@ export function CollectionDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { updateCollection, deleteCollection } = useCollections()
+  const { updateCollection, deleteCollection } = useCollections({ skipInitialFetch: true })
   const { getFarmer } = useFarmers()
 
   const [collection, setCollection] = useState<Collection | null>(null)

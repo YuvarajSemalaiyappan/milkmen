@@ -23,7 +23,7 @@ export function AddCollectionPage() {
   const setCurrentShift = useAppStore((state) => state.setCurrentShift)
 
   const { activeFarmers, searchFarmers, isLoading } = useFarmers()
-  const { addCollection } = useCollections()
+  const { addCollection } = useCollections({ skipInitialFetch: true })
   const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
   const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
   const { farmerIds: routeFarmerIds } = useRouteFarmerIds(selectedRouteId, selectedAreaId)

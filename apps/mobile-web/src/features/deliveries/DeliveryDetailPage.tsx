@@ -37,7 +37,7 @@ export function DeliveryDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { updateDelivery, deleteDelivery } = useDeliveries()
+  const { updateDelivery, deleteDelivery } = useDeliveries({ skipInitialFetch: true })
   const { getCustomer } = useCustomers()
 
   const [delivery, setDelivery] = useState<Delivery | null>(null)

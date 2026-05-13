@@ -5,11 +5,12 @@ import { calculateTotal } from '@/utils/calculate'
 import { getToday } from '@/utils/format'
 import type { Collection, Shift, ApiResponse } from '@/types'
 
-export function useCollections() {
+export function useCollections(options?: { skipInitialFetch?: boolean }) {
+  const skipInitialFetch = options?.skipInitialFetch ?? false
   const addToast = useAppStore((state) => state.addToast)
   const currentShift = useAppStore((state) => state.currentShift)
   const [todayCollections, setTodayCollections] = useState<Collection[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(!skipInitialFetch)
   const [error, setError] = useState(false)
 
   const fetchCollections = useCallback(async () => {
@@ -29,8 +30,9 @@ export function useCollections() {
   }, [])
 
   useEffect(() => {
+    if (skipInitialFetch) return
     fetchCollections()
-  }, [fetchCollections])
+  }, [fetchCollections, skipInitialFetch])
 
   const todayTotals = {
     liters: todayCollections.reduce((sum, c) => sum + Number(c.quantity), 0),
