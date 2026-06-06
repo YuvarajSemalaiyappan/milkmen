@@ -76,6 +76,10 @@ export const businessesApi = {
     return fetchWithAuth(`/businesses/${businessId}/reset-pin/${userId}`, {
       method: 'POST'
     })
+  },
+
+  delete: async (id: string) => {
+    return fetchWithAuth(`/businesses/${id}`, { method: 'DELETE' })
   }
 }
 

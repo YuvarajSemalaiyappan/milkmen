@@ -216,6 +216,38 @@ router.get('/:id/payments', authenticateAdmin, async (req: AdminRequest, res: Re
   }
 })
 
+// DELETE /api/admin/businesses/:id - Delete a business and all its data
+router.delete('/:id', authenticateAdmin, async (req: AdminRequest, res: Response) => {
+  try {
+    const id = req.params.id as string
+
+    const business = await prisma.business.findUnique({ where: { id } })
+    if (!business) {
+      return res.status(404).json({ success: false, error: 'Business not found' })
+    }
+
+    await prisma.$transaction([
+      prisma.collection.deleteMany({ where: { businessId: id } }),
+      prisma.delivery.deleteMany({ where: { businessId: id } }),
+      prisma.payment.deleteMany({ where: { businessId: id } }),
+      prisma.rate.deleteMany({ where: { businessId: id } }),
+      prisma.route.deleteMany({ where: { businessId: id } }),
+      prisma.customer.deleteMany({ where: { businessId: id } }),
+      prisma.farmer.deleteMany({ where: { businessId: id } }),
+      prisma.area.deleteMany({ where: { businessId: id } }),
+      prisma.user.deleteMany({ where: { businessId: id } }),
+      prisma.subscriptionPayment.deleteMany({ where: { businessId: id } }),
+      prisma.subscription.deleteMany({ where: { businessId: id } }),
+      prisma.business.delete({ where: { id } })
+    ])
+
+    return res.json({ success: true, message: 'Business deleted' })
+  } catch (error) {
+    console.error('Delete business error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to delete business' })
+  }
+})
+
 // POST /api/admin/businesses/:id/reset-pin/:userId - Reset user PIN
 router.post('/:id/reset-pin/:userId', authenticateAdmin, async (req: AdminRequest, res: Response) => {
   try {
