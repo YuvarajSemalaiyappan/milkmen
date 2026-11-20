@@ -203,6 +203,101 @@ router.get('/today', authenticateToken, async (req: AuthRequest, res: Response) 
   }
 })
 
+// GET /api/payments/period - Everything the payment screen needs for one farmer or customer,
+// computed in the database over all their entries and payments (no row limits):
+//   from      default start: the shift after the last paid period, else the first entry, else `to`
+//   unpaid    count / liters / amount of entries in from..to not covered by a payment period
+//             (an entry is paid only if a payment's period covers it AND it existed when that
+//             payment was recorded, same rule as the apps' paymentPeriod utils)
+//   overlaps  true if from..to overlaps an existing payment period
+// Query: farmerId or customerId, to + toShift (required), from + fromShift (optional).
+router.get('/period', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId } = req.user!
+    const q = req.query as Record<string, string | undefined>
+    const isShift = (v?: string): v is 'MORNING' | 'EVENING' => v === 'MORNING' || v === 'EVENING'
+    const isDay = (v?: string): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v)
+    const farmerId = q.farmerId || null
+    const customerId = farmerId ? null : q.customerId || null
+    if (!farmerId && !customerId) {
+      return res.status(400).json({ success: false, error: 'farmerId or customerId is required' })
+    }
+    if (!isDay(q.to) || !isShift(q.toShift)) {
+      return res.status(400).json({ success: false, error: 'to (YYYY-MM-DD) and toShift are required' })
+    }
+    if ((q.from || q.fromShift) && (!isDay(q.from) || !isShift(q.fromShift))) {
+      return res.status(400).json({ success: false, error: 'from (YYYY-MM-DD) and fromShift must be given together' })
+    }
+
+    const personPayment = farmerId ? Prisma.sql`p."farmerId" = ${farmerId}` : Prisma.sql`p."customerId" = ${customerId}`
+    const entries = farmerId
+      ? Prisma.sql`"Collection" e WHERE e."businessId" = ${businessId} AND e."farmerId" = ${farmerId}`
+      : Prisma.sql`"Delivery" e WHERE e."businessId" = ${businessId} AND e."customerId" = ${customerId} AND e.status = 'DELIVERED'`
+    const periodPayments = Prisma.sql`"Payment" p WHERE p."businessId" = ${businessId} AND ${personPayment}
+      AND p."periodFromDate" IS NOT NULL AND p."periodToDate" IS NOT NULL
+      AND p."periodFromShift" IS NOT NULL AND p."periodToShift" IS NOT NULL`
+
+    // Default start, only when the client didn't choose one
+    let from = isDay(q.from) && isShift(q.fromShift) ? { date: q.from, shift: q.fromShift } : null
+    if (!from) {
+      const [[lastPaid], [firstEntry]] = await Promise.all([
+        prisma.$queryRaw<{ date: string; shift: 'MORNING' | 'EVENING' }[]>`
+          SELECT to_char(p."periodToDate", 'YYYY-MM-DD') AS date, p."periodToShift"::text AS shift
+          FROM ${periodPayments}
+          ORDER BY p."periodToDate" DESC, p."periodToShift" DESC LIMIT 1`,
+        prisma.$queryRaw<{ date: string; shift: 'MORNING' | 'EVENING' }[]>`
+          SELECT to_char(e.date, 'YYYY-MM-DD') AS date, e.shift::text AS shift
+          FROM ${entries}
+          ORDER BY e.date ASC, e.shift ASC LIMIT 1`
+      ])
+      if (lastPaid) {
+        // The shift after the last paid one
+        if (lastPaid.shift === 'MORNING') from = { date: lastPaid.date, shift: 'EVENING' }
+        else {
+          const next = new Date(`${lastPaid.date}T00:00:00Z`)
+          next.setUTCDate(next.getUTCDate() + 1)
+          from = { date: next.toISOString().slice(0, 10), shift: 'MORNING' }
+        }
+      } else {
+        from = firstEntry ?? { date: q.to, shift: 'MORNING' }
+      }
+    }
+    const to = { date: q.to, shift: q.toShift }
+
+    const fromKey = Prisma.sql`(${from.date}::date, ${from.shift}::"Shift")`
+    const toKey = Prisma.sql`(${to.date}::date, ${to.shift}::"Shift")`
+    const [[unpaid], [overlap]] = await Promise.all([
+      prisma.$queryRaw<{ count: number; liters: number; amount: number }[]>`
+        SELECT COUNT(*)::int AS count,
+          COALESCE(SUM(e.quantity), 0)::float8 AS liters,
+          COALESCE(SUM(e."totalAmount"), 0)::float8 AS amount
+        FROM ${entries}
+          AND e.date BETWEEN ${from.date}::date AND ${to.date}::date
+          AND (e.date, e.shift) >= ${fromKey} AND (e.date, e.shift) <= ${toKey}
+          AND NOT EXISTS (
+            SELECT 1 FROM ${periodPayments}
+              AND e."createdAt" <= p."createdAt"
+              AND (e.date, e.shift) >= (p."periodFromDate", p."periodFromShift")
+              AND (e.date, e.shift) <= (p."periodToDate", p."periodToShift")
+          )`,
+      prisma.$queryRaw<{ overlaps: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1 FROM ${periodPayments}
+            AND (p."periodToDate", p."periodToShift") >= ${fromKey}
+            AND (p."periodFromDate", p."periodFromShift") <= ${toKey}
+        ) AS overlaps`
+    ])
+
+    return res.json({
+      success: true,
+      data: { from, to, unpaid, overlaps: overlap.overlaps }
+    })
+  } catch (error) {
+    console.error('Payment period error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to calculate payment period' })
+  }
+})
+
 // GET /api/payments/:id - Get a single payment
 router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
