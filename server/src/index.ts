@@ -26,7 +26,8 @@ import adminDashboardRoutes from './routes/admin/dashboard.js'
 import adminBusinessesRoutes from './routes/admin/businesses.js'
 import adminSubscriptionsRoutes from './routes/admin/subscriptions.js'
 import adminLogsRoutes from './routes/admin/logs.js'
-import { requestLog, startRequestLogCleanup } from './middleware/requestLog.js'
+import prisma from './lib/prisma.js'
+import { installProcessErrorLogging, logServerEvent, requestLog, startRequestLogCleanup } from './middleware/requestLog.js'
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -42,9 +43,25 @@ app.use(cors({
 }))
 app.use(express.json())
 
-// Health check
+// Health check (server only: does not touch the database, so it doesn't keep the database awake)
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+// Database health check for an uptime monitor: 200 when the database answers, 503 when it doesn't.
+// When the database is down nothing can be saved to RequestLog, so this is how that case is noticed.
+app.get('/health/db', async (_req, res) => {
+  const started = Date.now()
+  try {
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Database did not answer in 10 s')), 10_000))
+    ])
+    res.json({ status: 'ok', db: 'ok', ms: Date.now() - started })
+  } catch (error) {
+    console.error('Database health check failed:', error)
+    res.status(503).json({ status: 'error', db: 'unreachable', ms: Date.now() - started })
+  }
 })
 
 // API Routes
@@ -106,7 +123,9 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 })
 
 // Start server
+installProcessErrorLogging()
 startRequestLogCleanup()
+void logServerEvent('server-start', undefined, 200)
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)

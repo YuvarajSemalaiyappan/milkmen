@@ -114,3 +114,35 @@ export function startRequestLogCleanup() {
   setTimeout(prune, 60_000).unref()
   setInterval(prune, 24 * 60 * 60 * 1000).unref()
 }
+
+// Errors that happen outside a request (a dropped database connection, a promise nobody awaited,
+// a crash) never reach the request logger. Save them in the same table with method PROCESS, so
+// one place shows everything that went wrong. Also records each server start, to spot restarts.
+export function logServerEvent(event: string, error?: unknown, status = 500) {
+  const err = error as (Error & { code?: string }) | undefined
+  const message = err
+    ? `${err.code ? `${err.code} ` : ''}${err.name ?? 'Error'}: ${err.message ?? String(error)} @ ${
+        err.stack?.split('\n').slice(1, 3).map((l) => l.trim()).join(' < ') ?? ''
+      }`.slice(0, MAX_ERROR)
+    : null
+  process.stdout.write(JSON.stringify({ t: 'event', r: event, s: status, ...(message ? { e: message } : {}) }) + '\n')
+  return prisma.requestLog
+    .create({
+      data: { method: 'PROCESS', route: event, path: '-', status, durationMs: 0, error: message }
+    })
+    .catch((e: unknown) => originalConsoleError('Event log write failed:', e))
+}
+
+export function installProcessErrorLogging() {
+  process.on('unhandledRejection', (reason) => {
+    originalConsoleError('Unhandled promise rejection:', reason)
+    void logServerEvent('unhandledRejection', reason)
+  })
+  process.on('uncaughtException', (error) => {
+    originalConsoleError('Uncaught exception:', error)
+    // The process may be in a broken state: save the error, then exit so Render restarts it
+    const exit = () => process.exit(1)
+    setTimeout(exit, 3000).unref()
+    void logServerEvent('uncaughtException', error).finally(exit)
+  })
+}

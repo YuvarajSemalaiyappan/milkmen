@@ -43,6 +43,9 @@ database round trip costs network time. Check every new or changed endpoint agai
 9. **Failures are logged.** Every handler's `catch` calls `console.error('<what> error:', error)`;
    the request logger saves the route, status, time, user and error to `RequestLog`
    (read with `GET /api/admin/logs`). Requests slower than 2 s are saved too: check them.
+   Errors outside a request (dropped database connections, unhandled promise rejections, crashes)
+   and every server start are saved with method `PROCESS`. `GET /health/db` returns 503 when the
+   database doesn't answer: point an uptime monitor at it, since nothing can be logged then.
 
 ## App Parity Rule (web <-> phone app)
 

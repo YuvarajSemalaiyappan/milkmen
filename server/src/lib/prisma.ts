@@ -20,7 +20,14 @@ const pool = new pg.Pool({
 })
 
 // Create Prisma adapter
-const adapter = new PrismaPg(pool)
+// A pooled connection dropped by the database (e.g. Neon suspending when idle) is reported here.
+// The pool replaces it on the next query; the event is saved so repeated drops are visible.
+// Imported lazily to avoid a circular import with the request logger.
+const adapter = new PrismaPg(pool, {
+  onPoolError: (err: Error) => {
+    void import('../middleware/requestLog.js').then((m) => m.logServerEvent('db-pool-error', err, 503))
+  }
+})
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
