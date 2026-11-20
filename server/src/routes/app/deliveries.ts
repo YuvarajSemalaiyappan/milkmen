@@ -3,6 +3,7 @@ import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
 import type { Prisma } from '@prisma/client'
+import { DuplicateEntryError, duplicateResponse, lockEntrySlot } from '../../lib/duplicates.js'
 
 const router = Router()
 
@@ -15,7 +16,9 @@ const createDeliverySchema = z.object({
   ratePerLiter: z.number().positive(),
   isSubscription: z.boolean().optional(),
   status: z.enum(['DELIVERED', 'SKIPPED', 'CANCELLED']).optional(),
-  notes: z.string().max(500).optional()
+  notes: z.string().max(500).optional(),
+  // Set only after the user confirms they really want a second entry for this shift
+  allowDuplicate: z.boolean().optional()
 })
 
 const updateDeliverySchema = z.object({
@@ -220,7 +223,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { customerId, date, shift, quantity, ratePerLiter, isSubscription, status, notes } = validation.data
+    const { customerId, date, shift, quantity, ratePerLiter, isSubscription, status, notes, allowDuplicate } = validation.data
 
     // Verify customer belongs to business
     const customer = await prisma.customer.findFirst({
@@ -239,6 +242,16 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
     // Create delivery and update customer balance in a transaction
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // One delivery per customer per shift (cancelled ones don't count), unless the user confirmed another one
+      await lockEntrySlot(tx, `delivery:${customerId}:${date}:${shift}`)
+      if (!allowDuplicate) {
+        const existing = await tx.delivery.findMany({
+          where: { businessId, customerId, date: new Date(date), shift, status: { not: 'CANCELLED' } },
+          select: { id: true, quantity: true }
+        })
+        if (existing.length) throw new DuplicateEntryError(existing)
+      }
+
       const delivery = await tx.delivery.create({
         data: {
           businessId,
@@ -279,6 +292,9 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       data: result
     })
   } catch (error) {
+    if (error instanceof DuplicateEntryError) {
+      return res.status(409).json(duplicateResponse('delivery', error.existing))
+    }
     console.error('Create delivery error:', error)
     return res.status(500).json({
       success: false,

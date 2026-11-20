@@ -7,14 +7,14 @@ import { Button, Card } from '@/components/ui'
 import { NumberPad, ShiftToggle } from '@/components/common'
 import { useFarmers, useCustomers, usePayments, useCollections, useDeliveries } from '@/hooks'
 import { useAppStore } from '@/store'
-import { formatCurrency } from '@/utils/format'
+import { formatCurrency, toLocalDateString } from '@/utils/format'
 import { isInShiftRange, shiftOrd } from '@/utils/paymentPeriod'
 import type { Farmer, Customer, PaymentType, PaymentMethod, Shift } from '@/types'
 
 type RecipientType = 'farmer' | 'customer'
 
 function getToday(): string {
-  return new Date().toISOString().split('T')[0]
+  return toLocalDateString(new Date())
 }
 
 // API returns dates as full ISO strings (e.g. "2026-05-05T00:00:00.000Z").
@@ -30,7 +30,7 @@ function nextShift(date: string, shift: Shift): { date: string; shift: Shift } {
   }
   const d = new Date(dateOnly + 'T00:00:00')
   d.setDate(d.getDate() + 1)
-  return { date: d.toISOString().split('T')[0], shift: 'MORNING' }
+  return { date: toLocalDateString(d), shift: 'MORNING' }
 }
 
 export function AddPaymentPage() {

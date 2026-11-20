@@ -12,7 +12,7 @@ import {
 import { AppShell } from '@/components/layout'
 import { Card, Input, Badge } from '@/components/ui'
 import { reportsApi } from '@/services/api'
-import { formatCurrency, formatDate, getToday } from '@/utils'
+import { formatCurrency, formatDate, getToday, toLocalDateString } from '@/utils'
 import type { ApiResponse } from '@/types'
 
 interface DailyData {
@@ -38,7 +38,7 @@ export function ProfitLossReportPage() {
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
     date.setDate(date.getDate() - 30)
-    return date.toISOString().split('T')[0]
+    return toLocalDateString(date)
   })
   const [endDate, setEndDate] = useState(getToday())
   const [isLoading, setIsLoading] = useState(true)

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { paymentsApi } from '@/services/api'
 import { useAppStore } from '@/store'
 import type { Payment, PaymentType, PaymentMethod, ApiResponse } from '@/types'
+import { toLocalDateString } from '@/utils/format'
 
 export function usePayments(options?: { skipInitialFetch?: boolean }) {
   const skipInitialFetch = options?.skipInitialFetch ?? false
@@ -160,7 +161,7 @@ export function usePayments(options?: { skipInitialFetch?: boolean }) {
   }, [])
 
   const getTodayPayments = useCallback(async () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toLocalDateString(new Date())
     try {
       const response = await paymentsApi.list({ date: today }) as ApiResponse<Payment[]>
       if (response.success && response.data) {

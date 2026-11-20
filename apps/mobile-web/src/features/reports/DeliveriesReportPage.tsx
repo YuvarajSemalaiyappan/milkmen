@@ -7,7 +7,7 @@ import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useCustomers } from '@/hooks'
 import { reportsApi, deliveriesApi } from '@/services/api'
-import { formatCurrency, formatDate, getToday, exportToExcel } from '@/utils'
+import { formatCurrency, formatDate, getToday, toLocalDateString, exportToExcel } from '@/utils'
 import type { Customer, Delivery, ApiResponse } from '@/types'
 
 interface DeliveryWithCustomer extends Delivery {
@@ -44,7 +44,7 @@ export function DeliveriesReportPage() {
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
     date.setDate(date.getDate() - 30)
-    return date.toISOString().split('T')[0]
+    return toLocalDateString(date)
   })
   const [endDate, setEndDate] = useState(getToday())
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customerIdParam || '')

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { collectionsApi } from '@/services/api'
+import { collectionsApi, ApiError } from '@/services/api'
 import { useAppStore } from '@/store'
 import { calculateTotal } from '@/utils/calculate'
 import { getToday } from '@/utils/format'
@@ -52,7 +52,7 @@ export function useCollections(options?: { skipInitialFetch?: boolean }) {
     }) => {
       try {
         const totalAmount = calculateTotal(data.quantity, data.ratePerLiter)
-        const response = await collectionsApi.create({
+        const payload = {
           farmerId: data.farmerId,
           date: data.date || getToday(),
           shift: data.shift || currentShift,
@@ -60,7 +60,16 @@ export function useCollections(options?: { skipInitialFetch?: boolean }) {
           fatContent: data.fatContent,
           ratePerLiter: data.ratePerLiter,
           notes: data.notes
-        }) as ApiResponse<Collection>
+        }
+        let response: ApiResponse<Collection>
+        try {
+          response = await collectionsApi.create(payload) as ApiResponse<Collection>
+        } catch (error) {
+          // The server refuses a second entry for the same farmer and shift unless the user confirms it
+          if (!(error instanceof ApiError && error.code === 'DUPLICATE_ENTRY')) throw error
+          if (!window.confirm('Milk is already entered for this farmer in this shift. Add another entry?')) return
+          response = await collectionsApi.create({ ...payload, allowDuplicate: true }) as ApiResponse<Collection>
+        }
 
         if (response.success && response.data) {
           addToast({ type: 'success', message: 'Collection saved' })

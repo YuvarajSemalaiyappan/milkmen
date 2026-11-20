@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Shift } from '@/types'
+import { toLocalDateString } from '@/utils/format'
 
 export type Theme = 'light' | 'dark' | 'system'
 
@@ -47,7 +48,7 @@ function getDefaultShift(): Shift {
 
 // Get today's date in YYYY-MM-DD format
 function getToday(): string {
-  return new Date().toISOString().split('T')[0]
+  return toLocalDateString(new Date())
 }
 
 // Generate unique ID for toasts

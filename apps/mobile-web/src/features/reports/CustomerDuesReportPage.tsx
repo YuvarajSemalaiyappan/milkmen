@@ -7,7 +7,7 @@ import { Card, Button, Badge, Input } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useCustomers } from '@/hooks'
 import { deliveriesApi, paymentsApi } from '@/services/api'
-import { formatCurrency, getToday } from '@/utils'
+import { formatCurrency, getToday, toLocalDateString } from '@/utils'
 import type { Customer, Delivery, Payment, ApiResponse } from '@/types'
 
 interface CustomerDue {
@@ -26,7 +26,7 @@ export function CustomerDuesReportPage() {
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
     date.setDate(date.getDate() - 30) // Last 30 days
-    return date.toISOString().split('T')[0]
+    return toLocalDateString(date)
   })
   const [endDate, setEndDate] = useState(getToday())
   const [customerDues, setCustomerDues] = useState<CustomerDue[]>([])

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { deliveriesApi } from '@/services/api'
+import { deliveriesApi, ApiError } from '@/services/api'
 import { useAppStore } from '@/store'
 import { getToday } from '@/utils/format'
 import type { Delivery, Shift, DeliveryStatus, ApiResponse } from '@/types'
@@ -51,7 +51,7 @@ export function useDeliveries(options?: { skipInitialFetch?: boolean }) {
       notes?: string
     }) => {
       try {
-        const response = await deliveriesApi.create({
+        const payload = {
           customerId: data.customerId,
           date: data.date || getToday(),
           shift: data.shift || currentShift,
@@ -60,7 +60,16 @@ export function useDeliveries(options?: { skipInitialFetch?: boolean }) {
           status: data.status || 'DELIVERED',
           isSubscription: data.isSubscription || false,
           notes: data.notes
-        }) as ApiResponse<Delivery>
+        }
+        let response: ApiResponse<Delivery>
+        try {
+          response = await deliveriesApi.create(payload) as ApiResponse<Delivery>
+        } catch (error) {
+          // The server refuses a second delivery for the same customer and shift unless the user confirms it
+          if (!(error instanceof ApiError && error.code === 'DUPLICATE_ENTRY')) throw error
+          if (!window.confirm('A delivery is already entered for this customer in this shift. Add another entry?')) return
+          response = await deliveriesApi.create({ ...payload, allowDuplicate: true }) as ApiResponse<Delivery>
+        }
 
         if (response.success && response.data) {
           addToast({ type: 'success', message: 'Delivery saved' })

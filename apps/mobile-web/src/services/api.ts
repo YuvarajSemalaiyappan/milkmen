@@ -2,6 +2,18 @@ import { useAuthStore } from '@/store'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
+// Carries the server's error code (for example DUPLICATE_ENTRY) as well as its message
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public code?: string) {
+    super(message)
+  }
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  const body = await response.json().catch(() => ({ error: 'Unknown error' }))
+  return new ApiError(body.error || `API Error: ${response.status}`, response.status, body.code)
+}
+
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean
 }
@@ -49,7 +61,7 @@ class ApiService {
         }
         const retryResponse = await fetch(url, { ...fetchOptions, headers })
         if (!retryResponse.ok) {
-          throw new Error(`API Error: ${retryResponse.status}`)
+          throw await toApiError(retryResponse)
         }
         return retryResponse.json()
       } else {
@@ -61,8 +73,7 @@ class ApiService {
     }
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-      throw new Error(error.error || `API Error: ${response.status}`)
+      throw await toApiError(response)
     }
 
     return response.json()
@@ -205,6 +216,7 @@ export const collectionsApi = {
     fatContent?: number
     ratePerLiter: number
     notes?: string
+    allowDuplicate?: boolean
   }) => api.post('/collections', data),
   update: (id: string, data: Partial<{
     quantity: number
@@ -231,6 +243,7 @@ export const deliveriesApi = {
     isSubscription?: boolean
     status?: string
     notes?: string
+    allowDuplicate?: boolean
   }) => api.post('/deliveries', data),
   update: (id: string, data: Partial<{
     quantity: number

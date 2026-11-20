@@ -112,7 +112,7 @@ export function AddCollectionPage() {
 
     try {
       setIsSubmitting(true)
-      await addCollection({
+      const saved = await addCollection({
         farmerId: selectedFarmer.id,
         date: selectedDate,
         shift: currentShift,
@@ -121,6 +121,8 @@ export function AddCollectionPage() {
         ratePerLiter: parseFloat(rate),
         notes: notes || undefined
       })
+      // Nothing saved when the user declined a second entry for the same shift: stay on the form
+      if (!saved) return
       navigate(navigateTo || '/collect')
     } catch (error) {
       console.error('Failed to add collection:', error)

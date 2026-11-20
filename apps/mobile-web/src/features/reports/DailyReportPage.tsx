@@ -4,7 +4,7 @@ import { Calendar, TrendingUp, TrendingDown, IndianRupee, Package, ChevronLeft, 
 import { AppShell } from '@/components/layout'
 import { Card, Button, Badge } from '@/components/ui'
 import { useCollections, useDeliveries, usePayments } from '@/hooks'
-import { formatCurrency, formatDate, getToday } from '@/utils'
+import { formatCurrency, formatDate, getToday, toLocalDateString } from '@/utils'
 
 interface DailySummary {
   date: string
@@ -73,9 +73,9 @@ export function DailyReportPage() {
   }
 
   const changeDate = (days: number) => {
-    const date = new Date(selectedDate)
+    const date = new Date(selectedDate + 'T00:00:00')
     date.setDate(date.getDate() + days)
-    setSelectedDate(date.toISOString().split('T')[0])
+    setSelectedDate(toLocalDateString(date))
   }
 
   const isToday = selectedDate === getToday()

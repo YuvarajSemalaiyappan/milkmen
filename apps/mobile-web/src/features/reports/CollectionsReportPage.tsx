@@ -7,7 +7,7 @@ import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useFarmers } from '@/hooks'
 import { reportsApi, collectionsApi, paymentsApi } from '@/services/api'
-import { formatCurrency, formatDate, getToday, exportToExcel, isEntryPaid } from '@/utils'
+import { formatCurrency, formatDate, getToday, toLocalDateString, exportToExcel, isEntryPaid } from '@/utils'
 import type { Farmer, Collection, Payment, ApiResponse } from '@/types'
 import type { PaidPeriodPayment } from '@/utils/paymentPeriod'
 
@@ -45,7 +45,7 @@ export function CollectionsReportPage() {
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
     date.setDate(date.getDate() - 30)
-    return date.toISOString().split('T')[0]
+    return toLocalDateString(date)
   })
   const [endDate, setEndDate] = useState(getToday())
   const [selectedFarmerId, setSelectedFarmerId] = useState<string>(farmerIdParam || '')
