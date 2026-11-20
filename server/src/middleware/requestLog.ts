@@ -21,7 +21,10 @@ const context = new AsyncLocalStorage<RequestContext>()
 const originalConsoleError = console.error.bind(console)
 console.error = (...args: unknown[]) => {
   const ctx = context.getStore()
-  if (ctx && !ctx.error) {
+  // Node's own warnings (e.g. "(node:74) Warning: ...") are printed through console.error too;
+  // they are not request failures, so don't attach them to the request.
+  const isNodeWarning = typeof args[0] === 'string' && args[0].startsWith('(node:')
+  if (ctx && !ctx.error && !isNodeWarning) {
     const err = args.find((a) => a instanceof Error) as (Error & { code?: string }) | undefined
     if (err) {
       const where = err.stack?.split('\n').slice(1, 3).map((l) => l.trim()).join(' < ') ?? ''
