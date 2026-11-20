@@ -78,6 +78,15 @@ export function isSameDay(date1: Date, date2: Date): boolean {
   )
 }
 
+// Format a Date as YYYY-MM-DD in the phone's local time.
+// Never use toISOString() for this: it is UTC, so in India it gives the previous day before 5:30 am.
+export function toLocalDateString(d: Date): string {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 // Get today's date as YYYY-MM-DD (local time)
 export function getToday(): string {
   const d = new Date()
