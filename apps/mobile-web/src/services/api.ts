@@ -253,7 +253,7 @@ export const deliveriesApi = {
   }>) => api.put(`/deliveries/${id}`, data),
   delete: (id: string) => api.delete(`/deliveries/${id}`),
   bulkUpdate: (deliveries: { id: string; status: string }[]) =>
-    api.post('/deliveries/bulk', { deliveries })
+    api.post('/deliveries/bulk-update', { deliveries })
 }
 
 // Payments API
@@ -261,6 +261,9 @@ export const paymentsApi = {
   list: (params?: { date?: string; farmerId?: string; customerId?: string; from?: string; to?: string; type?: string }) =>
     api.get(`/payments${buildQuery(params)}`),
   get: (id: string) => api.get(`/payments/${id}`),
+  // Default period start, unpaid total over all entries and payments, and overlap (server-side)
+  period: (params: { farmerId?: string; customerId?: string; from?: string; fromShift?: string; to: string; toShift: string }) =>
+    api.get(`/payments/period${buildQuery(params)}`),
   create: (data: {
     farmerId?: string
     customerId?: string

@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { User, UserCircle, Calculator, AlertTriangle } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Card } from '@/components/ui'
 import { NumberPad, ShiftToggle } from '@/components/common'
-import { useFarmers, useCustomers, usePayments, useCollections, useDeliveries } from '@/hooks'
+import { useFarmers, useCustomers, usePayments } from '@/hooks'
 import { useAppStore } from '@/store'
 import { formatCurrency, toLocalDateString } from '@/utils/format'
-import { isInShiftRange, shiftOrd } from '@/utils/paymentPeriod'
-import type { Farmer, Customer, PaymentType, PaymentMethod, Shift } from '@/types'
+import { paymentsApi } from '@/services/api'
+import type { Farmer, Customer, PaymentType, PaymentMethod, Shift, ApiResponse, PaymentPeriod } from '@/types'
 
 type RecipientType = 'farmer' | 'customer'
 
@@ -17,35 +17,16 @@ function getToday(): string {
   return toLocalDateString(new Date())
 }
 
-// API returns dates as full ISO strings (e.g. "2026-05-05T00:00:00.000Z").
-// All date logic + <input type="date"> need plain YYYY-MM-DD.
-function toDateOnly(d: string): string {
-  return d.slice(0, 10)
-}
-
-function nextShift(date: string, shift: Shift): { date: string; shift: Shift } {
-  const dateOnly = toDateOnly(date)
-  if (shift === 'MORNING') {
-    return { date: dateOnly, shift: 'EVENING' }
-  }
-  const d = new Date(dateOnly + 'T00:00:00')
-  d.setDate(d.getDate() + 1)
-  return { date: toLocalDateString(d), shift: 'MORNING' }
-}
-
 export function AddPaymentPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const addToast = useAppStore((state) => state.addToast)
   const currentShift = useAppStore((state) => state.currentShift)
   const initialShiftRef = useRef(currentShift)
 
   const { activeFarmers } = useFarmers()
   const { activeCustomers } = useCustomers()
-  const { addPayment, getPaymentsByFarmer, getPaymentsByCustomer } = usePayments({ skipInitialFetch: true })
-  const { getCollectionsByFarmer } = useCollections({ skipInitialFetch: true })
-  const { getDeliveriesByCustomer } = useDeliveries({ skipInitialFetch: true })
+  const { addPayment } = usePayments({ skipInitialFetch: true })
 
   const recipientType: RecipientType = (searchParams.get('type') as RecipientType) || 'farmer'
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null)
@@ -68,13 +49,6 @@ export function AddPaymentPage() {
   const [isCalculating, setIsCalculating] = useState(false)
   const [existingPaymentForPeriod, setExistingPaymentForPeriod] = useState(false)
 
-  // Cached payments for the selected person. Populated once by the
-  // auto-select effect and reused by the period-total calculation so we
-  // don't fetch /payments twice on every render cycle.
-  type CachedPayment = Awaited<ReturnType<typeof getPaymentsByFarmer>>[number]
-  const [cachedPayments, setCachedPayments] = useState<CachedPayment[]>([])
-  const [autoSelectDone, setAutoSelectDone] = useState(false)
-
   // Pre-select from URL params
   useEffect(() => {
     const farmerId = searchParams.get('farmerId')
@@ -93,192 +67,100 @@ export function AddPaymentPage() {
     }
   }, [searchParams, activeFarmers, activeCustomers])
 
-  // Auto-select date range based on last payment for this person.
-  // Also caches the fetched payments so calculatePeriodTotal can reuse them
-  // instead of refetching.
+  // The server works out the period (same rules as the phone app): the default start is the shift
+  // after the last paid period, else the first entry; the unpaid total covers all entries and all
+  // payments, with no row limits; and it says whether the range overlaps an earlier payment.
+  // A ref remembers the last request so the auto-selected range doesn't trigger a second call.
+  const [autoSelectDone, setAutoSelectDone] = useState(false)
+  const lastPeriodKey = useRef('')
+
+  const applyPeriod = (data: PaymentPeriod) => {
+    setPeriodAmount(data.unpaid.amount)
+    setPeriodCount(data.unpaid.count)
+    setExistingPaymentForPeriod(data.overlaps)
+  }
+
+  // When the person changes: ask for the default period ending now
   useEffect(() => {
     const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
-    if (!selected) {
-      setCachedPayments([])
-      setAutoSelectDone(false)
-      return
-    }
-
     setAutoSelectDone(false)
+    if (!selected) return
 
-    const autoSelectDates = async () => {
-      const allPayments = recipientType === 'farmer'
-        ? await getPaymentsByFarmer(selected.id)
-        : await getPaymentsByCustomer(selected.id)
-      setCachedPayments(allPayments)
-
-      const personPayments = allPayments
-        .filter((p) => p.periodFromDate && p.periodFromShift && p.periodToDate && p.periodToShift)
-
-      if (personPayments.length > 0) {
-        const descByEnd = [...personPayments].sort((a, b) => {
-          const aTo = toDateOnly(a.periodToDate!)
-          const bTo = toDateOnly(b.periodToDate!)
-          if (aTo > bTo) return -1
-          if (aTo < bTo) return 1
-          return shiftOrd(b.periodToShift!) - shiftOrd(a.periodToShift!)
-        })
-        const lastPaidDate = toDateOnly(descByEnd[0].periodToDate!)
-        const lastPaidShift = descByEnd[0].periodToShift!
-
-        const next = nextShift(lastPaidDate, lastPaidShift)
-        setFromDate(next.date)
-        setFromShift(next.shift)
-      } else {
-        // No previous payment — default to first collection/delivery for this person
-        let firstDate: string | null = null
-        let firstShift: Shift = 'MORNING'
-
-        if (recipientType === 'farmer') {
-          const collections = await getCollectionsByFarmer(selected.id)
-          const sorted = collections.sort((a, b) => {
-            const ad = toDateOnly(a.date)
-            const bd = toDateOnly(b.date)
-            if (ad < bd) return -1
-            if (ad > bd) return 1
-            return a.shift === 'MORNING' ? -1 : 1
-          })
-          if (sorted.length > 0) {
-            firstDate = toDateOnly(sorted[0].date)
-            firstShift = sorted[0].shift
-          }
-        } else {
-          const deliveries = await getDeliveriesByCustomer(selected.id)
-          const sorted = deliveries.sort((a, b) => {
-            const ad = toDateOnly(a.date)
-            const bd = toDateOnly(b.date)
-            if (ad < bd) return -1
-            if (ad > bd) return 1
-            return a.shift === 'MORNING' ? -1 : 1
-          })
-          if (sorted.length > 0) {
-            firstDate = toDateOnly(sorted[0].date)
-            firstShift = sorted[0].shift
-          }
+    let cancelled = false
+    const today = getToday()
+    const shift = initialShiftRef.current
+    const person = recipientType === 'farmer' ? { farmerId: selected.id } : { customerId: selected.id }
+    setIsCalculating(true)
+    paymentsApi
+      .period({ ...person, to: today, toShift: shift })
+      .then((res) => {
+        const data = (res as ApiResponse<PaymentPeriod>).data
+        if (cancelled || !data) return
+        setFromDate(data.from.date)
+        setFromShift(data.from.shift)
+        setToDate(today)
+        setToShift(shift)
+        applyPeriod(data)
+        lastPeriodKey.current = [selected.id, data.from.date, data.from.shift, today, shift].join('|')
+        setAutoSelectDone(true)
+      })
+      .catch((error) => {
+        console.error('Failed to load payment period:', error)
+        if (!cancelled) {
+          setPeriodAmount(null)
+          setPeriodCount(0)
+          setExistingPaymentForPeriod(false)
+          setAutoSelectDone(true)
         }
-
-        if (firstDate) {
-          setFromDate(firstDate)
-          setFromShift(firstShift)
-        } else {
-          setFromDate(getToday())
-          setFromShift('MORNING')
-        }
-      }
-      setToDate(getToday())
-      setToShift(initialShiftRef.current)
-      setAutoSelectDone(true)
+      })
+      .finally(() => !cancelled && setIsCalculating(false))
+    return () => {
+      cancelled = true
     }
-    autoSelectDates()
-  }, [selectedFarmer, selectedCustomer, recipientType, getPaymentsByFarmer, getPaymentsByCustomer, getCollectionsByFarmer, getDeliveriesByCustomer])
+  }, [selectedFarmer, selectedCustomer, recipientType])
 
-  // Calculate period total when filters or recipient change
-  const calculatePeriodTotal = useCallback(async () => {
+  // When the user changes the range: recalculate on the server
+  useEffect(() => {
+    const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
     if (isAdvance) {
       setPeriodAmount(null)
       setPeriodCount(0)
       setExistingPaymentForPeriod(false)
       return
     }
+    if (!selected || !autoSelectDone) return
+    const key = [selected.id, fromDate, fromShift, toDate, toShift].join('|')
+    if (key === lastPeriodKey.current) return
 
-    const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
-    if (!selected) {
-      setPeriodAmount(null)
-      setPeriodCount(0)
-      return
-    }
-
-    // Wait for auto-select to populate cachedPayments and the real
-    // from/to range; otherwise we'd issue a redundant calculation against
-    // the default (today→today) range.
-    if (!autoSelectDone) return
-
+    let cancelled = false
+    const person = recipientType === 'farmer' ? { farmerId: selected.id } : { customerId: selected.id }
     setIsCalculating(true)
-    try {
-      // Use cached payments populated by autoSelectDates instead of refetching.
-      const allPayments = cachedPayments
-
-      const existingPaidPeriods = allPayments
-        .filter((p) => p.periodFromDate && p.periodToDate && p.periodFromShift && p.periodToShift)
-        .map((p) => ({
-          from: toDateOnly(p.periodFromDate!),
-          fromShift: p.periodFromShift!,
-          to: toDateOnly(p.periodToDate!),
-          toShift: p.periodToShift!,
-          paymentCreatedAt: p.createdAt,
-        }))
-
-      // An entry is already paid only if some payment's period covers it AND
-      // the entry existed when that payment was recorded. The createdAt cutoff
-      // ensures back-dated entries added after a payment still appear as
-      // selectable for a fresh payment over the same period.
-      const isAlreadyPaid = (date: string, shift: Shift, createdAt: string) =>
-        existingPaidPeriods.some((pp) =>
-          createdAt <= pp.paymentCreatedAt &&
-          isInShiftRange(date, shift, pp.from, pp.fromShift, pp.to, pp.toShift)
-        )
-
-      let total = 0
-      let count = 0
-
-      if (recipientType === 'farmer') {
-        const collections = await getCollectionsByFarmer(selected.id, fromDate, toDate)
-        for (const c of collections) {
-          const cDate = toDateOnly(c.date)
-          if (
-            isInShiftRange(cDate, c.shift, fromDate, fromShift, toDate, toShift) &&
-            !isAlreadyPaid(cDate, c.shift, c.createdAt)
-          ) {
-            total += Number(c.totalAmount)
-            count++
-          }
-        }
-      } else {
-        const deliveries = await getDeliveriesByCustomer(selected.id, fromDate, toDate)
-        for (const d of deliveries) {
-          const dDate = toDateOnly(d.date)
-          if (
-            d.status === 'DELIVERED' &&
-            isInShiftRange(dDate, d.shift, fromDate, fromShift, toDate, toShift) &&
-            !isAlreadyPaid(dDate, d.shift, d.createdAt)
-          ) {
-            total += Number(d.totalAmount)
-            count++
-          }
-        }
-      }
-
-      setPeriodAmount(total)
-      setPeriodCount(count)
-
-      // Check for existing payment with overlapping period
-      const hasDuplicate = existingPaidPeriods.some((pp) => {
-        const aEndBeforeBStart = toDate < pp.from
-          || (toDate === pp.from && shiftOrd(toShift) < shiftOrd(pp.fromShift))
-        const bEndBeforeAStart = pp.to < fromDate
-          || (pp.to === fromDate && shiftOrd(pp.toShift) < shiftOrd(fromShift))
-
-        return !aEndBeforeBStart && !bEndBeforeAStart
+    paymentsApi
+      .period({ ...person, from: fromDate, fromShift, to: toDate, toShift })
+      .then((res) => {
+        const data = (res as ApiResponse<PaymentPeriod>).data
+        if (cancelled || !data) return
+        applyPeriod(data)
+        lastPeriodKey.current = key
       })
-      setExistingPaymentForPeriod(hasDuplicate)
-    } catch (error) {
-      console.error('Failed to calculate period total:', error)
-      setPeriodAmount(null)
-      setPeriodCount(0)
-      setExistingPaymentForPeriod(false)
-    } finally {
-      setIsCalculating(false)
+      .catch((error) => {
+        console.error('Failed to calculate period total:', error)
+        if (!cancelled) {
+          setPeriodAmount(null)
+          setPeriodCount(0)
+          setExistingPaymentForPeriod(false)
+        }
+      })
+      .finally(() => !cancelled && setIsCalculating(false))
+    return () => {
+      cancelled = true
     }
-  }, [recipientType, selectedFarmer, selectedCustomer, fromDate, toDate, fromShift, toShift, isAdvance, autoSelectDone, cachedPayments, getCollectionsByFarmer, getDeliveriesByCustomer])
+  }, [recipientType, selectedFarmer, selectedCustomer, fromDate, toDate, fromShift, toShift, isAdvance, autoSelectDone])
 
+  // Switching back from advance must recalculate even if the range is unchanged
   useEffect(() => {
-    calculatePeriodTotal()
-  }, [calculatePeriodTotal])
+    if (isAdvance) lastPeriodKey.current = ''
+  }, [isAdvance])
 
   const handleSubmit = async () => {
     const amountNum = parseFloat(amount)

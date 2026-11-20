@@ -218,6 +218,14 @@ export interface AuthState {
 }
 
 // API Response types
+// GET /payments/period: default start, unpaid entries in the period, overlap with a paid period
+export interface PaymentPeriod {
+  from: { date: string; shift: Shift }
+  to: { date: string; shift: Shift }
+  unpaid: { count: number; liters: number; amount: number }
+  overlaps: boolean
+}
+
 export interface ApiResponse<T> {
   success: boolean
   data?: T

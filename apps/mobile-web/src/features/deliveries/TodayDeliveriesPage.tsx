@@ -112,11 +112,14 @@ export function TodayDeliveriesPage() {
       if (item.delivery) {
         await updateDelivery(item.delivery.id, { status: 'SKIPPED' })
       } else {
+        // The server rejects quantity 0, so send the normal quantity like the phone app does.
+        // A SKIPPED delivery never adds to the customer's bill.
+        const normalQty = Number(currentShift === 'MORNING' ? item.customer.subscriptionQtyAM : item.customer.subscriptionQtyPM)
         await addDelivery({
           customerId: item.customer.id,
           date: getToday(),
           shift: currentShift,
-          quantity: 0,
+          quantity: normalQty > 0 ? normalQty : 1,
           ratePerLiter: item.customer.defaultRate,
           status: 'SKIPPED',
           isSubscription: true

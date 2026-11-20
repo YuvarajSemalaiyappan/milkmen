@@ -43,3 +43,25 @@ database round trip costs network time. Check every new or changed endpoint agai
 9. **Failures are logged.** Every handler's `catch` calls `console.error('<what> error:', error)`;
    the request logger saves the route, status, time, user and error to `RequestLog`
    (read with `GET /api/admin/logs`). Requests slower than 2 s are saved too: check them.
+
+## App Parity Rule (web <-> phone app)
+
+The web app (`apps/mobile-web`, this repo) and the phone app (`YuvarajSemalaiyappan/milkmen-app`)
+are two front ends for the same business. **Any change to how one behaves must be made in the
+other in the same piece of work**, unless it is listed as platform-only below.
+
+- This covers features, screens, fields, validation, business rules (what is paid, duplicates,
+  skips, balances), wording in `en.json`/`ta.json`, and how each screen calls the server.
+- Business rules live on the server where possible (e.g. `GET /payments/period`), so both apps
+  get them from one place instead of two copies.
+- Server changes must keep both apps working: check what each app reads before removing a field,
+  and deploy the server before releasing an app that depends on it.
+- If the other app can't be changed right away, add the gap to "Known differences" below (and in
+  the app repo's `AGENTS.md`) in the same commit, so nothing is forgotten.
+
+Platform-only (no parity needed): fingerprint lock and on-phone reminder notifications (phone app);
+install/offline PWA behaviour (web).
+
+### Known differences (fix these to match)
+- Route filter: the phone app loads `GET /routes/:id?scope=1` (ids and areas only); the web app
+  still loads the full route. Same result, more data.
