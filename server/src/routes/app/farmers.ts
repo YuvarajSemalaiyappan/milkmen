@@ -117,18 +117,15 @@ router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Respo
     })
     const validIds = new Set(farmers.map((f) => f.id))
 
-    // Upsert sort orders in a transaction
-    await prisma.$transaction(
-      orders
-        .filter((o: { farmerId: string }) => validIds.has(o.farmerId))
-        .map((o: { farmerId: string; sortOrder: number }) =>
-          prisma.userFarmerOrder.upsert({
-            where: { userId_farmerId: { userId, farmerId: o.farmerId } },
-            update: { sortOrder: o.sortOrder },
-            create: { userId, farmerId: o.farmerId, sortOrder: o.sortOrder }
-          })
-        )
-    )
+    // Replace this user's order for these farmers: two statements, however many farmers there are
+    const valid = (orders as { farmerId: string; sortOrder: number }[]).filter((o) => validIds.has(o.farmerId))
+    await prisma.$transaction([
+      prisma.userFarmerOrder.deleteMany({ where: { userId, farmerId: { in: valid.map((o) => o.farmerId) } } }),
+      prisma.userFarmerOrder.createMany({
+        data: valid.map((o) => ({ userId, farmerId: o.farmerId, sortOrder: o.sortOrder })),
+        skipDuplicates: true
+      })
+    ])
 
     return res.json({ success: true, message: 'Sort orders updated' })
   } catch (error) {
@@ -146,18 +143,9 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     const { businessId } = req.user!
     const id = req.params.id as string
 
+    // Entry and payment history are loaded separately (paged) by the apps, not embedded here
     const farmer = await prisma.farmer.findFirst({
-      where: { id, businessId },
-      include: {
-        collections: {
-          orderBy: { date: 'desc' },
-          take: 10
-        },
-        payments: {
-          orderBy: { date: 'desc' },
-          take: 10
-        }
-      }
+      where: { id, businessId }
     })
 
     if (!farmer) {

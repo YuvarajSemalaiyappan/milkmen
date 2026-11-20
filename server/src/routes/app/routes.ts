@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma.js'
 import { authenticateToken, requireOwner, requireOwnerOrManager, AuthRequest } from '../../middleware/auth.js'
 
@@ -33,26 +34,46 @@ const assignCustomersSchema = z.object({
   areaIds: z.record(z.string(), z.string()).optional()
 })
 
-// Helper to check if user has access to route
+// Helper to check if user has access to route. One round trip: the role, the route and the
+// staff assignment are read in parallel.
 async function userHasRouteAccess(userId: string, routeId: string, businessId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true }
-  })
+  const [user, route, assigned] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+    prisma.route.findFirst({ where: { id: routeId, businessId }, select: { id: true } }),
+    prisma.userRoute.findFirst({ where: { userId, routeId }, select: { id: true } })
+  ])
+  if (!route) return false
+  // Owners and managers can access all routes in business; staff only their assigned routes
+  return user?.role === 'OWNER' || user?.role === 'MANAGER' || !!assigned
+}
 
-  // Owners and managers can access all routes in business
-  if (user?.role === 'OWNER' || user?.role === 'MANAGER') {
-    const route = await prisma.route.findFirst({
-      where: { id: routeId, businessId }
-    })
-    return !!route
-  }
-
-  // Staff can only access assigned routes
-  const userRoute = await prisma.userRoute.findFirst({
-    where: { userId, routeId, route: { businessId } }
-  })
-  return !!userRoute
+// Adds people to a route or updates their order/area, without removing anyone, in two statements
+// however many people are sent. sortOrder/areaId are only changed for people that have a value.
+async function upsertRouteMembers(
+  table: 'RouteFarmer' | 'RouteCustomer',
+  routeId: string,
+  ids: string[],
+  sortOrders?: Record<string, number>,
+  areaIds?: Record<string, string>
+) {
+  const col = Prisma.raw(table === 'RouteFarmer' ? '"farmerId"' : '"customerId"')
+  const tbl = Prisma.raw(`"${table}"`)
+  const orders = ids.map((id) => sortOrders?.[id] ?? null)
+  const areas = ids.map((id) => areaIds?.[id] ?? null)
+  await prisma.$transaction([
+    prisma.$executeRaw`
+      UPDATE ${tbl} AS t SET
+        "sortOrder" = COALESCE(v.sort_order, t."sortOrder"),
+        "areaId" = COALESCE(v.area_id, t."areaId")
+      FROM unnest(${ids}::text[], ${orders}::int[], ${areas}::text[]) AS v(member_id, sort_order, area_id)
+      WHERE t."routeId" = ${routeId} AND t.${col} = v.member_id
+        AND (v.sort_order IS NOT NULL OR v.area_id IS NOT NULL)`,
+    prisma.$executeRaw`
+      INSERT INTO ${tbl} (id, "routeId", ${col}, "sortOrder", "areaId", "createdAt")
+      SELECT gen_random_uuid()::text, ${routeId}, v.member_id, COALESCE(v.sort_order, (v.ord - 1)::int), v.area_id, NOW()
+      FROM unnest(${ids}::text[], ${orders}::int[], ${areas}::text[]) WITH ORDINALITY AS v(member_id, sort_order, area_id, ord)
+      ON CONFLICT ("routeId", ${col}) DO NOTHING`
+  ])
 }
 
 // GET /api/routes - List routes (filtered by role)
@@ -149,6 +170,21 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
         success: false,
         error: 'Access denied to this route'
       })
+    }
+
+    // scope=1: only the areas and who is on the route in which area. Used by the route filter on
+    // the entry screens, which needs nothing else.
+    if (req.query.scope === '1') {
+      const [routeFarmers, routeCustomers, areas] = await Promise.all([
+        prisma.routeFarmer.findMany({ where: { routeId: id }, select: { farmerId: true, areaId: true } }),
+        prisma.routeCustomer.findMany({ where: { routeId: id }, select: { customerId: true, areaId: true } }),
+        prisma.area.findMany({
+          where: { routeId: id, isActive: true },
+          select: { id: true, name: true, isActive: true },
+          orderBy: { name: 'asc' }
+        })
+      ])
+      return res.json({ success: true, data: { id, routeFarmers, routeCustomers, areas } })
     }
 
     const route = await prisma.route.findFirst({
@@ -380,7 +416,8 @@ router.post('/:id/users', authenticateToken, requireOwner, async (req: AuthReque
 
     // Verify all users belong to business
     const users = await prisma.user.findMany({
-      where: { id: { in: userIds }, businessId }
+      where: { id: { in: userIds }, businessId },
+      select: { id: true }
     })
     if (users.length !== userIds.length) {
       return res.status(400).json({
@@ -475,7 +512,8 @@ router.post('/:id/farmers', authenticateToken, requireOwnerOrManager, async (req
 
     // Verify all farmers belong to business
     const farmers = await prisma.farmer.findMany({
-      where: { id: { in: farmerIds }, businessId }
+      where: { id: { in: farmerIds }, businessId },
+      select: { id: true }
     })
     if (farmers.length !== farmerIds.length) {
       return res.status(400).json({
@@ -485,23 +523,7 @@ router.post('/:id/farmers', authenticateToken, requireOwnerOrManager, async (req
     }
 
     // Upsert farmer assignments (add or update without removing existing)
-    await prisma.$transaction(
-      farmerIds.map((farmerId, index) =>
-        prisma.routeFarmer.upsert({
-          where: { routeId_farmerId: { routeId, farmerId } },
-          create: {
-            routeId,
-            farmerId,
-            sortOrder: sortOrders?.[farmerId] ?? index,
-            areaId: areaIds?.[farmerId] ?? null
-          },
-          update: {
-            sortOrder: sortOrders?.[farmerId] ?? undefined,
-            areaId: areaIds?.[farmerId] ?? undefined
-          }
-        })
-      )
-    )
+    await upsertRouteMembers('RouteFarmer', routeId, farmerIds, sortOrders, areaIds)
 
     return res.json({
       success: true,
@@ -581,7 +603,8 @@ router.post('/:id/customers', authenticateToken, requireOwnerOrManager, async (r
 
     // Verify all customers belong to business
     const customers = await prisma.customer.findMany({
-      where: { id: { in: customerIds }, businessId }
+      where: { id: { in: customerIds }, businessId },
+      select: { id: true }
     })
     if (customers.length !== customerIds.length) {
       return res.status(400).json({
@@ -591,23 +614,7 @@ router.post('/:id/customers', authenticateToken, requireOwnerOrManager, async (r
     }
 
     // Upsert customer assignments (add or update without removing existing)
-    await prisma.$transaction(
-      customerIds.map((customerId, index) =>
-        prisma.routeCustomer.upsert({
-          where: { routeId_customerId: { routeId, customerId } },
-          create: {
-            routeId,
-            customerId,
-            sortOrder: sortOrders?.[customerId] ?? index,
-            areaId: areaIds?.[customerId] ?? null
-          },
-          update: {
-            sortOrder: sortOrders?.[customerId] ?? undefined,
-            areaId: areaIds?.[customerId] ?? undefined
-          }
-        })
-      )
-    )
+    await upsertRouteMembers('RouteCustomer', routeId, customerIds, sortOrders, areaIds)
 
     return res.json({
       success: true,

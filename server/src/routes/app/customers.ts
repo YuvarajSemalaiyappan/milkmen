@@ -166,21 +166,30 @@ router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Respo
     })
     const validIds = new Set(customers.map((c) => c.id))
 
-    // Upsert sort orders in a transaction
-    await prisma.$transaction(
-      orders
-        .filter((o: { customerId: string }) => validIds.has(o.customerId))
-        .map((o: { customerId: string; sortOrder: number; shift?: string }) => {
-          const shiftValue = (o.shift as 'MORNING' | 'EVENING') || null
-          return prisma.userCustomerOrder.upsert({
-            where: {
-              userId_customerId_shift: { userId, customerId: o.customerId, shift: shiftValue }
-            },
-            update: { sortOrder: o.sortOrder },
-            create: { userId, customerId: o.customerId, sortOrder: o.sortOrder, shift: shiftValue }
+    // Replace this user's order for these customers: a fixed number of statements, however many
+    // customers there are. Shift may be null (one order for both shifts), so rows are deleted per shift.
+    // Last entry wins if the same customer and shift is sent twice
+    const valid = [
+      ...new Map(
+        (orders as { customerId: string; sortOrder: number; shift?: string }[])
+          .filter((o) => validIds.has(o.customerId))
+          .map((o) => {
+            const row = { customerId: o.customerId, sortOrder: o.sortOrder, shift: (o.shift as 'MORNING' | 'EVENING') || null }
+            return [`${row.customerId}:${row.shift}`, row] as const
           })
+      ).values()
+    ]
+    const shifts = [...new Set(valid.map((o) => o.shift))]
+    await prisma.$transaction([
+      ...shifts.map((shift) =>
+        prisma.userCustomerOrder.deleteMany({
+          where: { userId, shift, customerId: { in: valid.filter((o) => o.shift === shift).map((o) => o.customerId) } }
         })
-    )
+      ),
+      prisma.userCustomerOrder.createMany({
+        data: valid.map((o) => ({ userId, ...o }))
+      })
+    ])
 
     return res.json({ success: true, message: 'Sort orders updated' })
   } catch (error) {
@@ -198,18 +207,9 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     const { businessId } = req.user!
     const id = req.params.id as string
 
+    // Delivery and payment history are loaded separately (paged) by the apps, not embedded here
     const customer = await prisma.customer.findFirst({
-      where: { id, businessId },
-      include: {
-        deliveries: {
-          orderBy: { date: 'desc' },
-          take: 10
-        },
-        payments: {
-          orderBy: { date: 'desc' },
-          take: 10
-        }
-      }
+      where: { id, businessId }
     })
 
     if (!customer) {

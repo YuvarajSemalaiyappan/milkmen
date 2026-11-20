@@ -4,8 +4,21 @@ import prisma from '../../lib/prisma.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
 import type { Prisma } from '@prisma/client'
 import { DuplicateEntryError, duplicateResponse, lockEntrySlot } from '../../lib/duplicates.js'
+import { lockOwnedRow, NotFoundError, wantsTotal } from '../../lib/db.js'
 
 const router = Router()
+
+// Columns read back by lockOwnedRow (raw query: decimals arrive as Prisma.Decimal)
+interface CollectionRow {
+  farmerId: string
+  quantity: Prisma.Decimal
+  ratePerLiter: Prisma.Decimal
+  totalAmount: Prisma.Decimal
+  fatContent: Prisma.Decimal | null
+  notes: string | null
+  rateEditedAt: Date | null
+  rateEditedBy: string | null
+}
 
 // Validation schemas
 const createCollectionSchema = z.object({
@@ -31,7 +44,7 @@ const updateCollectionSchema = z.object({
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
-    const { date, farmerId, shift, from, to, routeId, page: pageStr, limit: limitStr } = req.query
+    const { date, farmerId, shift, from, to, routeId, order, page: pageStr, limit: limitStr } = req.query
 
     const page = Math.max(1, parseInt(pageStr as string) || 1)
     const limit = Math.min(500, Math.max(1, parseInt(limitStr as string) || 200))
@@ -68,10 +81,16 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // order=asc gives the oldest first (e.g. limit=1 to find a farmer's first entry)
+    const orderBy: Prisma.CollectionOrderByWithRelationInput[] =
+      order === 'asc'
+        ? [{ date: 'asc' }, { shift: 'asc' }, { createdAt: 'asc' }]
+        : [{ date: 'desc' }, { createdAt: 'desc' }]
+
     const [collections, total] = await Promise.all([
       prisma.collection.findMany({
         where,
-        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        orderBy,
         skip,
         take: limit,
         include: {
@@ -83,15 +102,13 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           }
         }
       }),
-      prisma.collection.count({ where })
+      wantsTotal(pageStr) ? prisma.collection.count({ where }) : undefined
     ])
 
     return res.json({
       success: true,
       data: collections,
-      total,
-      page,
-      limit
+      ...(total !== undefined ? { total, page, limit } : {})
     })
   } catch (error) {
     console.error('List collections error:', error)
@@ -165,7 +182,9 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     const collection = await prisma.collection.findFirst({
       where: { id, businessId },
       include: {
-        farmer: true,
+        farmer: {
+          select: { id: true, name: true, phone: true, village: true, defaultRate: true, balance: true, isActive: true }
+        },
         user: {
           select: { id: true, name: true }
         }
@@ -208,18 +227,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
     const { farmerId, date, shift, quantity, fatContent, ratePerLiter, notes, allowDuplicate } = validation.data
 
-    // Verify farmer belongs to business
-    const farmer = await prisma.farmer.findFirst({
-      where: { id: farmerId, businessId, isActive: true }
-    })
-
-    if (!farmer) {
-      return res.status(400).json({
-        success: false,
-        error: 'Farmer not found or inactive'
-      })
-    }
-
     const totalAmount = quantity * ratePerLiter
 
     // Create collection and update farmer balance in a transaction
@@ -234,7 +241,15 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         if (existing.length) throw new DuplicateEntryError(existing)
       }
 
-      const collection = await tx.collection.create({
+      // Update farmer balance (we owe them more). This also checks the farmer belongs to the
+      // business and is active, so no separate lookup is needed.
+      const updated = await tx.farmer.updateMany({
+        where: { id: farmerId, businessId, isActive: true },
+        data: { balance: { increment: totalAmount } }
+      })
+      if (updated.count === 0) throw new NotFoundError('Farmer not found or inactive')
+
+      return tx.collection.create({
         data: {
           businessId,
           farmerId,
@@ -247,23 +262,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           totalAmount,
           originalRate: ratePerLiter,
           notes
-        },
-        include: {
-          farmer: {
-            select: { id: true, name: true }
-          }
         }
       })
-
-      // Update farmer balance (we owe them more)
-      await tx.farmer.update({
-        where: { id: farmerId },
-        data: {
-          balance: { increment: totalAmount }
-        }
-      })
-
-      return collection
     })
 
     return res.status(201).json({
@@ -273,6 +273,9 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   } catch (error) {
     if (error instanceof DuplicateEntryError) {
       return res.status(409).json(duplicateResponse('collection', error.existing))
+    }
+    if (error instanceof NotFoundError) {
+      return res.status(400).json({ success: false, error: error.message })
     }
     console.error('Create collection error:', error)
     return res.status(500).json({
@@ -297,26 +300,17 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       })
     }
 
-    const existing = await prisma.collection.findFirst({
-      where: { id, businessId }
-    })
-
-    if (!existing) {
-      return res.status(404).json({
-        success: false,
-        error: 'Collection not found'
-      })
-    }
-
     const { quantity, fatContent, ratePerLiter, notes } = validation.data
-    const newQuantity = quantity ?? Number(existing.quantity)
-    const newRate = ratePerLiter ?? Number(existing.ratePerLiter)
-    const newTotal = newQuantity * newRate
-    const oldTotal = Number(existing.totalAmount)
-    const balanceDiff = newTotal - oldTotal
 
-    // Update collection and adjust farmer balance
+    // Update collection and adjust farmer balance. The row is read and locked inside the
+    // transaction so two edits at once cannot both apply their balance change.
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await lockOwnedRow<CollectionRow>(tx, 'Collection', id, businessId)
+      const newQuantity = quantity ?? Number(existing.quantity)
+      const newRate = ratePerLiter ?? Number(existing.ratePerLiter)
+      const newTotal = newQuantity * newRate
+      const balanceDiff = newTotal - Number(existing.totalAmount)
+
       const collection = await tx.collection.update({
         where: { id },
         data: {
@@ -348,6 +342,9 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       data: result
     })
   } catch (error) {
+    if (error instanceof NotFoundError) {
+      return res.status(404).json({ success: false, error: 'Collection not found' })
+    }
     console.error('Update collection error:', error)
     return res.status(500).json({
       success: false,
@@ -362,19 +359,9 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
     const { businessId } = req.user!
     const id = req.params.id as string
 
-    const existing = await prisma.collection.findFirst({
-      where: { id, businessId }
-    })
-
-    if (!existing) {
-      return res.status(404).json({
-        success: false,
-        error: 'Collection not found'
-      })
-    }
-
     // Delete and adjust farmer balance
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await lockOwnedRow<CollectionRow>(tx, 'Collection', id, businessId)
       await tx.collection.delete({
         where: { id }
       })
@@ -393,6 +380,9 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
       message: 'Collection deleted successfully'
     })
   } catch (error) {
+    if (error instanceof NotFoundError) {
+      return res.status(404).json({ success: false, error: 'Collection not found' })
+    }
     console.error('Delete collection error:', error)
     return res.status(500).json({
       success: false,

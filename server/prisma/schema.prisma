@@ -52,6 +52,7 @@ model User {
   routes             UserRoute[]
 
   @@unique([businessId, phone])
+  @@index([phone])
 }
 
 enum Role {
@@ -196,7 +197,7 @@ model Collection {
   updatedAt DateTime @updatedAt
 
   @@index([businessId, date])
-  @@index([farmerId, date])
+  @@index([farmerId, date, shift])
 }
 
 model Delivery {
@@ -230,7 +231,7 @@ model Delivery {
   updatedAt DateTime @updatedAt
 
   @@index([businessId, date])
-  @@index([customerId, date])
+  @@index([customerId, date, shift])
 }
 
 enum Shift {
@@ -276,8 +277,8 @@ model Payment {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([businessId, date])
-  @@index([farmerId])
-  @@index([customerId])
+  @@index([farmerId, date])
+  @@index([customerId, date])
 }
 
 enum PaymentType {
@@ -460,4 +461,23 @@ enum SubscriptionStatus {
   ACTIVE    // Currently active
   EXPIRED   // Was active, now expired
   SUSPENDED // Manually suspended by admin
+}
+
+// One row per failed (status >= 400) or slow API request, for auditing. No foreign keys, so
+// rows outlive the users and businesses they mention. Rows older than 90 days are pruned.
+model RequestLog {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  method     String
+  route      String   // Route template, e.g. /api/collections/:id
+  path       String   // Actual path without the query string
+  status     Int
+  durationMs Int
+  userId     String?
+  businessId String?
+  error      String?
+
+  @@index([createdAt])
+  @@index([businessId, createdAt])
+  @@index([status, createdAt])
 }

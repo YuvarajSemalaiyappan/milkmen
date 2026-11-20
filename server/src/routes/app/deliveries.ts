@@ -2,10 +2,31 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { DuplicateEntryError, duplicateResponse, lockEntrySlot } from '../../lib/duplicates.js'
+import { lockOwnedRow, NotFoundError, wantsTotal } from '../../lib/db.js'
 
 const router = Router()
+
+// Columns read back by lockOwnedRow (raw query: decimals arrive as Prisma.Decimal)
+interface DeliveryRow {
+  id: string
+  customerId: string
+  quantity: Prisma.Decimal
+  ratePerLiter: Prisma.Decimal
+  totalAmount: Prisma.Decimal
+  status: 'DELIVERED' | 'SKIPPED' | 'CANCELLED'
+  notes: string | null
+  rateEditedAt: Date | null
+}
+
+// Balance change when a delivery moves from one state to another
+function balanceChange(wasDelivered: boolean, isDelivered: boolean, oldTotal: number, newTotal: number) {
+  if (wasDelivered && !isDelivered) return -oldTotal
+  if (!wasDelivered && isDelivered) return newTotal
+  if (wasDelivered && isDelivered) return newTotal - oldTotal
+  return 0
+}
 
 // Validation schemas
 const createDeliverySchema = z.object({
@@ -41,7 +62,7 @@ const bulkUpdateSchema = z.object({
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
-    const { date, customerId, shift, status, from, to, routeId, page: pageStr, limit: limitStr } = req.query
+    const { date, customerId, shift, status, from, to, routeId, order, page: pageStr, limit: limitStr } = req.query
 
     const page = Math.max(1, parseInt(pageStr as string) || 1)
     const limit = Math.min(500, Math.max(1, parseInt(limitStr as string) || 200))
@@ -82,10 +103,16 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // order=asc gives the oldest first (e.g. limit=1 to find a customer's first delivery)
+    const orderBy: Prisma.DeliveryOrderByWithRelationInput[] =
+      order === 'asc'
+        ? [{ date: 'asc' }, { shift: 'asc' }, { createdAt: 'asc' }]
+        : [{ date: 'desc' }, { createdAt: 'desc' }]
+
     const [deliveries, total] = await Promise.all([
       prisma.delivery.findMany({
         where,
-        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        orderBy,
         skip,
         take: limit,
         include: {
@@ -97,15 +124,13 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           }
         }
       }),
-      prisma.delivery.count({ where })
+      wantsTotal(pageStr) ? prisma.delivery.count({ where }) : undefined
     ])
 
     return res.json({
       success: true,
       data: deliveries,
-      total,
-      page,
-      limit
+      ...(total !== undefined ? { total, page, limit } : {})
     })
   } catch (error) {
     console.error('List deliveries error:', error)
@@ -182,7 +207,9 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     const delivery = await prisma.delivery.findFirst({
       where: { id, businessId },
       include: {
-        customer: true,
+        customer: {
+          select: { id: true, name: true, phone: true, address: true, defaultRate: true, balance: true, isActive: true }
+        },
         user: {
           select: { id: true, name: true }
         }
@@ -225,18 +252,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
     const { customerId, date, shift, quantity, ratePerLiter, isSubscription, status, notes, allowDuplicate } = validation.data
 
-    // Verify customer belongs to business
-    const customer = await prisma.customer.findFirst({
-      where: { id: customerId, businessId, isActive: true }
-    })
-
-    if (!customer) {
-      return res.status(400).json({
-        success: false,
-        error: 'Customer not found or inactive'
-      })
-    }
-
     const totalAmount = quantity * ratePerLiter
     const deliveryStatus = status || 'DELIVERED'
 
@@ -252,7 +267,15 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         if (existing.length) throw new DuplicateEntryError(existing)
       }
 
-      const delivery = await tx.delivery.create({
+      // Update customer balance only if delivered (they owe us more). The same statement checks
+      // the customer belongs to the business and is active, so no separate lookup is needed.
+      const owner = { id: customerId, businessId, isActive: true }
+      const found = deliveryStatus === 'DELIVERED'
+        ? (await tx.customer.updateMany({ where: owner, data: { balance: { increment: totalAmount } } })).count > 0
+        : !!(await tx.customer.findFirst({ where: owner, select: { id: true } }))
+      if (!found) throw new NotFoundError('Customer not found or inactive')
+
+      return tx.delivery.create({
         data: {
           businessId,
           customerId,
@@ -266,25 +289,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           isSubscription: isSubscription || false,
           status: deliveryStatus,
           notes
-        },
-        include: {
-          customer: {
-            select: { id: true, name: true }
-          }
         }
       })
-
-      // Update customer balance only if delivered (they owe us more)
-      if (deliveryStatus === 'DELIVERED') {
-        await tx.customer.update({
-          where: { id: customerId },
-          data: {
-            balance: { increment: totalAmount }
-          }
-        })
-      }
-
-      return delivery
     })
 
     return res.status(201).json({
@@ -294,6 +300,9 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   } catch (error) {
     if (error instanceof DuplicateEntryError) {
       return res.status(409).json(duplicateResponse('delivery', error.existing))
+    }
+    if (error instanceof NotFoundError) {
+      return res.status(400).json({ success: false, error: error.message })
     }
     console.error('Create delivery error:', error)
     return res.status(500).json({
@@ -318,42 +327,18 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       })
     }
 
-    const existing = await prisma.delivery.findFirst({
-      where: { id, businessId }
-    })
-
-    if (!existing) {
-      return res.status(404).json({
-        success: false,
-        error: 'Delivery not found'
-      })
-    }
-
     const { quantity, ratePerLiter, status, notes } = validation.data
-    const newQuantity = quantity ?? Number(existing.quantity)
-    const newRate = ratePerLiter ?? Number(existing.ratePerLiter)
-    const newTotal = newQuantity * newRate
-    const newStatus = status ?? existing.status
 
-    // Calculate balance adjustments
-    const wasDelivered = existing.status === 'DELIVERED'
-    const isNowDelivered = newStatus === 'DELIVERED'
-    const oldTotal = Number(existing.totalAmount)
-
-    let balanceChange = 0
-    if (wasDelivered && !isNowDelivered) {
-      // Was delivered, now cancelled/skipped - remove from balance
-      balanceChange = -oldTotal
-    } else if (!wasDelivered && isNowDelivered) {
-      // Wasn't delivered, now is - add to balance
-      balanceChange = newTotal
-    } else if (wasDelivered && isNowDelivered) {
-      // Still delivered - adjust for amount change
-      balanceChange = newTotal - oldTotal
-    }
-
-    // Update delivery and adjust customer balance
+    // Update delivery and adjust customer balance. The row is read and locked inside the
+    // transaction so two edits at once cannot both apply their balance change.
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await lockOwnedRow<DeliveryRow>(tx, 'Delivery', id, businessId)
+      const newQuantity = quantity ?? Number(existing.quantity)
+      const newRate = ratePerLiter ?? Number(existing.ratePerLiter)
+      const newTotal = newQuantity * newRate
+      const newStatus = status ?? existing.status
+      const change = balanceChange(existing.status === 'DELIVERED', newStatus === 'DELIVERED', Number(existing.totalAmount), newTotal)
+
       const delivery = await tx.delivery.update({
         where: { id },
         data: {
@@ -367,11 +352,11 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       })
 
       // Adjust customer balance
-      if (balanceChange !== 0) {
+      if (change !== 0) {
         await tx.customer.update({
           where: { id: existing.customerId },
           data: {
-            balance: { increment: balanceChange }
+            balance: { increment: change }
           }
         })
       }
@@ -384,6 +369,9 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       data: result
     })
   } catch (error) {
+    if (error instanceof NotFoundError) {
+      return res.status(404).json({ success: false, error: 'Delivery not found' })
+    }
     console.error('Update delivery error:', error)
     return res.status(500).json({
       success: false,
@@ -407,55 +395,58 @@ router.post('/bulk-update', authenticateToken, async (req: AuthRequest, res: Res
     }
 
     const { deliveries } = validation.data
-    const results = []
+    if (!deliveries.length) {
+      return res.json({ success: true, data: { updated: 0, results: [] } })
+    }
 
-    for (const update of deliveries) {
-      const existing = await prisma.delivery.findFirst({
-        where: { id: update.id, businessId }
-      })
+    // One transaction with a fixed number of queries, however many rows are sent:
+    // lock all rows, update them in one statement, then one balance update per customer.
+    const results = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const ids = deliveries.map((d) => d.id)
+      const rows = await tx.$queryRaw<DeliveryRow[]>`
+        SELECT id, "customerId", quantity, "ratePerLiter", "totalAmount", status, notes, "rateEditedAt"
+        FROM "Delivery" WHERE id = ANY(${ids}) AND "businessId" = ${businessId} FOR UPDATE`
+      const byId = new Map(rows.map((r) => [r.id, r]))
 
-      if (!existing) continue
-
-      const newQuantity = update.quantity ?? Number(existing.quantity)
-      const newTotal = newQuantity * Number(existing.ratePerLiter)
-
-      // Calculate balance change
-      const wasDelivered = existing.status === 'DELIVERED'
-      const isNowDelivered = update.status === 'DELIVERED'
-      const oldTotal = Number(existing.totalAmount)
-
-      let balanceChange = 0
-      if (wasDelivered && !isNowDelivered) {
-        balanceChange = -oldTotal
-      } else if (!wasDelivered && isNowDelivered) {
-        balanceChange = newTotal
-      } else if (wasDelivered && isNowDelivered && update.quantity) {
-        balanceChange = newTotal - oldTotal
+      const changes: { id: string; status: string; quantity: number; total: number; notes: string | null }[] = []
+      const perCustomer = new Map<string, number>()
+      for (const update of deliveries) {
+        const existing = byId.get(update.id)
+        if (!existing) continue
+        const newQuantity = update.quantity ?? Number(existing.quantity)
+        const newTotal = newQuantity * Number(existing.ratePerLiter)
+        const wasDelivered = existing.status === 'DELIVERED'
+        const isNowDelivered = update.status === 'DELIVERED'
+        // Same rule as before: when it stays delivered, only a new quantity changes the balance
+        const change = wasDelivered && isNowDelivered && !update.quantity
+          ? 0
+          : balanceChange(wasDelivered, isNowDelivered, Number(existing.totalAmount), newTotal)
+        if (change !== 0) perCustomer.set(existing.customerId, (perCustomer.get(existing.customerId) ?? 0) + change)
+        changes.push({ id: update.id, status: update.status, quantity: newQuantity, total: newTotal, notes: update.notes ?? existing.notes })
       }
 
-      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        await tx.delivery.update({
-          where: { id: update.id },
-          data: {
-            status: update.status,
-            quantity: newQuantity,
-            totalAmount: newTotal,
-            notes: update.notes ?? existing.notes
-          }
-        })
-
-        if (balanceChange !== 0) {
-          await tx.customer.update({
-            where: { id: existing.customerId },
-            data: {
-              balance: { increment: balanceChange }
-            }
-          })
-        }
-      })
-
-      results.push({ id: update.id, status: 'updated' })
-    }
+      if (changes.length) {
+        await tx.$executeRaw`
+          UPDATE "Delivery" AS d SET
+            status = v.status::"DeliveryStatus",
+            quantity = v.quantity,
+            "totalAmount" = v.total,
+            notes = v.notes,
+            "updatedAt" = NOW()
+          FROM unnest(
+            ${changes.map((c) => c.id)}::text[],
+            ${changes.map((c) => c.status)}::text[],
+            ${changes.map((c) => c.quantity)}::numeric[],
+            ${changes.map((c) => c.total)}::numeric[],
+            ${changes.map((c) => c.notes)}::text[]
+          ) AS v(id, status, quantity, total, notes)
+          WHERE d.id = v.id`
+      }
+      for (const [customerId, change] of perCustomer) {
+        await tx.customer.update({ where: { id: customerId }, data: { balance: { increment: change } } })
+      }
+      return changes.map((c) => ({ id: c.id, status: 'updated' }))
+    })
 
     return res.json({
       success: true,
@@ -476,19 +467,9 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
     const { businessId } = req.user!
     const id = req.params.id as string
 
-    const existing = await prisma.delivery.findFirst({
-      where: { id, businessId }
-    })
-
-    if (!existing) {
-      return res.status(404).json({
-        success: false,
-        error: 'Delivery not found'
-      })
-    }
-
     // Delete and adjust customer balance
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await lockOwnedRow<DeliveryRow>(tx, 'Delivery', id, businessId)
       await tx.delivery.delete({
         where: { id }
       })
@@ -509,6 +490,9 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
       message: 'Delivery deleted successfully'
     })
   } catch (error) {
+    if (error instanceof NotFoundError) {
+      return res.status(404).json({ success: false, error: 'Delivery not found' })
+    }
     console.error('Delete delivery error:', error)
     return res.status(500).json({
       success: false,

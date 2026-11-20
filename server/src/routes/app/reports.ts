@@ -1,5 +1,7 @@
 import { Router, Response } from 'express'
+import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma.js'
+import { dayRange, ymd } from '../../lib/db.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
 
 const router = Router()
@@ -166,47 +168,44 @@ router.get('/daily', authenticateToken, async (req: AuthRequest, res: Response) 
   }
 })
 
-// GET /api/reports/farmer-dues - Farmer dues report
+// Totals for one group of entries, as plain numbers
+interface Group {
+  liters: number
+  amount: number
+  count: number
+}
+const sumGroups = (groups: Group[]): Group =>
+  groups.reduce((a, g) => ({ liters: a.liters + g.liters, amount: a.amount + g.amount, count: a.count + g.count }), {
+    liters: 0,
+    amount: 0,
+    count: 0
+  })
+
+// GET /api/reports/farmer-dues - Farmer dues report (balances are kept on the farmer row)
 router.get('/farmer-dues', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
 
     const farmers = await prisma.farmer.findMany({
-      where: {
-        businessId,
-        isActive: true
-      },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        village: true,
-        balance: true,
-        _count: {
-          select: { collections: true, payments: true }
-        }
-      },
+      where: { businessId, isActive: true },
+      select: { id: true, name: true, phone: true, village: true, balance: true },
       orderBy: { balance: 'desc' }
     })
 
-    // Get totals
-    const totalDues = farmers.reduce((sum, f) => sum + Number(f.balance), 0)
-    const farmersWithDues = farmers.filter(f => Number(f.balance) > 0)
-    const farmersWithCredit = farmers.filter(f => Number(f.balance) < 0)
+    const rows = farmers.map((f) => ({ ...f, balance: Number(f.balance) }))
+    const withDues = rows.filter((f) => f.balance > 0)
+    const withCredit = rows.filter((f) => f.balance < 0)
 
     return res.json({
       success: true,
       data: {
-        farmers: farmers.map(f => ({
-          ...f,
-          balance: Number(f.balance)
-        })),
+        farmers: rows,
         summary: {
-          totalFarmers: farmers.length,
-          farmersWithDues: farmersWithDues.length,
-          farmersWithCredit: farmersWithCredit.length,
-          totalDues,
-          totalCredit: Math.abs(farmersWithCredit.reduce((sum, f) => sum + Number(f.balance), 0))
+          totalFarmers: rows.length,
+          farmersWithDues: withDues.length,
+          farmersWithCredit: withCredit.length,
+          totalDues: rows.reduce((sum, f) => sum + f.balance, 0),
+          totalCredit: Math.abs(withCredit.reduce((sum, f) => sum + f.balance, 0))
         }
       }
     })
@@ -219,47 +218,31 @@ router.get('/farmer-dues', authenticateToken, async (req: AuthRequest, res: Resp
   }
 })
 
-// GET /api/reports/customer-dues - Customer dues report
+// GET /api/reports/customer-dues - Customer dues report (balances are kept on the customer row)
 router.get('/customer-dues', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
 
     const customers = await prisma.customer.findMany({
-      where: {
-        businessId,
-        isActive: true
-      },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        address: true,
-        balance: true,
-        _count: {
-          select: { deliveries: true, payments: true }
-        }
-      },
+      where: { businessId, isActive: true },
+      select: { id: true, name: true, phone: true, address: true, balance: true },
       orderBy: { balance: 'desc' }
     })
 
-    // Get totals
-    const totalDues = customers.reduce((sum, c) => sum + Number(c.balance), 0)
-    const customersWithDues = customers.filter(c => Number(c.balance) > 0)
-    const customersWithCredit = customers.filter(c => Number(c.balance) < 0)
+    const rows = customers.map((c) => ({ ...c, balance: Number(c.balance) }))
+    const withDues = rows.filter((c) => c.balance > 0)
+    const withCredit = rows.filter((c) => c.balance < 0)
 
     return res.json({
       success: true,
       data: {
-        customers: customers.map(c => ({
-          ...c,
-          balance: Number(c.balance)
-        })),
+        customers: rows,
         summary: {
-          totalCustomers: customers.length,
-          customersWithDues: customersWithDues.length,
-          customersWithCredit: customersWithCredit.length,
-          totalDues,
-          totalCredit: Math.abs(customersWithCredit.reduce((sum, c) => sum + Number(c.balance), 0))
+          totalCustomers: rows.length,
+          customersWithDues: withDues.length,
+          customersWithCredit: withCredit.length,
+          totalDues: rows.reduce((sum, c) => sum + c.balance, 0),
+          totalCredit: Math.abs(withCredit.reduce((sum, c) => sum + c.balance, 0))
         }
       }
     })
@@ -272,86 +255,54 @@ router.get('/customer-dues', authenticateToken, async (req: AuthRequest, res: Re
   }
 })
 
-// GET /api/reports/collections - Collections report for date range
+// GET /api/reports/collections - Collections report for a date range.
+// Totals and groupings are computed in the database. The entry rows are included for the web
+// app's list view; pass rows=0 to get only the totals (the phone app does).
 router.get('/collections', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
-    const { from, to, farmerId } = req.query
+    const { from, to, farmerId, rows } = req.query
+    const { fromDate, toDate } = dayRange(from, to)
+    const person = typeof farmerId === 'string' && farmerId ? farmerId : null
+    const filter = Prisma.sql`c."businessId" = ${businessId}
+      AND c.date BETWEEN ${ymd(fromDate)}::date AND ${ymd(toDate)}::date
+      ${person ? Prisma.sql`AND c."farmerId" = ${person}` : Prisma.empty}`
 
-    const fromDate = from ? new Date(from as string) : new Date(new Date().setDate(new Date().getDate() - 30))
-    const toDate = to ? new Date(to as string) : new Date()
-    fromDate.setHours(0, 0, 0, 0)
-    toDate.setHours(23, 59, 59, 999)
-
-    const where: Record<string, unknown> = {
-      businessId,
-      date: {
-        gte: fromDate,
-        lte: toDate
-      }
-    }
-
-    if (farmerId && typeof farmerId === 'string') {
-      where.farmerId = farmerId
-    }
-
-    const collections = await prisma.collection.findMany({
-      where,
-      include: {
-        farmer: {
-          select: { id: true, name: true, village: true }
-        }
-      },
-      orderBy: { date: 'desc' }
-    })
-
-    // Group by farmer
-    const byFarmer: Record<string, { name: string; village: string | null; liters: number; amount: number; count: number }> = {}
-    collections.forEach(c => {
-      if (!byFarmer[c.farmerId]) {
-        byFarmer[c.farmerId] = {
-          name: c.farmer.name,
-          village: c.farmer.village,
-          liters: 0,
-          amount: 0,
-          count: 0
-        }
-      }
-      byFarmer[c.farmerId].liters += Number(c.quantity)
-      byFarmer[c.farmerId].amount += Number(c.totalAmount)
-      byFarmer[c.farmerId].count++
-    })
-
-    // Group by date
-    const byDate: Record<string, { liters: number; amount: number; count: number }> = {}
-    collections.forEach(c => {
-      const dateKey = c.date.toISOString().split('T')[0]
-      if (!byDate[dateKey]) {
-        byDate[dateKey] = { liters: 0, amount: 0, count: 0 }
-      }
-      byDate[dateKey].liters += Number(c.quantity)
-      byDate[dateKey].amount += Number(c.totalAmount)
-      byDate[dateKey].count++
-    })
-
-    const totals = collections.reduce(
-      (acc, c) => ({
-        liters: acc.liters + Number(c.quantity),
-        amount: acc.amount + Number(c.totalAmount),
-        count: acc.count + 1
-      }),
-      { liters: 0, amount: 0, count: 0 }
-    )
+    const [byFarmer, byDate, collections] = await Promise.all([
+      prisma.$queryRaw<(Group & { id: string; name: string; village: string | null })[]>`
+        SELECT c."farmerId" AS id, f.name, f.village,
+          SUM(c.quantity)::float8 AS liters, SUM(c."totalAmount")::float8 AS amount, COUNT(*)::int AS count
+        FROM "Collection" c JOIN "Farmer" f ON f.id = c."farmerId"
+        WHERE ${filter}
+        GROUP BY c."farmerId", f.name, f.village ORDER BY liters DESC`,
+      prisma.$queryRaw<(Group & { date: string })[]>`
+        SELECT to_char(c.date, 'YYYY-MM-DD') AS date,
+          SUM(c.quantity)::float8 AS liters, SUM(c."totalAmount")::float8 AS amount, COUNT(*)::int AS count
+        FROM "Collection" c
+        WHERE ${filter}
+        GROUP BY c.date ORDER BY c.date DESC`,
+      rows === '0'
+        ? Promise.resolve([])
+        : prisma.collection.findMany({
+            where: {
+              businessId,
+              date: { gte: fromDate, lte: toDate },
+              ...(person ? { farmerId: person } : {})
+            },
+            include: { farmer: { select: { id: true, name: true, village: true } } },
+            orderBy: { date: 'desc' }
+          })
+    ])
 
     return res.json({
       success: true,
       data: {
-        from: fromDate.toISOString().split('T')[0],
-        to: toDate.toISOString().split('T')[0],
+        from: ymd(fromDate),
+        to: ymd(toDate),
         collections,
-        byFarmer: Object.entries(byFarmer).map(([id, data]) => ({ id, ...data })),
-        byDate: Object.entries(byDate).map(([date, data]) => ({ date, ...data })),
-        totals
+        byFarmer,
+        byDate,
+        totals: sumGroups(byDate)
       }
     })
   } catch (error) {
@@ -363,87 +314,55 @@ router.get('/collections', authenticateToken, async (req: AuthRequest, res: Resp
   }
 })
 
-// GET /api/reports/deliveries - Deliveries report for date range
+// GET /api/reports/deliveries - Deliveries report for a date range (delivered only).
+// Same shape and rows=0 option as the collections report.
 router.get('/deliveries', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
-    const { from, to, customerId } = req.query
+    const { from, to, customerId, rows } = req.query
+    const { fromDate, toDate } = dayRange(from, to)
+    const person = typeof customerId === 'string' && customerId ? customerId : null
+    const filter = Prisma.sql`d."businessId" = ${businessId}
+      AND d.date BETWEEN ${ymd(fromDate)}::date AND ${ymd(toDate)}::date
+      AND d.status = 'DELIVERED'
+      ${person ? Prisma.sql`AND d."customerId" = ${person}` : Prisma.empty}`
 
-    const fromDate = from ? new Date(from as string) : new Date(new Date().setDate(new Date().getDate() - 30))
-    const toDate = to ? new Date(to as string) : new Date()
-    fromDate.setHours(0, 0, 0, 0)
-    toDate.setHours(23, 59, 59, 999)
-
-    const where: Record<string, unknown> = {
-      businessId,
-      date: {
-        gte: fromDate,
-        lte: toDate
-      },
-      status: 'DELIVERED'
-    }
-
-    if (customerId && typeof customerId === 'string') {
-      where.customerId = customerId
-    }
-
-    const deliveries = await prisma.delivery.findMany({
-      where,
-      include: {
-        customer: {
-          select: { id: true, name: true, address: true }
-        }
-      },
-      orderBy: { date: 'desc' }
-    })
-
-    // Group by customer
-    const byCustomer: Record<string, { name: string; address: string | null; liters: number; amount: number; count: number }> = {}
-    deliveries.forEach(d => {
-      if (!byCustomer[d.customerId]) {
-        byCustomer[d.customerId] = {
-          name: d.customer.name,
-          address: d.customer.address,
-          liters: 0,
-          amount: 0,
-          count: 0
-        }
-      }
-      byCustomer[d.customerId].liters += Number(d.quantity)
-      byCustomer[d.customerId].amount += Number(d.totalAmount)
-      byCustomer[d.customerId].count++
-    })
-
-    // Group by date
-    const byDate: Record<string, { liters: number; amount: number; count: number }> = {}
-    deliveries.forEach(d => {
-      const dateKey = d.date.toISOString().split('T')[0]
-      if (!byDate[dateKey]) {
-        byDate[dateKey] = { liters: 0, amount: 0, count: 0 }
-      }
-      byDate[dateKey].liters += Number(d.quantity)
-      byDate[dateKey].amount += Number(d.totalAmount)
-      byDate[dateKey].count++
-    })
-
-    const totals = deliveries.reduce(
-      (acc, d) => ({
-        liters: acc.liters + Number(d.quantity),
-        amount: acc.amount + Number(d.totalAmount),
-        count: acc.count + 1
-      }),
-      { liters: 0, amount: 0, count: 0 }
-    )
+    const [byCustomer, byDate, deliveries] = await Promise.all([
+      prisma.$queryRaw<(Group & { id: string; name: string; address: string | null })[]>`
+        SELECT d."customerId" AS id, cu.name, cu.address,
+          SUM(d.quantity)::float8 AS liters, SUM(d."totalAmount")::float8 AS amount, COUNT(*)::int AS count
+        FROM "Delivery" d JOIN "Customer" cu ON cu.id = d."customerId"
+        WHERE ${filter}
+        GROUP BY d."customerId", cu.name, cu.address ORDER BY liters DESC`,
+      prisma.$queryRaw<(Group & { date: string })[]>`
+        SELECT to_char(d.date, 'YYYY-MM-DD') AS date,
+          SUM(d.quantity)::float8 AS liters, SUM(d."totalAmount")::float8 AS amount, COUNT(*)::int AS count
+        FROM "Delivery" d
+        WHERE ${filter}
+        GROUP BY d.date ORDER BY d.date DESC`,
+      rows === '0'
+        ? Promise.resolve([])
+        : prisma.delivery.findMany({
+            where: {
+              businessId,
+              date: { gte: fromDate, lte: toDate },
+              status: 'DELIVERED',
+              ...(person ? { customerId: person } : {})
+            },
+            include: { customer: { select: { id: true, name: true, address: true } } },
+            orderBy: { date: 'desc' }
+          })
+    ])
 
     return res.json({
       success: true,
       data: {
-        from: fromDate.toISOString().split('T')[0],
-        to: toDate.toISOString().split('T')[0],
+        from: ymd(fromDate),
+        to: ymd(toDate),
         deliveries,
-        byCustomer: Object.entries(byCustomer).map(([id, data]) => ({ id, ...data })),
-        byDate: Object.entries(byDate).map(([date, data]) => ({ date, ...data })),
-        totals
+        byCustomer,
+        byDate,
+        totals: sumGroups(byDate)
       }
     })
   } catch (error) {
@@ -455,111 +374,58 @@ router.get('/deliveries', authenticateToken, async (req: AuthRequest, res: Respo
   }
 })
 
-// GET /api/reports/profit-loss - Profit/Loss report for date range
+// GET /api/reports/profit-loss - Profit/Loss report for a date range, computed in the database
 router.get('/profit-loss', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
-    const { from, to } = req.query
+    const { fromDate, toDate } = dayRange(req.query.from, req.query.to)
+    const fromDay = ymd(fromDate)
+    const toDay = ymd(toDate)
 
-    const fromDate = from ? new Date(from as string) : new Date(new Date().setDate(new Date().getDate() - 30))
-    const toDate = to ? new Date(to as string) : new Date()
-    fromDate.setHours(0, 0, 0, 0)
-    toDate.setHours(23, 59, 59, 999)
+    const [collectedByDay, deliveredByDay, paymentsByType] = await Promise.all([
+      prisma.$queryRaw<(Group & { date: string })[]>`
+        SELECT to_char(date, 'YYYY-MM-DD') AS date,
+          SUM(quantity)::float8 AS liters, SUM("totalAmount")::float8 AS amount, COUNT(*)::int AS count
+        FROM "Collection"
+        WHERE "businessId" = ${businessId} AND date BETWEEN ${fromDay}::date AND ${toDay}::date
+        GROUP BY date`,
+      prisma.$queryRaw<(Group & { date: string })[]>`
+        SELECT to_char(date, 'YYYY-MM-DD') AS date,
+          SUM(quantity)::float8 AS liters, SUM("totalAmount")::float8 AS amount, COUNT(*)::int AS count
+        FROM "Delivery"
+        WHERE "businessId" = ${businessId} AND date BETWEEN ${fromDay}::date AND ${toDay}::date AND status = 'DELIVERED'
+        GROUP BY date`,
+      prisma.payment.groupBy({
+        by: ['type'],
+        where: { businessId, date: { gte: fromDate, lte: toDate } },
+        _sum: { amount: true }
+      })
+    ])
 
-    // Get collections (expenses)
-    const collections = await prisma.collection.findMany({
-      where: {
-        businessId,
-        date: {
-          gte: fromDate,
-          lte: toDate
-        }
-      }
-    })
-
-    // Get deliveries (revenue)
-    const deliveries = await prisma.delivery.findMany({
-      where: {
-        businessId,
-        date: {
-          gte: fromDate,
-          lte: toDate
-        },
-        status: 'DELIVERED'
-      }
-    })
-
-    // Get payments
-    const payments = await prisma.payment.findMany({
-      where: {
-        businessId,
-        date: {
-          gte: fromDate,
-          lte: toDate
-        }
-      }
-    })
-
-    // Calculate totals
-    const totalCollectionAmount = collections.reduce((sum, c) => sum + Number(c.totalAmount), 0)
-    const totalCollectionLiters = collections.reduce((sum, c) => sum + Number(c.quantity), 0)
-    const avgBuyRate = totalCollectionLiters > 0 ? totalCollectionAmount / totalCollectionLiters : 0
-
-    const totalDeliveryAmount = deliveries.reduce((sum, d) => sum + Number(d.totalAmount), 0)
-    const totalDeliveryLiters = deliveries.reduce((sum, d) => sum + Number(d.quantity), 0)
-    const avgSellRate = totalDeliveryLiters > 0 ? totalDeliveryAmount / totalDeliveryLiters : 0
-
-    const grossProfit = totalDeliveryAmount - totalCollectionAmount
-    const profitMargin = totalDeliveryAmount > 0 ? (grossProfit / totalDeliveryAmount) * 100 : 0
-
-    // Payment summary
-    const paidToFarmers = payments
-      .filter(p => p.type === 'PAID_TO_FARMER')
-      .reduce((sum, p) => sum + Number(p.amount), 0)
-    const receivedFromCustomers = payments
-      .filter(p => p.type === 'RECEIVED_FROM_CUSTOMER')
-      .reduce((sum, p) => sum + Number(p.amount), 0)
+    const collected = sumGroups(collectedByDay)
+    const delivered = sumGroups(deliveredByDay)
+    const avgBuyRate = collected.liters > 0 ? collected.amount / collected.liters : 0
+    const avgSellRate = delivered.liters > 0 ? delivered.amount / delivered.liters : 0
+    const grossProfit = delivered.amount - collected.amount
+    const profitMargin = delivered.amount > 0 ? (grossProfit / delivered.amount) * 100 : 0
+    const paid = (type: string) => Number(paymentsByType.find((p) => p.type === type)?._sum.amount ?? 0)
+    const paidToFarmers = paid('PAID_TO_FARMER')
+    const receivedFromCustomers = paid('RECEIVED_FROM_CUSTOMER')
 
     // Daily breakdown
     const dailyData: Record<string, { date: string; collected: number; delivered: number; profit: number }> = {}
-
-    collections.forEach(c => {
-      const dateKey = c.date.toISOString().split('T')[0]
-      if (!dailyData[dateKey]) {
-        dailyData[dateKey] = { date: dateKey, collected: 0, delivered: 0, profit: 0 }
-      }
-      dailyData[dateKey].collected += Number(c.totalAmount)
-    })
-
-    deliveries.forEach(d => {
-      const dateKey = d.date.toISOString().split('T')[0]
-      if (!dailyData[dateKey]) {
-        dailyData[dateKey] = { date: dateKey, collected: 0, delivered: 0, profit: 0 }
-      }
-      dailyData[dateKey].delivered += Number(d.totalAmount)
-    })
-
-    Object.values(dailyData).forEach(day => {
-      day.profit = day.delivered - day.collected
-    })
+    const day = (date: string) => (dailyData[date] ??= { date, collected: 0, delivered: 0, profit: 0 })
+    collectedByDay.forEach((c) => (day(c.date).collected += c.amount))
+    deliveredByDay.forEach((d) => (day(d.date).delivered += d.amount))
+    Object.values(dailyData).forEach((d) => (d.profit = d.delivered - d.collected))
 
     return res.json({
       success: true,
       data: {
-        from: fromDate.toISOString().split('T')[0],
-        to: toDate.toISOString().split('T')[0],
-        collections: {
-          count: collections.length,
-          liters: totalCollectionLiters,
-          amount: totalCollectionAmount,
-          avgRate: avgBuyRate
-        },
-        deliveries: {
-          count: deliveries.length,
-          liters: totalDeliveryLiters,
-          amount: totalDeliveryAmount,
-          avgRate: avgSellRate
-        },
+        from: fromDay,
+        to: toDay,
+        collections: { count: collected.count, liters: collected.liters, amount: collected.amount, avgRate: avgBuyRate },
+        deliveries: { count: delivered.count, liters: delivered.liters, amount: delivered.amount, avgRate: avgSellRate },
         payments: {
           paidToFarmers,
           receivedFromCustomers,

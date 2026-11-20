@@ -25,11 +25,14 @@ import adminAuthRoutes from './routes/admin/auth.js'
 import adminDashboardRoutes from './routes/admin/dashboard.js'
 import adminBusinessesRoutes from './routes/admin/businesses.js'
 import adminSubscriptionsRoutes from './routes/admin/subscriptions.js'
+import adminLogsRoutes from './routes/admin/logs.js'
+import { requestLog, startRequestLogCleanup } from './middleware/requestLog.js'
 
 const app = express()
 const PORT = process.env.PORT || 4000
 
 // Middleware
+app.use(requestLog)
 app.use(helmet())
 app.use(cors({
   origin: process.env.CORS_ORIGIN
@@ -63,6 +66,7 @@ app.use('/api/admin/auth', adminAuthRoutes)
 app.use('/api/admin/dashboard', adminDashboardRoutes)
 app.use('/api/admin/businesses', adminBusinessesRoutes)
 app.use('/api/admin/subscriptions', adminSubscriptionsRoutes)
+app.use('/api/admin/logs', adminLogsRoutes)
 
 // Serve frontend static files in production
 if (process.env.NODE_ENV === 'production') {
@@ -102,6 +106,8 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 })
 
 // Start server
+startRequestLogCleanup()
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)

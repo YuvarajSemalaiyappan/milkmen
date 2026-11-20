@@ -2,13 +2,19 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import { lockEntrySlot } from '../../lib/duplicates.js'
+import { lockOwnedRow, NotFoundError, wantsTotal } from '../../lib/db.js'
 
 const router = Router()
 
-// Shift ordinal for period overlap comparison
-function shiftOrd(shift: 'MORNING' | 'EVENING'): number {
-  return shift === 'MORNING' ? 0 : 1
+class OverlapError extends Error {}
+
+// Columns read back by lockOwnedRow (raw query: decimals arrive as Prisma.Decimal)
+interface PaymentRow {
+  farmerId: string | null
+  customerId: string | null
+  amount: Prisma.Decimal
 }
 
 // Validation schemas
@@ -106,15 +112,13 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           }
         }
       }),
-      prisma.payment.count({ where })
+      wantsTotal(pageStr) ? prisma.payment.count({ where }) : undefined
     ])
 
     return res.json({
       success: true,
       data: payments,
-      total,
-      page,
-      limit
+      ...(total !== undefined ? { total, page, limit } : {})
     })
   } catch (error) {
     console.error('List payments error:', error)
@@ -208,8 +212,12 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     const payment = await prisma.payment.findFirst({
       where: { id, businessId },
       include: {
-        farmer: true,
-        customer: true,
+        farmer: {
+          select: { id: true, name: true, phone: true, village: true, balance: true, isActive: true }
+        },
+        customer: {
+          select: { id: true, name: true, phone: true, address: true, balance: true, isActive: true }
+        },
         user: {
           select: { id: true, name: true }
         }
@@ -252,84 +260,36 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
     const { farmerId, customerId, date, amount, type, method, notes, periodFromDate, periodToDate, periodFromShift, periodToShift } = validation.data
 
-    // Verify farmer/customer belongs to business
-    if (farmerId) {
-      const farmer = await prisma.farmer.findFirst({
-        where: { id: farmerId, businessId }
-      })
-      if (!farmer) {
-        return res.status(400).json({
-          success: false,
-          error: 'Farmer not found'
-        })
-      }
-    }
+    const hasPeriod = !!(periodFromDate && periodToDate && periodFromShift && periodToShift)
 
-    if (customerId) {
-      const customer = await prisma.customer.findFirst({
-        where: { id: customerId, businessId }
-      })
-      if (!customer) {
-        return res.status(400).json({
-          success: false,
-          error: 'Customer not found'
-        })
-      }
-    }
-
-    // Check for period overlap (server-side validation)
-    if (periodFromDate && periodToDate && periodFromShift && periodToShift) {
-      const personFilter: Prisma.PaymentWhereInput = farmerId
-        ? { farmerId, businessId }
-        : { customerId, businessId }
-
-      const existingPayments = await prisma.payment.findMany({
-        where: {
-          ...personFilter,
-          periodFromDate: { not: null },
-          periodToDate: { not: null },
-          periodFromShift: { not: null },
-          periodToShift: { not: null }
-        },
-        select: {
-          periodFromDate: true,
-          periodToDate: true,
-          periodFromShift: true,
-          periodToShift: true
-        }
-      })
-
-      const newFromDate = periodFromDate
-      const newToDate = periodToDate
-      const newFromShiftOrd = shiftOrd(periodFromShift)
-      const newToShiftOrd = shiftOrd(periodToShift)
-
-      const hasOverlap = existingPayments.some(p => {
-        const pFromDate = p.periodFromDate!.toISOString().slice(0, 10)
-        const pToDate = p.periodToDate!.toISOString().slice(0, 10)
-        const pFromShiftOrd = shiftOrd(p.periodFromShift as 'MORNING' | 'EVENING')
-        const pToShiftOrd = shiftOrd(p.periodToShift as 'MORNING' | 'EVENING')
-
-        // Two periods overlap unless one ends entirely before the other starts
-        const newEndBeforeExistingStart = newToDate < pFromDate
-          || (newToDate === pFromDate && newToShiftOrd < pFromShiftOrd)
-        const existingEndBeforeNewStart = pToDate < newFromDate
-          || (pToDate === newFromDate && pToShiftOrd < newFromShiftOrd)
-
-        return !newEndBeforeExistingStart && !existingEndBeforeNewStart
-      })
-
-      if (hasOverlap) {
-        return res.status(409).json({
-          success: false,
-          error: 'A payment already exists for an overlapping period'
-        })
-      }
-    }
-
-    // Create payment and update balance in a transaction
+    // One transaction, a fixed number of queries. A lock per person makes two saves at the same
+    // moment (double tap, two phones) run one after the other, so the overlap check holds.
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const payment = await tx.payment.create({
+      await lockEntrySlot(tx, `payment:${farmerId ?? customerId}`)
+
+      if (hasPeriod) {
+        // Periods overlap unless one ends before the other starts. Shifts compare in enum order
+        // (MORNING < EVENING), so (date, shift) pairs compare like the app's period logic.
+        const overlap = await tx.$queryRaw<{ id: string }[]>`
+          SELECT id FROM "Payment"
+          WHERE "businessId" = ${businessId}
+            AND ${farmerId ? Prisma.sql`"farmerId" = ${farmerId}` : Prisma.sql`"customerId" = ${customerId}`}
+            AND "periodFromDate" IS NOT NULL AND "periodToDate" IS NOT NULL
+            AND "periodFromShift" IS NOT NULL AND "periodToShift" IS NOT NULL
+            AND ("periodToDate", "periodToShift") >= (${periodFromDate}::date, ${periodFromShift}::"Shift")
+            AND ("periodFromDate", "periodFromShift") <= (${periodToDate}::date, ${periodToShift}::"Shift")
+          LIMIT 1`
+        if (overlap.length) throw new OverlapError()
+      }
+
+      // All payment types (regular + advance) reduce the balance. The same statement checks the
+      // person belongs to the business, so no separate lookup is needed.
+      const updated = farmerId
+        ? await tx.farmer.updateMany({ where: { id: farmerId, businessId }, data: { balance: { decrement: amount } } })
+        : await tx.customer.updateMany({ where: { id: customerId, businessId }, data: { balance: { decrement: amount } } })
+      if (updated.count === 0) throw new NotFoundError(farmerId ? 'Farmer not found' : 'Customer not found')
+
+      return tx.payment.create({
         data: {
           businessId,
           farmerId,
@@ -344,33 +304,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
           periodToDate: periodToDate ? new Date(periodToDate) : undefined,
           periodFromShift: periodFromShift || undefined,
           periodToShift: periodToShift || undefined
-        },
-        include: {
-          farmer: farmerId ? {
-            select: { id: true, name: true }
-          } : false,
-          customer: customerId ? {
-            select: { id: true, name: true }
-          } : false
         }
       })
-
-      // Update balance: all payment types (regular + advance) reduce balance
-      if (farmerId) {
-        await tx.farmer.update({
-          where: { id: farmerId },
-          data: { balance: { decrement: amount } }
-        })
-      }
-
-      if (customerId) {
-        await tx.customer.update({
-          where: { id: customerId },
-          data: { balance: { decrement: amount } }
-        })
-      }
-
-      return payment
     })
 
     return res.status(201).json({
@@ -378,6 +313,12 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       data: result
     })
   } catch (error) {
+    if (error instanceof OverlapError) {
+      return res.status(409).json({ success: false, error: 'A payment already exists for an overlapping period' })
+    }
+    if (error instanceof NotFoundError) {
+      return res.status(400).json({ success: false, error: error.message })
+    }
     console.error('Create payment error:', error)
     return res.status(500).json({
       success: false,
@@ -401,23 +342,14 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       })
     }
 
-    const existing = await prisma.payment.findFirst({
-      where: { id, businessId }
-    })
-
-    if (!existing) {
-      return res.status(404).json({
-        success: false,
-        error: 'Payment not found'
-      })
-    }
-
     const { amount, method, notes } = validation.data
-    const oldAmount = Number(existing.amount)
-    const newAmount = amount ?? oldAmount
-    const amountDelta = oldAmount - newAmount
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Read and lock the row inside the transaction so two edits cannot both adjust the balance
+      const existing = await lockOwnedRow<PaymentRow>(tx, 'Payment', id, businessId)
+      const oldAmount = Number(existing.amount)
+      const amountDelta = oldAmount - (amount ?? oldAmount)
+
       const updateData: Record<string, unknown> = {}
       if (amount !== undefined) updateData.amount = amount
       if (method !== undefined) updateData.method = method
@@ -427,12 +359,8 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
         where: { id },
         data: updateData,
         include: {
-          farmer: existing.farmerId ? {
-            select: { id: true, name: true }
-          } : false,
-          customer: existing.customerId ? {
-            select: { id: true, name: true }
-          } : false
+          farmer: { select: { id: true, name: true } },
+          customer: { select: { id: true, name: true } }
         }
       })
 
@@ -460,6 +388,9 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       data: result
     })
   } catch (error) {
+    if (error instanceof NotFoundError) {
+      return res.status(404).json({ success: false, error: 'Payment not found' })
+    }
     console.error('Update payment error:', error)
     return res.status(500).json({
       success: false,
@@ -474,19 +405,9 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
     const { businessId } = req.user!
     const id = req.params.id as string
 
-    const existing = await prisma.payment.findFirst({
-      where: { id, businessId }
-    })
-
-    if (!existing) {
-      return res.status(404).json({
-        success: false,
-        error: 'Payment not found'
-      })
-    }
-
     // Delete and reverse balance
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await lockOwnedRow<PaymentRow>(tx, 'Payment', id, businessId)
       await tx.payment.delete({
         where: { id }
       })
@@ -518,6 +439,9 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
       message: 'Payment deleted successfully'
     })
   } catch (error) {
+    if (error instanceof NotFoundError) {
+      return res.status(404).json({ success: false, error: 'Payment not found' })
+    }
     console.error('Delete payment error:', error)
     return res.status(500).json({
       success: false,
