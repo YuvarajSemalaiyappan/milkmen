@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { collectionsApi, ApiError } from '@/services/api'
 import { useAppStore } from '@/store'
-import { calculateTotal } from '@/utils/calculate'
 import { getToday } from '@/utils/format'
 import type { Collection, Shift, ApiResponse } from '@/types'
 
@@ -51,7 +50,6 @@ export function useCollections(options?: { skipInitialFetch?: boolean }) {
       notes?: string
     }) => {
       try {
-        const totalAmount = calculateTotal(data.quantity, data.ratePerLiter)
         const payload = {
           farmerId: data.farmerId,
           date: data.date || getToday(),

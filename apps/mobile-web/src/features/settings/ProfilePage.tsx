@@ -9,7 +9,6 @@ import { authApi } from '@/services/api'
 export function ProfilePage() {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.user)
-  const updateUser = useAuthStore((state) => state.updateUser)
 
   const [isChangingPin, setIsChangingPin] = useState(false)
   const [currentPin, setCurrentPin] = useState('')

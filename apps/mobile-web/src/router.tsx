@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
-import type { Action, Location, To } from 'react-router-dom'
+import type { Location, NavigationType as Action, To } from 'react-router-dom'
 import { Router, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '@/store'
 
@@ -61,7 +61,8 @@ function buildLocation(state: unknown): RouterLocation {
     search: window.location.search,
     hash: window.location.hash,
     state: s?.usr ?? null,
-    key: s?.key ?? 'default'
+    key: s?.key ?? 'default',
+    unstable_mask: undefined
   }
 }
 

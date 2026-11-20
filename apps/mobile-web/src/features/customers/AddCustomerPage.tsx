@@ -21,7 +21,9 @@ const customerSchema = z.object({
   subscriptionQtyPM: z.preprocess((v) => (v === '' || Number.isNaN(v) ? undefined : v), z.number().optional())
 })
 
-type CustomerFormData = z.infer<typeof customerSchema>
+// Form values before parsing (quantities may be '' or NaN) and after (numbers or undefined)
+type CustomerFormInput = z.input<typeof customerSchema>
+type CustomerFormData = z.output<typeof customerSchema>
 
 export function AddCustomerPage() {
   const { t } = useTranslation()
@@ -36,9 +38,8 @@ export function AddCustomerPage() {
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors }
-  } = useForm<CustomerFormData>({
+  } = useForm<CustomerFormInput, unknown, CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
       name: '',

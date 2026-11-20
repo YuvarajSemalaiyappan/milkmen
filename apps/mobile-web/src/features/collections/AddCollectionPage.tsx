@@ -40,31 +40,6 @@ export function AddCollectionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Check if farmer is pre-selected
-  useEffect(() => {
-    const farmerId = searchParams.get('farmerId')
-    if (!farmerId || selectedFarmer) return
-
-    // Try local DB first
-    const farmer = activeFarmers.find((f) => f.id === farmerId)
-    if (farmer) {
-      selectFarmer(farmer)
-      return
-    }
-
-    // Fall back to server API if not found locally
-    if (activeFarmers.length > 0 || isLoading) return
-    const fetchFarmer = async () => {
-      try {
-        const response = await farmersApi.get(farmerId) as ApiResponse<Farmer>
-        if (response.success && response.data) {
-          selectFarmer(response.data)
-        }
-      } catch (error) {
-        console.error('Failed to fetch farmer:', error)
-      }
-    }
-    fetchFarmer()
-  }, [searchParams, activeFarmers, isLoading, selectedFarmer])
 
   // Filter farmers on search
   useEffect(() => {
@@ -94,7 +69,7 @@ export function AddCollectionPage() {
     saveSortOrder(newIds)
   }, [saveSortOrder])
 
-  const selectFarmer = (farmer: Farmer) => {
+  const selectFarmer = useCallback((farmer: Farmer) => {
     setSelectedFarmer(farmer)
     setRate(farmer.defaultRate.toString())
     // Pre-fill subscription quantity based on current shift
@@ -105,7 +80,33 @@ export function AddCollectionPage() {
       setQuantity(subscriptionQty.toString())
     }
     setStep('enter-quantity')
-  }
+  }, [currentShift])
+
+  useEffect(() => {
+    const farmerId = searchParams.get('farmerId')
+    if (!farmerId || selectedFarmer) return
+
+    // Try local DB first
+    const farmer = activeFarmers.find((f) => f.id === farmerId)
+    if (farmer) {
+      selectFarmer(farmer)
+      return
+    }
+
+    // Fall back to server API if not found locally
+    if (activeFarmers.length > 0 || isLoading) return
+    const fetchFarmer = async () => {
+      try {
+        const response = await farmersApi.get(farmerId) as ApiResponse<Farmer>
+        if (response.success && response.data) {
+          selectFarmer(response.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch farmer:', error)
+      }
+    }
+    fetchFarmer()
+  }, [searchParams, activeFarmers, isLoading, selectedFarmer, selectFarmer])
 
   const handleSubmit = async (navigateTo?: string) => {
     if (!selectedFarmer || !quantity || !rate) return

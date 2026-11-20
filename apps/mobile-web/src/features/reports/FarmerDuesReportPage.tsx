@@ -1,14 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Users, IndianRupee, ChevronRight, Calendar } from 'lucide-react'
+import { Users, ChevronRight, Calendar } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Button, Badge, Input } from '@/components/ui'
+import { Card, Badge, Input } from '@/components/ui'
 import { EmptyState } from '@/components/common'
-import { useFarmers } from '@/hooks'
-import { collectionsApi, paymentsApi } from '@/services/api'
+import { reportsApi } from '@/services/api'
 import { formatCurrency, getToday, toLocalDateString } from '@/utils'
-import type { Farmer, Collection, Payment, ApiResponse } from '@/types'
+import type { Farmer, ApiResponse } from '@/types'
+
+// One row of GET /reports/farmer-dues?from&to
+interface DuesRow {
+  id: string
+  name: string
+  balance: number
+  period?: { liters: number; amount: number; paid: number }
+}
 
 interface FarmerDue {
   farmer: Farmer
@@ -21,7 +28,6 @@ interface FarmerDue {
 export function FarmerDuesReportPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { activeFarmers } = useFarmers()
 
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
@@ -32,52 +38,22 @@ export function FarmerDuesReportPage() {
   const [farmerDues, setFarmerDues] = useState<FarmerDue[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    if (activeFarmers.length > 0) {
-      loadFarmerDues()
-    }
-  }, [activeFarmers, startDate, endDate])
 
-  const loadFarmerDues = async () => {
+  // The server totals the period in the database (all entries and payments in the range, no
+  // row limits), the same dues report the phone app uses.
+  const loadFarmerDues = useCallback(async () => {
     setIsLoading(true)
     try {
-      // 2 bulk API calls instead of N+1 per farmer
-      const [collectionsRes, paymentsRes] = await Promise.all([
-        collectionsApi.list({ from: startDate, to: endDate }) as Promise<ApiResponse<Collection[]>>,
-        paymentsApi.list({ from: startDate, to: endDate }) as Promise<ApiResponse<Payment[]>>
-      ])
-
-      const allCollections = collectionsRes.success && collectionsRes.data ? collectionsRes.data : []
-      const allPayments = paymentsRes.success && paymentsRes.data ? paymentsRes.data : []
-
-      // Group collections by farmer
-      const collectionByFarmer = new Map<string, { liters: number; amount: number }>()
-      allCollections.forEach(c => {
-        const existing = collectionByFarmer.get(c.farmerId) || { liters: 0, amount: 0 }
-        existing.liters += Number(c.quantity)
-        existing.amount += Number(c.totalAmount)
-        collectionByFarmer.set(c.farmerId, existing)
-      })
-
-      // Group payments by farmer
-      const paymentByFarmer = new Map<string, number>()
-      allPayments
-        .filter(p => p.farmerId && (p.type === 'PAID_TO_FARMER' || p.type === 'ADVANCE_TO_FARMER'))
-        .forEach(p => {
-          const existing = paymentByFarmer.get(p.farmerId!) || 0
-          paymentByFarmer.set(p.farmerId!, existing + Number(p.amount))
-        })
-
-      // Build dues list
-      const dues: FarmerDue[] = activeFarmers.map(farmer => {
-        const collectionData = collectionByFarmer.get(farmer.id) || { liters: 0, amount: 0 }
-        const totalPaid = paymentByFarmer.get(farmer.id) || 0
+      const response = await reportsApi.farmerDues(startDate, endDate) as ApiResponse<{ farmers: DuesRow[] }>
+      const rows = response.success && response.data ? response.data.farmers : []
+      const dues: FarmerDue[] = rows.map((row) => {
+        const period = row.period ?? { liters: 0, amount: 0, paid: 0 }
         return {
-          farmer,
-          totalLiters: collectionData.liters,
-          totalAmount: collectionData.amount,
-          totalPaid,
-          balance: collectionData.amount - totalPaid
+          farmer: row as unknown as Farmer,
+          totalLiters: period.liters,
+          totalAmount: period.amount,
+          totalPaid: period.paid,
+          balance: period.amount - period.paid
         }
       })
 
@@ -89,7 +65,11 @@ export function FarmerDuesReportPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [endDate, startDate])
+
+  useEffect(() => {
+    loadFarmerDues()
+  }, [loadFarmerDues])
 
   const totalDue = farmerDues.reduce((sum, f) => sum + Math.max(0, f.balance), 0)
   const totalLiters = farmerDues.reduce((sum, f) => sum + f.totalLiters, 0)

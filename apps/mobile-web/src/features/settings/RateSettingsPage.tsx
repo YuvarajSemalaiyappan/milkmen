@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DollarSign, Plus, Trash2, Edit2, Save, X, TrendingUp } from 'lucide-react'
 import { AppShell } from '@/components/layout'
@@ -32,11 +32,8 @@ export function RateSettingsPage() {
     ratePerLiter: ''
   })
 
-  useEffect(() => {
-    loadRates()
-  }, [])
 
-  const loadRates = async () => {
+  const loadRates = useCallback(async () => {
     setIsLoading(true)
     try {
       const response = await api.get<ApiResponse<Rate[]>>('/rates')
@@ -48,7 +45,11 @@ export function RateSettingsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [t])
+
+  useEffect(() => {
+    loadRates()
+  }, [loadRates])
 
   const validateRate = (data: typeof newRate) => {
     const fatFrom = parseFloat(data.fatFrom)

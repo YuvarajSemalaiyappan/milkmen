@@ -5,11 +5,10 @@ import { Plus, Search, UserCircle, Phone, MapPin, ChevronRight, Sun, Moon } from
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { EmptyState, RouteFilter } from '@/components/common'
-import { useCustomers } from '@/hooks'
+import { useCustomers, useRouteScope } from '@/hooks'
 import { useRouteStore } from '@/store'
-import { routesApi } from '@/services/api'
 import { formatCurrency } from '@/utils'
-import type { Customer, ApiResponse, RouteCustomer } from '@/types'
+import type { Customer } from '@/types'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 
@@ -24,25 +23,9 @@ export function CustomersPage() {
   const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
   const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
 
-  const [routeCustomers, setRouteCustomers] = useState<RouteCustomer[] | undefined>(undefined)
-
-  useEffect(() => {
-    if (!selectedRouteId) {
-      setRouteCustomers(undefined)
-      return
-    }
-    const fetchRouteAssignments = async () => {
-      try {
-        const response = await routesApi.get(selectedRouteId) as ApiResponse<{ routeCustomers: RouteCustomer[] }>
-        if (response.success && response.data) {
-          setRouteCustomers(response.data.routeCustomers)
-        }
-      } catch (error) {
-        console.error('Failed to fetch route customers:', error)
-      }
-    }
-    fetchRouteAssignments()
-  }, [selectedRouteId])
+  // Only ids and areas are needed to filter the list
+  const { scope: routeScope } = useRouteScope(selectedRouteId)
+  const routeCustomers = routeScope?.routeCustomers
 
   // Get the base list based on status filter
   const baseCustomers = statusFilter === 'active'

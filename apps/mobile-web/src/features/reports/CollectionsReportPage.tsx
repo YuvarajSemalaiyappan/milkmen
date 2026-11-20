@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Milk, Calendar, User, ChevronRight, Filter, Download } from 'lucide-react'
@@ -6,14 +6,14 @@ import { AppShell } from '@/components/layout'
 import { Card, Input, Badge } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useFarmers } from '@/hooks'
-import { reportsApi, collectionsApi, paymentsApi } from '@/services/api'
+import { reportsApi, paymentsApi } from '@/services/api'
 import { formatCurrency, formatDate, getToday, toLocalDateString, exportToExcel, isEntryPaid } from '@/utils'
-import type { Farmer, Collection, Payment, ApiResponse } from '@/types'
+import type { Collection, Payment, ApiResponse } from '@/types'
 import type { PaidPeriodPayment } from '@/utils/paymentPeriod'
 
 interface CollectionWithFarmer extends Collection {
   farmerName: string
-  farmerVillage?: string
+  farmerVillage?: string | null
 }
 
 interface FarmerSummary {
@@ -65,16 +65,12 @@ export function CollectionsReportPage() {
     return farmer?.name || ''
   }, [farmerIdParam, allFarmers])
 
-  useEffect(() => {
-    loadCollections()
-    loadPaidPeriods()
-  }, [startDate, endDate, selectedFarmerId])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
   }, [startDate, endDate, selectedFarmerId])
 
-  const loadPaidPeriods = async () => {
+  const loadPaidPeriods = useCallback(async () => {
     try {
       const effectiveFarmerId = selectedFarmerId || farmerIdParam || undefined
       const response = await paymentsApi.list(
@@ -103,7 +99,7 @@ export function CollectionsReportPage() {
     } catch (error) {
       console.error('Failed to load payment periods:', error)
     }
-  }
+  }, [farmerIdParam, selectedFarmerId])
 
   const isCollectionPaid = (c: CollectionWithFarmer) => {
     const payments = paymentsByFarmer.get(c.farmerId)
@@ -111,7 +107,7 @@ export function CollectionsReportPage() {
     return isEntryPaid(c.date, c.shift, c.createdAt, payments)
   }
 
-  const loadCollections = async () => {
+  const loadCollections = useCallback(async () => {
     setIsLoading(true)
     try {
       const effectiveFarmerId = selectedFarmerId || farmerIdParam || undefined
@@ -121,14 +117,11 @@ export function CollectionsReportPage() {
       if (response.success && response.data) {
         const data = response.data
 
-        const farmerMap = new Map<string, Farmer>()
-        allFarmers.forEach(f => farmerMap.set(f.id, f))
-
-        // Map collections for list view
+        // Map collections for list view (the server includes each farmer's name and village)
         const items: CollectionWithFarmer[] = data.collections.map(c => ({
           ...c,
-          farmerName: c.farmer?.name || farmerMap.get(c.farmerId)?.name || t('common.unknown'),
-          farmerVillage: c.farmer?.village || farmerMap.get(c.farmerId)?.village
+          farmerName: c.farmer?.name || t('common.unknown'),
+          farmerVillage: c.farmer?.village
         }))
 
         setCollections(items)
@@ -140,7 +133,12 @@ export function CollectionsReportPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [endDate, farmerIdParam, selectedFarmerId, startDate, t])
+
+  useEffect(() => {
+    loadCollections()
+    loadPaidPeriods()
+  }, [startDate, endDate, selectedFarmerId, loadCollections, loadPaidPeriods])
 
   const avgRate = totals.liters > 0 ? totals.amount / totals.liters : 0
 
@@ -155,7 +153,7 @@ export function CollectionsReportPage() {
       'Quantity (L)': Number(c.quantity),
       'Rate/L': Number(c.ratePerLiter),
       Total: Number(c.totalAmount),
-      'Fat %': c.fatPercentage ? Number(c.fatPercentage) : '',
+      'Fat %': c.fatContent ? Number(c.fatContent) : '',
       Notes: c.notes || ''
     }))
     const name = personName || 'Collections'

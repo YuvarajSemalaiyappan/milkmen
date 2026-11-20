@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Calendar, TrendingUp, TrendingDown, IndianRupee, Package, ChevronLeft, ChevronRight } from 'lucide-react'
 import { AppShell } from '@/components/layout'
@@ -27,11 +27,8 @@ export function DailyReportPage() {
   const [summary, setSummary] = useState<DailySummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    loadDailySummary()
-  }, [selectedDate])
 
-  const loadDailySummary = async () => {
+  const loadDailySummary = useCallback(async () => {
     setIsLoading(true)
     try {
       const [collections, deliveries, payments] = await Promise.all([
@@ -70,7 +67,11 @@ export function DailyReportPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [getCollectionsByDate, getDeliveriesByDate, getPaymentsByDateRange, selectedDate])
+
+  useEffect(() => {
+    loadDailySummary()
+  }, [selectedDate, loadDailySummary])
 
   const changeDate = (days: number) => {
     const date = new Date(selectedDate + 'T00:00:00')

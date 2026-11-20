@@ -5,11 +5,10 @@ import { Plus, Search, Users, Phone, MapPin, ChevronRight } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { EmptyState, RouteFilter } from '@/components/common'
-import { useFarmers } from '@/hooks'
+import { useFarmers, useRouteScope } from '@/hooks'
 import { useRouteStore } from '@/store'
-import { routesApi } from '@/services/api'
 import { formatCurrency } from '@/utils'
-import type { Farmer, ApiResponse, RouteFarmer } from '@/types'
+import type { Farmer } from '@/types'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 
@@ -24,25 +23,9 @@ export function FarmersPage() {
   const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
   const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
 
-  const [routeFarmers, setRouteFarmers] = useState<RouteFarmer[] | undefined>(undefined)
-
-  useEffect(() => {
-    if (!selectedRouteId) {
-      setRouteFarmers(undefined)
-      return
-    }
-    const fetchRouteAssignments = async () => {
-      try {
-        const response = await routesApi.get(selectedRouteId) as ApiResponse<{ routeFarmers: RouteFarmer[] }>
-        if (response.success && response.data) {
-          setRouteFarmers(response.data.routeFarmers)
-        }
-      } catch (error) {
-        console.error('Failed to fetch route farmers:', error)
-      }
-    }
-    fetchRouteAssignments()
-  }, [selectedRouteId])
+  // Only ids and areas are needed to filter the list
+  const { scope: routeScope } = useRouteScope(selectedRouteId)
+  const routeFarmers = routeScope?.routeFarmers
 
   // Get the base list based on status filter
   const baseFarmers = statusFilter === 'active'

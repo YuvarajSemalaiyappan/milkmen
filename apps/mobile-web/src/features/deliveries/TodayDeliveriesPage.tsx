@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -14,10 +14,10 @@ import {
 import { AppShell } from '@/components/layout'
 import { Button, Card, Badge } from '@/components/ui'
 import { ShiftToggle, EmptyState } from '@/components/common'
-import { useCustomers, useDeliveries, usePayments } from '@/hooks'
+import { useCustomers, useDeliveries } from '@/hooks'
 import { useAppStore } from '@/store'
 import { formatCurrency, getToday } from '@/utils'
-import type { Customer, Delivery, Shift } from '@/types'
+import type { Customer, Delivery } from '@/types'
 
 interface DeliveryItem {
   customer: Customer
@@ -31,17 +31,13 @@ export function TodayDeliveriesPage() {
   const { currentShift, setCurrentShift } = useAppStore()
   const { getSubscribedCustomers, activeCustomers } = useCustomers()
   const { todayDeliveries, addDelivery, updateDelivery } = useDeliveries()
-  const { addPayment } = usePayments({ skipInitialFetch: true })
 
   const [deliveryItems, setDeliveryItems] = useState<DeliveryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadDeliveryItems()
-  }, [currentShift, todayDeliveries, activeCustomers])
 
-  const loadDeliveryItems = async () => {
+  const loadDeliveryItems = useCallback(async () => {
     setIsLoading(true)
     try {
       // Get subscribed customers for current shift
@@ -75,7 +71,11 @@ export function TodayDeliveriesPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [currentShift, getSubscribedCustomers, todayDeliveries])
+
+  useEffect(() => {
+    loadDeliveryItems()
+  }, [currentShift, todayDeliveries, activeCustomers, loadDeliveryItems])
 
   const handleMarkDelivered = async (item: DeliveryItem) => {
     const subscriptionQty = currentShift === 'MORNING'

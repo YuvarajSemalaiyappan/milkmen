@@ -4,8 +4,13 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 // Carries the server's error code (for example DUPLICATE_ENTRY) as well as its message
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public code?: string) {
+  status: number
+  code?: string
+
+  constructor(message: string, status: number, code?: string) {
     super(message)
+    this.status = status
+    this.code = code
   }
 }
 
@@ -229,7 +234,7 @@ export const collectionsApi = {
 
 // Deliveries API
 export const deliveriesApi = {
-  list: (params?: { date?: string; customerId?: string; from?: string; to?: string; shift?: string; status?: string }) =>
+  list: (params?: { date?: string; customerId?: string; from?: string; to?: string; shift?: string; status?: string; limit?: string }) =>
     api.get(`/deliveries${buildQuery(params)}`),
   get: (id: string) => api.get(`/deliveries/${id}`),
   today: (shift?: string) =>
@@ -290,8 +295,9 @@ export const reportsApi = {
     api.get(`/reports/customer-dues?from=${from}&to=${to}`),
   collections: (from: string, to: string, farmerId?: string) =>
     api.get(`/reports/collections?from=${from}&to=${to}${farmerId ? `&farmerId=${farmerId}` : ''}`),
-  deliveries: (from: string, to: string, customerId?: string) =>
-    api.get(`/reports/deliveries?from=${from}&to=${to}${customerId ? `&customerId=${customerId}` : ''}`),
+  // summaryOnly: totals and groupings without the entry rows (rows=0)
+  deliveries: (from: string, to: string, customerId?: string, summaryOnly = false) =>
+    api.get(`/reports/deliveries?from=${from}&to=${to}${customerId ? `&customerId=${customerId}` : ''}${summaryOnly ? '&rows=0' : ''}`),
   profitLoss: (from: string, to: string) =>
     api.get(`/reports/profit-loss?from=${from}&to=${to}`)
 }
@@ -312,6 +318,8 @@ export const routesApi = {
   list: (params?: { active?: string }) =>
     api.get(`/routes${params ? `?${new URLSearchParams(params as Record<string, string>)}` : ''}`),
   get: (id: string) => api.get(`/routes/${id}`),
+  // Ids and areas only, for screens that just filter by route
+  getScope: (id: string) => api.get(`/routes/${id}?scope=1`),
   create: (data: { name: string; description?: string }) =>
     api.post('/routes', data),
   update: (id: string, data: Partial<{ name: string; description?: string; isActive: boolean }>) =>

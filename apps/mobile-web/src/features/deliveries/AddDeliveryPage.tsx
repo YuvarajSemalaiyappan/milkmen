@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Search, User, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
-import { ShiftToggle, QuickPad } from '@/components/common'
+import { ShiftToggle, QuickPad, RouteFilter } from '@/components/common'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useDeliveries } from '@/hooks/useDeliveries'
-import { useAppStore } from '@/store'
+import { useRouteCustomerIds } from '@/hooks/useRouteCustomerIds'
+import { useAppStore, useRouteStore } from '@/store'
 import { customersApi } from '@/services/api'
 import { formatCurrency, formatRate, getToday } from '@/utils/format'
 import { calculateTotal } from '@/utils/calculate'
@@ -25,6 +26,10 @@ export function AddDeliveryPage() {
 
   const { activeCustomers, searchCustomers, isLoading } = useCustomers()
   const { addDelivery } = useDeliveries({ skipInitialFetch: true })
+  // Same route/area filter as Add Collection and the phone app
+  const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
+  const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
+  const { customerIds: routeCustomerIds } = useRouteCustomerIds(selectedRouteId, selectedAreaId)
 
   const [step, setStep] = useState<Step>('select-customer')
   const [searchQuery, setSearchQuery] = useState('')
@@ -37,6 +42,39 @@ export function AddDeliveryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Check if customer is pre-selected
+
+  // Filter customers on search
+  useEffect(() => {
+    const filter = async () => {
+      const results = await searchCustomers(searchQuery)
+      setFilteredCustomers(results)
+    }
+    filter()
+  }, [searchQuery, searchCustomers])
+
+  // Initialize filtered customers
+  useEffect(() => {
+    setFilteredCustomers(activeCustomers)
+  }, [activeCustomers])
+
+  const routeCustomers = useMemo(
+    () => (routeCustomerIds ? filteredCustomers.filter((c) => routeCustomerIds.has(c.id)) : filteredCustomers),
+    [filteredCustomers, routeCustomerIds]
+  )
+
+  const selectCustomer = useCallback((customer: Customer) => {
+    setSelectedCustomer(customer)
+    setRate(customer.defaultRate.toString())
+    // Pre-fill subscription quantity based on current shift
+    const subscriptionQty = currentShift === 'MORNING'
+      ? customer.subscriptionQtyAM
+      : customer.subscriptionQtyPM
+    if (subscriptionQty) {
+      setQuantity(subscriptionQty.toString())
+    }
+    setStep('enter-quantity')
+  }, [currentShift])
+
   useEffect(() => {
     const customerId = searchParams.get('customerId')
     if (!customerId || selectedCustomer) return
@@ -61,34 +99,7 @@ export function AddDeliveryPage() {
       }
     }
     fetchCustomer()
-  }, [searchParams, activeCustomers, isLoading, selectedCustomer])
-
-  // Filter customers on search
-  useEffect(() => {
-    const filter = async () => {
-      const results = await searchCustomers(searchQuery)
-      setFilteredCustomers(results)
-    }
-    filter()
-  }, [searchQuery, searchCustomers])
-
-  // Initialize filtered customers
-  useEffect(() => {
-    setFilteredCustomers(activeCustomers)
-  }, [activeCustomers])
-
-  const selectCustomer = (customer: Customer) => {
-    setSelectedCustomer(customer)
-    setRate(customer.defaultRate.toString())
-    // Pre-fill subscription quantity based on current shift
-    const subscriptionQty = currentShift === 'MORNING'
-      ? customer.subscriptionQtyAM
-      : customer.subscriptionQtyPM
-    if (subscriptionQty) {
-      setQuantity(subscriptionQty.toString())
-    }
-    setStep('enter-quantity')
-  }
+  }, [searchParams, activeCustomers, isLoading, selectedCustomer, selectCustomer])
 
   const handleSubmit = async (navigateTo?: string) => {
     if (!selectedCustomer || !quantity || !rate) return
@@ -137,6 +148,9 @@ export function AddDeliveryPage() {
 
         {step === 'select-customer' && (
           <>
+            {/* Route Filter */}
+            <RouteFilter />
+
             {/* Search */}
             <Input
               placeholder={t('delivery.selectCustomer')}
@@ -148,7 +162,7 @@ export function AddDeliveryPage() {
             {/* Customer List */}
             <Card padding="none">
               <ul className="divide-y divide-gray-100 dark:divide-gray-700">
-                {filteredCustomers.map((customer) => {
+                {routeCustomers.map((customer) => {
                   const hasAM = !!customer.subscriptionQtyAM
                   const hasPM = !!customer.subscriptionQtyPM
                   const hasSubscription = hasAM || hasPM

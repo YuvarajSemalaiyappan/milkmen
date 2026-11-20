@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
@@ -58,13 +58,8 @@ export function CollectionDetailPage() {
   const watchRate = watch('ratePerLiter')
   const calculatedTotal = (watchQuantity || 0) * (watchRate || 0)
 
-  useEffect(() => {
-    if (id) {
-      loadCollection()
-    }
-  }, [id])
 
-  const loadCollection = async () => {
+  const loadCollection = useCallback(async () => {
     if (!id) return
     try {
       const response = await collectionsApi.get(id) as ApiResponse<Collection>
@@ -85,7 +80,13 @@ export function CollectionDetailPage() {
     } catch (error) {
       console.error('Failed to load collection:', error)
     }
-  }
+  }, [getFarmer, id, reset])
+
+  useEffect(() => {
+    if (id) {
+      loadCollection()
+    }
+  }, [id, loadCollection])
 
   const onSubmit = async (data: CollectionFormData) => {
     if (!id) return

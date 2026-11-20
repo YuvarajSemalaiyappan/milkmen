@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react'
+import { forwardRef, useId, type InputHTMLAttributes, type ReactNode } from 'react'
 import { clsx } from 'clsx'
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -26,7 +26,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
-    const inputId = id || `input-${Math.random().toString(36).substring(2, 9)}`
+    // Stable id so the label stays linked to its input across renders
+    const autoId = useId()
+    const inputId = id || `input-${autoId}`
 
     return (
       <div className={clsx('flex flex-col gap-1', fullWidth && 'w-full')}>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Building2, Phone, MapPin, Save } from 'lucide-react'
 import { AppShell } from '@/components/layout'
@@ -26,11 +26,8 @@ export function BusinessSettingsPage() {
     address: ''
   })
 
-  useEffect(() => {
-    loadBusiness()
-  }, [])
 
-  const loadBusiness = async () => {
+  const loadBusiness = useCallback(async () => {
     setIsLoading(true)
     try {
       const response = await api.get<ApiResponse<Business>>('/settings/business')
@@ -47,7 +44,11 @@ export function BusinessSettingsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [t])
+
+  useEffect(() => {
+    loadBusiness()
+  }, [loadBusiness])
 
   const handleSave = async () => {
     setError('')

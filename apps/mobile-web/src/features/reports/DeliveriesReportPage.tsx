@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Truck, Calendar, UserCircle, ChevronRight, Filter, Download } from 'lucide-react'
@@ -8,11 +8,11 @@ import { EmptyState } from '@/components/common'
 import { useCustomers } from '@/hooks'
 import { reportsApi, deliveriesApi } from '@/services/api'
 import { formatCurrency, formatDate, getToday, toLocalDateString, exportToExcel } from '@/utils'
-import type { Customer, Delivery, ApiResponse } from '@/types'
+import type { Delivery, ApiResponse } from '@/types'
 
 interface DeliveryWithCustomer extends Delivery {
   customerName: string
-  customerAddress?: string
+  customerAddress?: string | null
 }
 
 interface CustomerSummary {
@@ -63,45 +63,38 @@ export function DeliveriesReportPage() {
     return customer?.name || ''
   }, [customerIdParam, allCustomers])
 
-  useEffect(() => {
-    loadDeliveries()
-  }, [startDate, endDate, selectedCustomerId])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
   }, [startDate, endDate, selectedCustomerId])
 
-  const loadDeliveries = async () => {
+  const loadDeliveries = useCallback(async () => {
     setIsLoading(true)
     try {
       const effectiveCustomerId = selectedCustomerId || customerIdParam || undefined
 
       if (isPersonMode) {
-        // Person mode: fetch all statuses for this customer
-        const response = await deliveriesApi.list({
-          from: startDate,
-          to: endDate,
-          customerId: effectiveCustomerId
-        }) as ApiResponse<Delivery[]>
-        if (response.success && response.data) {
-          const customerMap = new Map<string, Customer>()
-          allCustomers.forEach(c => customerMap.set(c.id, c))
-
-          const items: DeliveryWithCustomer[] = response.data.map(d => {
-            const customer = customerMap.get(d.customerId)
-            return {
+        // Person mode: the list shows every status for this customer (newest 500, the server's page
+        // limit); the totals come from the report endpoint, which counts delivered entries over the
+        // whole range in the database.
+        const [listRes, summaryRes] = await Promise.all([
+          deliveriesApi.list({ from: startDate, to: endDate, customerId: effectiveCustomerId, limit: '500' }) as Promise<
+            ApiResponse<(Delivery & { customer?: { name: string; address?: string | null } })[]>
+          >,
+          reportsApi.deliveries(startDate, endDate, effectiveCustomerId, true) as Promise<ApiResponse<ReportData>>
+        ])
+        if (listRes.success && listRes.data) {
+          const items: DeliveryWithCustomer[] = listRes.data
+            .map(d => ({
               ...d,
-              customerName: customer?.name || t('common.unknown'),
-              customerAddress: customer?.address
-            }
-          }).sort((a, b) => b.date.localeCompare(a.date))
-
+              customerName: d.customer?.name || t('common.unknown'),
+              customerAddress: d.customer?.address
+            }))
+            .sort((a, b) => b.date.localeCompare(a.date))
           setDeliveries(items)
-          const totalLiters = items.reduce((sum, d) => sum + Number(d.quantity), 0)
-          const totalAmount = items.reduce((sum, d) => sum + Number(d.totalAmount), 0)
-          setTotals({ liters: totalLiters, amount: totalAmount, count: items.length })
-          setCustomerSummaries([])
         }
+        if (summaryRes.success && summaryRes.data) setTotals(summaryRes.data.totals)
+        setCustomerSummaries([])
       } else {
         // Report mode: use the report endpoint (only DELIVERED status)
         const response = await reportsApi.deliveries(startDate, endDate, effectiveCustomerId) as ApiResponse<ReportData>
@@ -125,7 +118,11 @@ export function DeliveriesReportPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [customerIdParam, endDate, isPersonMode, selectedCustomerId, startDate, t])
+
+  useEffect(() => {
+    loadDeliveries()
+  }, [startDate, endDate, selectedCustomerId, loadDeliveries])
 
   const avgRate = totals.liters > 0 ? totals.amount / totals.liters : 0
 

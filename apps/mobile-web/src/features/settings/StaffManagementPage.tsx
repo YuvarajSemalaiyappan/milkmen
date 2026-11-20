@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Users, Plus, Phone, Shield, MoreVertical, Key, Trash2, UserX, UserCheck } from 'lucide-react'
 import { AppShell } from '@/components/layout'
@@ -31,13 +31,8 @@ export function StaffManagementPage() {
     role: 'STAFF' as Role
   })
 
-  useEffect(() => {
-    if (isOwner) {
-      loadStaff()
-    }
-  }, [isOwner])
 
-  const loadStaff = async () => {
+  const loadStaff = useCallback(async () => {
     setIsLoading(true)
     try {
       const response = await api.get<ApiResponse<StaffMember[]>>('/settings/staff')
@@ -49,7 +44,13 @@ export function StaffManagementPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [t])
+
+  useEffect(() => {
+    if (isOwner) {
+      loadStaff()
+    }
+  }, [isOwner, loadStaff])
 
   const handleAddStaff = async () => {
     setError('')

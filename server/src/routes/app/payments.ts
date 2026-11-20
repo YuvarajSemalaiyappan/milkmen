@@ -65,7 +65,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     const { date, farmerId, customerId, type, from, to, page: pageStr, limit: limitStr } = req.query
 
     const page = Math.max(1, parseInt(pageStr as string) || 1)
-    const limit = Math.min(200, Math.max(1, parseInt(limitStr as string) || 50))
+    // A single day is naturally bounded (a busy business has ~300 entries a day), so a date
+    // filter returns the whole day; otherwise lists are paged.
+    const maxLimit = typeof date === 'string' && date ? 2000 : 200
+    const limit = Math.min(maxLimit, Math.max(1, parseInt(limitStr as string) || (maxLimit === 2000 ? 2000 : 50)))
     const skip = (page - 1) * limit
 
     const where: Prisma.PaymentWhereInput = { businessId }

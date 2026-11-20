@@ -218,6 +218,14 @@ export interface AuthState {
 }
 
 // API Response types
+// GET /routes/:id?scope=1: who is on a route and in which area
+export interface RouteScope {
+  id: string
+  routeFarmers: { farmerId: string; areaId?: string | null }[]
+  routeCustomers: { customerId: string; areaId?: string | null }[]
+  areas: { id: string; name: string; isActive: boolean }[]
+}
+
 // GET /payments/period: default start, unpaid entries in the period, overlap with a paid period
 export interface PaymentPeriod {
   from: { date: string; shift: Shift }

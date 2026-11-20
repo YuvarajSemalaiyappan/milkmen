@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
@@ -63,13 +63,8 @@ export function DeliveryDetailPage() {
   const watchStatus = watch('status')
   const calculatedTotal = (watchQuantity || 0) * (watchRate || 0)
 
-  useEffect(() => {
-    if (id) {
-      loadDelivery()
-    }
-  }, [id])
 
-  const loadDelivery = async () => {
+  const loadDelivery = useCallback(async () => {
     if (!id) return
     try {
       const response = await deliveriesApi.get(id) as ApiResponse<Delivery>
@@ -90,7 +85,13 @@ export function DeliveryDetailPage() {
     } catch (error) {
       console.error('Failed to load delivery:', error)
     }
-  }
+  }, [getCustomer, id, reset])
+
+  useEffect(() => {
+    if (id) {
+      loadDelivery()
+    }
+  }, [id, loadDelivery])
 
   const onSubmit = async (data: DeliveryFormData) => {
     if (!id) return
@@ -132,17 +133,6 @@ export function DeliveryDetailPage() {
         return <MinusCircle className="w-5 h-5 text-yellow-600" />
       case 'CANCELLED':
         return <XCircle className="w-5 h-5 text-red-600" />
-    }
-  }
-
-  const getStatusBadge = (status: DeliveryStatus) => {
-    switch (status) {
-      case 'DELIVERED':
-        return <Badge variant="success">{t('delivery.delivered')}</Badge>
-      case 'SKIPPED':
-        return <Badge variant="warning">{t('delivery.skipped')}</Badge>
-      case 'CANCELLED':
-        return <Badge variant="error">{t('delivery.cancelled')}</Badge>
     }
   }
 

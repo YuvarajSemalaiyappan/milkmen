@@ -1,14 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { UserCircle, IndianRupee, ChevronRight, Calendar } from 'lucide-react'
+import { UserCircle, ChevronRight, Calendar } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Button, Badge, Input } from '@/components/ui'
+import { Card, Badge, Input } from '@/components/ui'
 import { EmptyState } from '@/components/common'
-import { useCustomers } from '@/hooks'
-import { deliveriesApi, paymentsApi } from '@/services/api'
+import { reportsApi } from '@/services/api'
 import { formatCurrency, getToday, toLocalDateString } from '@/utils'
-import type { Customer, Delivery, Payment, ApiResponse } from '@/types'
+import type { Customer, ApiResponse } from '@/types'
+
+// One row of GET /reports/customer-dues?from&to
+interface DuesRow {
+  id: string
+  name: string
+  balance: number
+  period?: { liters: number; amount: number; paid: number }
+}
 
 interface CustomerDue {
   customer: Customer
@@ -21,7 +28,6 @@ interface CustomerDue {
 export function CustomerDuesReportPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { activeCustomers } = useCustomers()
 
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
@@ -32,54 +38,22 @@ export function CustomerDuesReportPage() {
   const [customerDues, setCustomerDues] = useState<CustomerDue[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    if (activeCustomers.length > 0) {
-      loadCustomerDues()
-    }
-  }, [activeCustomers, startDate, endDate])
 
-  const loadCustomerDues = async () => {
+  // The server totals the period in the database (all entries and payments in the range, no
+  // row limits), the same dues report the phone app uses.
+  const loadCustomerDues = useCallback(async () => {
     setIsLoading(true)
     try {
-      // 2 bulk API calls instead of N+1 per customer
-      const [deliveriesRes, paymentsRes] = await Promise.all([
-        deliveriesApi.list({ from: startDate, to: endDate }) as Promise<ApiResponse<Delivery[]>>,
-        paymentsApi.list({ from: startDate, to: endDate }) as Promise<ApiResponse<Payment[]>>
-      ])
-
-      const allDeliveries = deliveriesRes.success && deliveriesRes.data ? deliveriesRes.data : []
-      const allPayments = paymentsRes.success && paymentsRes.data ? paymentsRes.data : []
-
-      // Group deliveries by customer
-      const deliveryByCustomer = new Map<string, { liters: number; amount: number }>()
-      allDeliveries
-        .filter(d => d.status === 'DELIVERED')
-        .forEach(d => {
-          const existing = deliveryByCustomer.get(d.customerId) || { liters: 0, amount: 0 }
-          existing.liters += Number(d.quantity)
-          existing.amount += Number(d.totalAmount)
-          deliveryByCustomer.set(d.customerId, existing)
-        })
-
-      // Group payments by customer
-      const paymentByCustomer = new Map<string, number>()
-      allPayments
-        .filter(p => p.customerId && (p.type === 'RECEIVED_FROM_CUSTOMER' || p.type === 'ADVANCE_FROM_CUSTOMER'))
-        .forEach(p => {
-          const existing = paymentByCustomer.get(p.customerId!) || 0
-          paymentByCustomer.set(p.customerId!, existing + Number(p.amount))
-        })
-
-      // Build dues list
-      const dues: CustomerDue[] = activeCustomers.map(customer => {
-        const deliveryData = deliveryByCustomer.get(customer.id) || { liters: 0, amount: 0 }
-        const totalPaid = paymentByCustomer.get(customer.id) || 0
+      const response = await reportsApi.customerDues(startDate, endDate) as ApiResponse<{ customers: DuesRow[] }>
+      const rows = response.success && response.data ? response.data.customers : []
+      const dues: CustomerDue[] = rows.map((row) => {
+        const period = row.period ?? { liters: 0, amount: 0, paid: 0 }
         return {
-          customer,
-          totalLiters: deliveryData.liters,
-          totalAmount: deliveryData.amount,
-          totalPaid,
-          balance: deliveryData.amount - totalPaid
+          customer: row as unknown as Customer,
+          totalLiters: period.liters,
+          totalAmount: period.amount,
+          totalPaid: period.paid,
+          balance: period.amount - period.paid
         }
       })
 
@@ -91,7 +65,11 @@ export function CustomerDuesReportPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [endDate, startDate])
+
+  useEffect(() => {
+    loadCustomerDues()
+  }, [loadCustomerDues])
 
   const totalDue = customerDues.reduce((sum, c) => sum + Math.max(0, c.balance), 0)
   const totalLiters = customerDues.reduce((sum, c) => sum + c.totalLiters, 0)

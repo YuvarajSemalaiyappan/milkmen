@@ -3,7 +3,7 @@ import { Milk, Truck, CreditCard, Plus, Crown, AlertTriangle, Loader2, RefreshCw
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout'
 import { Card, Badge } from '@/components/ui'
-import { useAppStore, useAuthStore } from '@/store'
+import { useAuthStore } from '@/store'
 import { useCollections, useDeliveries, useFarmers, useCustomers } from '@/hooks'
 import { formatCurrency } from '@/utils'
 
@@ -64,7 +64,7 @@ export function DashboardPage() {
       time: d.createdAt
     }))
   ]
-    .sort((a, b) => b.time - a.time)
+    .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
     .slice(0, 5)
 
   const quickActions = [

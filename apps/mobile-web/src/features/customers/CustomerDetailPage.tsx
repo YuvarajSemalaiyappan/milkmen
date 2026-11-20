@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
@@ -21,7 +21,7 @@ import { Button, Input, Card, Badge } from '@/components/ui'
 import { useCustomers, useDeliveries, usePayments, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
 import { formatCurrency, formatDate, isEntryPaid } from '@/utils'
-import type { Customer, Delivery, ApiResponse } from '@/types'
+import type { Customer, Delivery } from '@/types'
 import type { PaidPeriodPayment } from '@/utils/paymentPeriod'
 
 const customerSchema = z.object({
@@ -33,7 +33,9 @@ const customerSchema = z.object({
   subscriptionQtyPM: z.preprocess((v) => (v === '' || Number.isNaN(v) ? undefined : v), z.number().optional())
 })
 
-type CustomerFormData = z.infer<typeof customerSchema>
+// Form values before parsing (quantities may be '' or NaN) and after (numbers or undefined)
+type CustomerFormInput = z.input<typeof customerSchema>
+type CustomerFormData = z.output<typeof customerSchema>
 
 export function CustomerDetailPage() {
   const { t } = useTranslation()
@@ -46,7 +48,6 @@ export function CustomerDetailPage() {
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
-  const [lastPaymentDate, setLastPaymentDate] = useState<string | null>(null)
   const [paidPayments, setPaidPayments] = useState<PaidPeriodPayment[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -60,23 +61,14 @@ export function CustomerDetailPage() {
     register,
     handleSubmit,
     reset,
-    watch,
-    setValue,
     formState: { errors }
-  } = useForm<CustomerFormData>({
+  } = useForm<CustomerFormInput, unknown, CustomerFormData>({
     resolver: zodResolver(customerSchema)
   })
 
 
-  useEffect(() => {
-    if (id) {
-      loadCustomer()
-      loadDeliveries()
-      loadLastPaymentDate()
-    }
-  }, [id])
 
-  const loadCustomer = async () => {
+  const loadCustomer = useCallback(async () => {
     if (!id) return
     const data = await getCustomer(id)
     if (data) {
@@ -97,24 +89,22 @@ export function CustomerDetailPage() {
         setSelectedAreaId(customerDetail.routeCustomers[0].areaId || null)
       }
     }
-  }
+  }, [getCustomer, id, reset])
 
-  const loadDeliveries = async () => {
+  const loadDeliveries = useCallback(async () => {
     if (!id) return
     const data = await getDeliveriesByCustomer(id, undefined, undefined, 10)
     setDeliveries(data)
-  }
+  }, [getDeliveriesByCustomer, id])
 
-  const loadLastPaymentDate = async () => {
+  const loadPaidPeriods = useCallback(async () => {
     if (!id) return
     const payments = await getPaymentsByCustomer(id)
     if (payments.length === 0) {
-      setLastPaymentDate(null)
       setPaidPayments([])
       return
     }
 
-    const toDateOnly = (d: string) => d.slice(0, 10)
     const withPeriod = payments
       .filter((p) => p.periodFromDate && p.periodToDate)
       .map((p) => ({
@@ -126,18 +116,15 @@ export function CustomerDetailPage() {
       })) as PaidPeriodPayment[]
 
     setPaidPayments(withPeriod)
+  }, [getPaymentsByCustomer, id])
 
-    if (withPeriod.length === 0) {
-      setLastPaymentDate(null)
-      return
+  useEffect(() => {
+    if (id) {
+      loadCustomer()
+      loadDeliveries()
+      loadPaidPeriods()
     }
-
-    const paidTill = withPeriod.reduce(
-      (max, p) => (toDateOnly(p.periodToDate!) > max ? toDateOnly(p.periodToDate!) : max),
-      toDateOnly(withPeriod[0].periodToDate!)
-    )
-    setLastPaymentDate(paidTill)
-  }
+  }, [id, loadCustomer, loadDeliveries, loadPaidPeriods])
 
   const onSubmit = async (data: CustomerFormData) => {
     if (!id) return

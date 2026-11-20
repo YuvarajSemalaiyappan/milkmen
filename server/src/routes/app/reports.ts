@@ -181,18 +181,66 @@ const sumGroups = (groups: Group[]): Group =>
     count: 0
   })
 
+
+// Per-person totals for a date range, for the dues reports: what was collected/delivered and what
+// was paid in the range. Two grouped queries, whatever the size of the range.
+type PeriodTotals = Map<string, { liters: number; amount: number; paid: number }>
+async function duesPeriodTotals(kind: 'farmer' | 'customer', businessId: string, from: unknown, to: unknown): Promise<PeriodTotals | null> {
+  if (typeof from !== 'string' || typeof to !== 'string' || !from || !to) return null
+  const { fromDate, toDate } = dayRange(from, to)
+  const fromDay = ymd(fromDate)
+  const toDay = ymd(toDate)
+  const [entries, paid] = await Promise.all([
+    kind === 'farmer'
+      ? prisma.$queryRaw<{ id: string; liters: number; amount: number }[]>`
+          SELECT "farmerId" AS id, SUM(quantity)::float8 AS liters, SUM("totalAmount")::float8 AS amount
+          FROM "Collection" WHERE "businessId" = ${businessId} AND date BETWEEN ${fromDay}::date AND ${toDay}::date
+          GROUP BY "farmerId"`
+      : prisma.$queryRaw<{ id: string; liters: number; amount: number }[]>`
+          SELECT "customerId" AS id, SUM(quantity)::float8 AS liters, SUM("totalAmount")::float8 AS amount
+          FROM "Delivery" WHERE "businessId" = ${businessId} AND date BETWEEN ${fromDay}::date AND ${toDay}::date
+            AND status = 'DELIVERED'
+          GROUP BY "customerId"`,
+    kind === 'farmer'
+      ? prisma.$queryRaw<{ id: string; paid: number }[]>`
+          SELECT "farmerId" AS id, SUM(amount)::float8 AS paid
+          FROM "Payment" WHERE "businessId" = ${businessId} AND date BETWEEN ${fromDay}::date AND ${toDay}::date
+            AND "farmerId" IS NOT NULL
+          GROUP BY "farmerId"`
+      : prisma.$queryRaw<{ id: string; paid: number }[]>`
+          SELECT "customerId" AS id, SUM(amount)::float8 AS paid
+          FROM "Payment" WHERE "businessId" = ${businessId} AND date BETWEEN ${fromDay}::date AND ${toDay}::date
+            AND "customerId" IS NOT NULL
+          GROUP BY "customerId"`
+  ])
+  const totals: PeriodTotals = new Map()
+  for (const e of entries) totals.set(e.id, { liters: e.liters, amount: e.amount, paid: 0 })
+  for (const p of paid) totals.set(p.id, { ...(totals.get(p.id) ?? { liters: 0, amount: 0 }), paid: p.paid })
+  return totals
+}
+const noPeriod = { liters: 0, amount: 0, paid: 0 }
+
 // GET /api/reports/farmer-dues - Farmer dues report (balances are kept on the farmer row)
 router.get('/farmer-dues', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { businessId } = req.user!
 
-    const farmers = await prisma.farmer.findMany({
-      where: { businessId, isActive: true },
-      select: { id: true, name: true, phone: true, village: true, balance: true },
-      orderBy: { balance: 'desc' }
-    })
+    // balance is the running balance kept on the farmer. With from/to, each row also gets
+    // `period`: liters and amount collected and amount paid in that range.
+    const [farmers, period] = await Promise.all([
+      prisma.farmer.findMany({
+        where: { businessId, isActive: true },
+        select: { id: true, name: true, phone: true, village: true, balance: true },
+        orderBy: { balance: 'desc' }
+      }),
+      duesPeriodTotals('farmer', businessId, req.query.from, req.query.to)
+    ])
 
-    const rows = farmers.map((f) => ({ ...f, balance: Number(f.balance) }))
+    const rows = farmers.map((f) => ({
+      ...f,
+      balance: Number(f.balance),
+      ...(period ? { period: period.get(f.id) ?? noPeriod } : {})
+    }))
     const withDues = rows.filter((f) => f.balance > 0)
     const withCredit = rows.filter((f) => f.balance < 0)
 
@@ -223,13 +271,22 @@ router.get('/customer-dues', authenticateToken, async (req: AuthRequest, res: Re
   try {
     const { businessId } = req.user!
 
-    const customers = await prisma.customer.findMany({
-      where: { businessId, isActive: true },
-      select: { id: true, name: true, phone: true, address: true, balance: true },
-      orderBy: { balance: 'desc' }
-    })
+    // balance is the running balance kept on the customer. With from/to, each row also gets
+    // `period`: liters and amount delivered and amount paid in that range.
+    const [customers, period] = await Promise.all([
+      prisma.customer.findMany({
+        where: { businessId, isActive: true },
+        select: { id: true, name: true, phone: true, address: true, balance: true },
+        orderBy: { balance: 'desc' }
+      }),
+      duesPeriodTotals('customer', businessId, req.query.from, req.query.to)
+    ])
 
-    const rows = customers.map((c) => ({ ...c, balance: Number(c.balance) }))
+    const rows = customers.map((c) => ({
+      ...c,
+      balance: Number(c.balance),
+      ...(period ? { period: period.get(c.id) ?? noPeriod } : {})
+    }))
     const withDues = rows.filter((c) => c.balance > 0)
     const withCredit = rows.filter((c) => c.balance < 0)
 

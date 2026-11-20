@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useForm, useWatch } from 'react-hook-form'
@@ -21,7 +21,7 @@ import { Button, Input, Card, Badge } from '@/components/ui'
 import { useFarmers, useCollections, usePayments, useRoutes, useAreas } from '@/hooks'
 import { routesApi } from '@/services/api'
 import { formatCurrency, formatDate, isEntryPaid } from '@/utils'
-import type { Farmer, Collection, ApiResponse } from '@/types'
+import type { Farmer, Collection } from '@/types'
 import type { PaidPeriodPayment } from '@/utils/paymentPeriod'
 
 const farmerSchema = z.object({
@@ -48,7 +48,6 @@ export function FarmerDetailPage() {
 
   const [farmer, setFarmer] = useState<Farmer | null>(null)
   const [collections, setCollections] = useState<Collection[]>([])
-  const [lastPaymentDate, setLastPaymentDate] = useState<string | null>(null)
   const [paidPayments, setPaidPayments] = useState<PaidPeriodPayment[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -72,15 +71,8 @@ export function FarmerDetailPage() {
   const collectAM = useWatch({ control, name: 'collectAM' })
   const collectPM = useWatch({ control, name: 'collectPM' })
 
-  useEffect(() => {
-    if (id) {
-      loadFarmer()
-      loadCollections()
-      loadLastPaymentDate()
-    }
-  }, [id])
 
-  const loadFarmer = async () => {
+  const loadFarmer = useCallback(async () => {
     if (!id) return
     const data = await getFarmer(id)
     if (data) {
@@ -103,24 +95,22 @@ export function FarmerDetailPage() {
         setSelectedAreaId(farmerDetail.routeFarmers[0].areaId || null)
       }
     }
-  }
+  }, [getFarmer, id, reset])
 
-  const loadCollections = async () => {
+  const loadCollections = useCallback(async () => {
     if (!id) return
     const data = await getCollectionsByFarmer(id, undefined, undefined, 10)
     setCollections(data)
-  }
+  }, [getCollectionsByFarmer, id])
 
-  const loadLastPaymentDate = async () => {
+  const loadPaidPeriods = useCallback(async () => {
     if (!id) return
     const payments = await getPaymentsByFarmer(id)
     if (payments.length === 0) {
-      setLastPaymentDate(null)
       setPaidPayments([])
       return
     }
 
-    const toDateOnly = (d: string) => d.slice(0, 10)
     const withPeriod = payments
       .filter((p) => p.periodFromDate && p.periodToDate)
       .map((p) => ({
@@ -132,18 +122,15 @@ export function FarmerDetailPage() {
       })) as PaidPeriodPayment[]
 
     setPaidPayments(withPeriod)
+  }, [getPaymentsByFarmer, id])
 
-    if (withPeriod.length === 0) {
-      setLastPaymentDate(null)
-      return
+  useEffect(() => {
+    if (id) {
+      loadFarmer()
+      loadCollections()
+      loadPaidPeriods()
     }
-
-    const paidTill = withPeriod.reduce(
-      (max, p) => (toDateOnly(p.periodToDate!) > max ? toDateOnly(p.periodToDate!) : max),
-      toDateOnly(withPeriod[0].periodToDate!)
-    )
-    setLastPaymentDate(paidTill)
-  }
+  }, [id, loadCollections, loadFarmer, loadPaidPeriods])
 
   const onSubmit = async (data: FarmerFormData) => {
     if (!id) return

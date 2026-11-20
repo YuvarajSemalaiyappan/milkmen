@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  TrendingUp,
-  TrendingDown,
   Calendar,
   IndianRupee,
   ArrowDownLeft,
@@ -10,7 +8,7 @@ import {
   Percent
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Input, Badge } from '@/components/ui'
+import { Card, Input } from '@/components/ui'
 import { reportsApi } from '@/services/api'
 import { formatCurrency, formatDate, getToday, toLocalDateString } from '@/utils'
 import type { ApiResponse } from '@/types'
@@ -51,11 +49,8 @@ export function ProfitLossReportPage() {
   const [profitMargin, setProfitMargin] = useState(0)
   const [rateSpread, setRateSpread] = useState(0)
 
-  useEffect(() => {
-    loadReport()
-  }, [startDate, endDate])
 
-  const loadReport = async () => {
+  const loadReport = useCallback(async () => {
     setIsLoading(true)
     try {
       const response = await reportsApi.profitLoss(startDate, endDate) as ApiResponse<ProfitLossData>
@@ -87,7 +82,11 @@ export function ProfitLossReportPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [endDate, startDate])
+
+  useEffect(() => {
+    loadReport()
+  }, [startDate, endDate, loadReport])
 
   const netCashFlow = paymentStats.receivedFromCustomers - paymentStats.paidToFarmers
 

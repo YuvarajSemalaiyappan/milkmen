@@ -63,5 +63,10 @@ Platform-only (no parity needed): fingerprint lock and on-phone reminder notific
 install/offline PWA behaviour (web).
 
 ### Known differences (fix these to match)
-- Route filter: the phone app loads `GET /routes/:id?scope=1` (ids and areas only); the web app
-  still loads the full route. Same result, more data.
+- Dues report meaning: the phone app shows each person's running balance; the web shows the
+  selected period (amount minus paid in the range). Both come from `GET /reports/*-dues?from&to`
+  (`balance` and `period`). Decide which one both apps should show.
+
+Not a difference: the web's Collections, Deliveries and Payments round pages load the full route
+because they show the route's people with their details; screens that only filter by route use
+`GET /routes/:id?scope=1` in both apps.

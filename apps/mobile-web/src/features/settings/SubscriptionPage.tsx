@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Crown, Calendar, Clock, AlertTriangle, Phone } from 'lucide-react'
 import { AppShell } from '@/components/layout'
@@ -45,11 +45,8 @@ export function SubscriptionPage() {
   const [detail, setDetail] = useState<SubscriptionDetail | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadSubscription()
-  }, [])
 
-  const loadSubscription = async () => {
+  const loadSubscription = useCallback(async () => {
     try {
       const result = await subscriptionApi.get() as { success: boolean; data: SubscriptionDetail }
       if (result.success) {
@@ -67,7 +64,11 @@ export function SubscriptionPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [setSubscription])
+
+  useEffect(() => {
+    loadSubscription()
+  }, [loadSubscription])
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'

@@ -10,24 +10,27 @@ export function AreaFilter() {
   const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
   const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
   const setSelectedArea = useRouteStore((state) => state.setSelectedArea)
-  const [areas, setAreas] = useState<AreaWithCounts[]>([])
+  // Keyed by route so areas of a previous route are never shown (no setState in the effect body)
+  const [loaded, setLoaded] = useState<{ routeId: string; areas: AreaWithCounts[] } | null>(null)
+  const areas = selectedRouteId && loaded?.routeId === selectedRouteId ? loaded.areas : []
 
   useEffect(() => {
-    if (!selectedRouteId) {
-      setAreas([])
-      return
-    }
+    if (!selectedRouteId) return
+    let cancelled = false
     const fetchAreas = async () => {
       try {
         const response = await areasApi.list(selectedRouteId) as ApiResponse<AreaWithCounts[]>
-        if (response.success && response.data) {
-          setAreas(response.data)
+        if (!cancelled && response.success && response.data) {
+          setLoaded({ routeId: selectedRouteId, areas: response.data })
         }
       } catch {
-        // Silently fail
+        // Silently fail: the area filter just stays hidden
       }
     }
     fetchAreas()
+    return () => {
+      cancelled = true
+    }
   }, [selectedRouteId])
 
   if (!selectedRouteId || areas.length === 0) return null

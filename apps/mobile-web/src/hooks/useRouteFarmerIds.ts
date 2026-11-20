@@ -1,34 +1,12 @@
-import { useState, useEffect } from 'react'
-import { routesApi } from '@/services/api'
-import type { ApiResponse } from '@/types'
+import { useMemo } from 'react'
+import { useRouteScope } from './useRouteScope'
 
+// Farmer ids on a route (and area, if given); null when no route is chosen or it hasn't loaded
 export function useRouteFarmerIds(routeId: string | null, areaId: string | null) {
-  const [farmerIds, setFarmerIds] = useState<Set<string> | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-
-  useEffect(() => {
-    if (!routeId) {
-      setFarmerIds(null)
-      return
-    }
-
-    const fetchIds = async () => {
-      try {
-        setIsLoading(true)
-        const response = await routesApi.getFarmerIds(routeId, areaId || undefined) as ApiResponse<string[]>
-        if (response.success && response.data) {
-          setFarmerIds(new Set(response.data))
-        }
-      } catch (error) {
-        console.error('Failed to fetch route farmer IDs:', error)
-        setFarmerIds(null)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchIds()
-  }, [routeId, areaId])
-
+  const { scope, isLoading } = useRouteScope(routeId)
+  const farmerIds = useMemo(() => {
+    if (!scope) return null
+    return new Set(scope.routeFarmers.filter((rf) => !areaId || rf.areaId === areaId).map((rf) => rf.farmerId))
+  }, [scope, areaId])
   return { farmerIds, isLoading }
 }
