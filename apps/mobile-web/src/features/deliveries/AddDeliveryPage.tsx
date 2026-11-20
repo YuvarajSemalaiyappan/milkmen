@@ -95,7 +95,7 @@ export function AddDeliveryPage() {
 
     try {
       setIsSubmitting(true)
-      await addDelivery({
+      const saved = await addDelivery({
         customerId: selectedCustomer.id,
         date: selectedDate,
         shift: currentShift,
@@ -103,6 +103,8 @@ export function AddDeliveryPage() {
         ratePerLiter: parseFloat(rate),
         notes: notes || undefined
       })
+      // Nothing saved when the user declined a second entry for the same shift: stay on the form
+      if (!saved) return
       navigate(navigateTo || '/deliver')
     } catch (error) {
       console.error('Failed to add delivery:', error)

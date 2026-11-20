@@ -3,6 +3,7 @@ import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
 import type { Prisma } from '@prisma/client'
+import { DuplicateEntryError, duplicateResponse, lockEntrySlot } from '../../lib/duplicates.js'
 
 const router = Router()
 
@@ -14,7 +15,9 @@ const createCollectionSchema = z.object({
   quantity: z.number().positive(),
   fatContent: z.number().min(0).max(10).optional(),
   ratePerLiter: z.number().positive(),
-  notes: z.string().max(500).optional()
+  notes: z.string().max(500).optional(),
+  // Set only after the user confirms they really want a second entry for this shift
+  allowDuplicate: z.boolean().optional()
 })
 
 const updateCollectionSchema = z.object({
@@ -203,7 +206,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { farmerId, date, shift, quantity, fatContent, ratePerLiter, notes } = validation.data
+    const { farmerId, date, shift, quantity, fatContent, ratePerLiter, notes, allowDuplicate } = validation.data
 
     // Verify farmer belongs to business
     const farmer = await prisma.farmer.findFirst({
@@ -221,6 +224,16 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
     // Create collection and update farmer balance in a transaction
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // One milk entry per farmer per shift, unless the user confirmed another one
+      await lockEntrySlot(tx, `collection:${farmerId}:${date}:${shift}`)
+      if (!allowDuplicate) {
+        const existing = await tx.collection.findMany({
+          where: { businessId, farmerId, date: new Date(date), shift },
+          select: { id: true, quantity: true }
+        })
+        if (existing.length) throw new DuplicateEntryError(existing)
+      }
+
       const collection = await tx.collection.create({
         data: {
           businessId,
@@ -258,6 +271,9 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       data: result
     })
   } catch (error) {
+    if (error instanceof DuplicateEntryError) {
+      return res.status(409).json(duplicateResponse('collection', error.existing))
+    }
     console.error('Create collection error:', error)
     return res.status(500).json({
       success: false,
