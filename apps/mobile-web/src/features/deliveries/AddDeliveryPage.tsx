@@ -246,7 +246,7 @@ export function AddDeliveryPage() {
                   <p className="font-semibold text-gray-900 dark:text-white truncate">
                     {selectedCustomer.name}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 break-words">
                     {selectedCustomer.address}
                   </p>
                 </div>

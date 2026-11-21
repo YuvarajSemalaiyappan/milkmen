@@ -254,7 +254,7 @@ export function AddCollectionPage() {
                   <p className="font-semibold text-gray-900 dark:text-white truncate">
                     {selectedFarmer.name}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 break-words">
                     {selectedFarmer.village}
                   </p>
                 </div>
