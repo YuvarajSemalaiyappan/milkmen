@@ -129,6 +129,15 @@ export function PaymentsPage() {
         {/* Route Filter */}
         <RouteFilter />
 
+        {/* All payments by date (same as the phone app) */}
+        <button
+          onClick={() => navigate('/payments/history')}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium"
+        >
+          <History className="w-4 h-4" />
+          {t('payment.history')}
+        </button>
+
         {/* Search and Sort */}
         {selectedRouteId && (
           <div className="flex gap-2">

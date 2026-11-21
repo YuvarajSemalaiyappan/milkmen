@@ -3,10 +3,15 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { IndianRupee, Trash2, Calendar, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Button } from '@/components/ui'
+import { Card, Button, Input } from '@/components/ui'
 import { useFarmers, useCustomers, usePayments } from '@/hooks'
-import { formatCurrency, formatDateDMY } from '@/utils'
-import type { Payment } from '@/types'
+import { formatCurrency, formatDateDMY, getToday, toLocalDateString } from '@/utils'
+import { paymentsApi } from '@/services/api'
+import type { ApiResponse, Payment } from '@/types'
+
+// The list endpoint also sends who was paid, used when no person is chosen
+type PaymentRow = Payment & { farmer?: { name: string }; customer?: { name: string } }
+const OUT = ['PAID_TO_FARMER', 'ADVANCE_TO_FARMER']
 
 export function PaymentHistoryPage() {
   const { t } = useTranslation()
@@ -17,11 +22,20 @@ export function PaymentHistoryPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [person, setPerson] = useState<{ name: string; type: 'farmer' | 'customer' } | null>(null)
-  const [payments, setPayments] = useState<Payment[]>([])
+  const [payments, setPayments] = useState<PaymentRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const farmerId = searchParams.get('farmerId')
   const customerId = searchParams.get('customerId')
+  // No person: every payment in a date range (last 30 days by default), like the phone app
+  const allPeople = !farmerId && !customerId
+  const today = getToday()
+  const [from, setFrom] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return toLocalDateString(d)
+  })
+  const [to, setTo] = useState(today)
 
   useEffect(() => {
     const load = async () => {
@@ -37,6 +51,10 @@ export function PaymentHistoryPage() {
           if (customer) setPerson({ name: customer.name, type: 'customer' })
           const data = await getPaymentsByCustomer(customerId)
           setPayments(data)
+        } else {
+          setPerson(null)
+          const res = await paymentsApi.list({ from, to }) as ApiResponse<PaymentRow[]>
+          setPayments(res.success && res.data ? res.data : [])
         }
       } catch (error) {
         console.error('Failed to load payment history:', error)
@@ -45,7 +63,7 @@ export function PaymentHistoryPage() {
       }
     }
     load()
-  }, [farmerId, customerId, getFarmer, getCustomer, getPaymentsByFarmer, getPaymentsByCustomer])
+  }, [farmerId, customerId, from, to, getFarmer, getCustomer, getPaymentsByFarmer, getPaymentsByCustomer])
 
   const handleDelete = async (id: string) => {
     try {
@@ -95,6 +113,28 @@ export function PaymentHistoryPage() {
   return (
     <AppShell title={person?.name ? `${t('payment.history')} - ${person.name}` : t('payment.history')} showBack>
       <div className="px-4 pt-5 pb-4 space-y-3">
+        {allPeople && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Input type="date" label={t('payment.fromDate')} value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+              <Input type="date" label={t('payment.toDate')} value={to} min={from} max={today} onChange={(e) => setTo(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Card>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('payment.receivedFromCustomer')}</p>
+                <p className="font-semibold text-green-600 dark:text-green-400">
+                  {formatCurrency(payments.filter((p) => !OUT.includes(p.type)).reduce((s, p) => s + Number(p.amount), 0))}
+                </p>
+              </Card>
+              <Card>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('payment.paidToFarmer')}</p>
+                <p className="font-semibold text-amber-600 dark:text-amber-400">
+                  {formatCurrency(payments.filter((p) => OUT.includes(p.type)).reduce((s, p) => s + Number(p.amount), 0))}
+                </p>
+              </Card>
+            </div>
+          </>
+        )}
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">{t('common.loading')}...</div>
         ) : payments.length === 0 ? (
@@ -111,6 +151,11 @@ export function PaymentHistoryPage() {
               <Card key={p.id}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0 space-y-1">
+                    {allPeople && (
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
+                        {p.farmer?.name ?? p.customer?.name ?? '—'}
+                      </p>
+                    )}
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-gray-900 dark:text-white">
                         {formatCurrency(p.amount)}
