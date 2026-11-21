@@ -4,9 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { Users, ChevronRight, Calendar } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Badge, Input } from '@/components/ui'
-import { EmptyState } from '@/components/common'
+import { EmptyState, RouteFilter } from '@/components/common'
 import { reportsApi } from '@/services/api'
-import { formatCurrency, getToday, toLocalDateString } from '@/utils'
+import { useRouteStore } from '@/store'
+import { formatCurrency, toLocalDateString } from '@/utils'
 import type { Farmer, ApiResponse } from '@/types'
 
 // One row of GET /reports/farmer-dues?from&to
@@ -29,12 +30,14 @@ export function FarmerDuesReportPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const [startDate, setStartDate] = useState(() => {
-    const date = new Date()
-    date.setDate(date.getDate() - 30) // Last 30 days
-    return toLocalDateString(date)
-  })
-  const [endDate, setEndDate] = useState(getToday())
+  const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
+  const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
+  // A month (this month by default); the list shows each farmer's running balance with what
+  // was collected and paid in the month, the same as the phone app.
+  const [month, setMonth] = useState(() => toLocalDateString(new Date()).slice(0, 7))
+  const [y, m] = month.split('-').map(Number)
+  const startDate = `${month}-01`
+  const endDate = toLocalDateString(new Date(y, m, 0))
   const [farmerDues, setFarmerDues] = useState<FarmerDue[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -44,7 +47,7 @@ export function FarmerDuesReportPage() {
   const loadFarmerDues = useCallback(async () => {
     setIsLoading(true)
     try {
-      const response = await reportsApi.farmerDues(startDate, endDate) as ApiResponse<{ farmers: DuesRow[] }>
+      const response = await reportsApi.farmerDues(startDate, endDate, selectedRouteId, selectedAreaId) as ApiResponse<{ farmers: DuesRow[] }>
       const rows = response.success && response.data ? response.data.farmers : []
       const dues: FarmerDue[] = rows.map((row) => {
         const period = row.period ?? { liters: 0, amount: 0, paid: 0 }
@@ -53,7 +56,7 @@ export function FarmerDuesReportPage() {
           totalLiters: period.liters,
           totalAmount: period.amount,
           totalPaid: period.paid,
-          balance: period.amount - period.paid
+          balance: Number(row.balance)
         }
       })
 
@@ -65,7 +68,7 @@ export function FarmerDuesReportPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [endDate, startDate])
+  }, [endDate, startDate, selectedRouteId, selectedAreaId])
 
   useEffect(() => {
     loadFarmerDues()
@@ -78,27 +81,20 @@ export function FarmerDuesReportPage() {
   return (
     <AppShell title={t('reports.farmerDues')} showBack>
       <div className="px-4 pt-5 pb-4 space-y-4">
-        {/* Date Range */}
+        {/* Month and route/area */}
         <Card>
-          <h3 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <h3 className="font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
             <Calendar className="w-4 h-4" />
-            {t('reports.dateRange')}
+            {t('reports.month')}
           </h3>
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              type="date"
-              label={t('reports.from')}
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-            <Input
-              type="date"
-              label={t('reports.to')}
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
+          <Input
+            type="month"
+            value={month}
+            max={toLocalDateString(new Date()).slice(0, 7)}
+            onChange={(e) => e.target.value && setMonth(e.target.value)}
+          />
         </Card>
+        <RouteFilter />
 
         {/* Summary */}
         <div className="grid grid-cols-3 gap-3">

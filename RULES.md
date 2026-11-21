@@ -66,9 +66,15 @@ Platform-only (no parity needed): fingerprint lock and on-phone reminder notific
 install/offline PWA behaviour (web).
 
 ### Known differences (fix these to match)
-- Dues report meaning: the phone app shows each person's running balance; the web shows the
-  selected period (amount minus paid in the range). Both come from `GET /reports/*-dues?from&to`
-  (`balance` and `period`). Decide which one both apps should show.
+- None right now.
+
+Dues reports (both apps): a month (this month by default) and the route/area filter. Each row
+shows the running balance, with what was delivered/collected and paid in the month
+(`GET /reports/*-dues?from&to&routeId&areaId`). Customer dues also has "Didn't pay in <month>"
+(`GET /reports/customer-unpaid?month&routeId&areaId`: owed at month end, last paid, owes now).
+Dues reminders (WhatsApp/SMS) list the pending amount by month, most recent first, from
+`GET /reports/customer-pending/:id` (the balance is matched to the latest months' bills first;
+the rest is "Earlier").
 
 Not a difference: the web's Collections, Deliveries and Payments round pages load the full route
 because they show the route's people with their details; screens that only filter by route use

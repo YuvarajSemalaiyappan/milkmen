@@ -297,10 +297,16 @@ export const paymentsApi = {
 // Reports API
 export const reportsApi = {
   daily: (date: string) => api.get(`/reports/daily?date=${date}`),
-  farmerDues: (from: string, to: string) =>
-    api.get(`/reports/farmer-dues?from=${from}&to=${to}`),
-  customerDues: (from: string, to: string) =>
-    api.get(`/reports/customer-dues?from=${from}&to=${to}`),
+  // Month figures (from/to) plus running balance; optional route/area filter
+  farmerDues: (from: string, to: string, routeId?: string | null, areaId?: string | null) =>
+    api.get(`/reports/farmer-dues${buildQuery({ from, to, routeId: routeId ?? undefined, areaId: areaId ?? undefined })}`),
+  customerDues: (from: string, to: string, routeId?: string | null, areaId?: string | null) =>
+    api.get(`/reports/customer-dues${buildQuery({ from, to, routeId: routeId ?? undefined, areaId: areaId ?? undefined })}`),
+  // Customers who owed money at the end of the month and paid nothing in it, largest first
+  customerUnpaid: (month: string, routeId?: string | null, areaId?: string | null) =>
+    api.get(`/reports/customer-unpaid${buildQuery({ month, routeId: routeId ?? undefined, areaId: areaId ?? undefined })}`),
+  // One customer's dues split by month, most recent first (adds up to the balance)
+  customerPending: (id: string) => api.get(`/reports/customer-pending/${id}`),
   collections: (from: string, to: string, farmerId?: string) =>
     api.get(`/reports/collections?from=${from}&to=${to}${farmerId ? `&farmerId=${farmerId}` : ''}`),
   // summaryOnly: totals and groupings without the entry rows (rows=0)

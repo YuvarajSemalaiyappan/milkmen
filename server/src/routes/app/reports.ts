@@ -220,6 +220,152 @@ async function duesPeriodTotals(kind: 'farmer' | 'customer', businessId: string,
 }
 const noPeriod = { liters: 0, amount: 0, paid: 0 }
 
+
+// Optional route/area filter for people lists: only those on the route (and in the area)
+function routeWhere(routeId: unknown, areaId: unknown) {
+  if (typeof routeId !== 'string' || !routeId) return {}
+  return {
+    routes: { some: { routeId, ...(typeof areaId === 'string' && areaId ? { areaId } : {}) } }
+  }
+}
+
+const monthRe = /^\d{4}-\d{2}$/
+// First and last day (YYYY-MM-DD) of a YYYY-MM month
+function monthBounds(month: string) {
+  const [y, m] = month.split('-').map(Number)
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  return { start: `${month}-01`, end: `${month}-${String(last).padStart(2, '0')}` }
+}
+
+// GET /api/reports/customer-unpaid?month=YYYY-MM&routeId&areaId
+// "Customers who did not pay in <month>": everyone who owed money at the end of the month and made
+// no payment during it, largest first. dueAtMonthEnd is worked back from today's balance (minus
+// later deliveries, plus later payments); lastPaid is the latest payment up to the month end;
+// paidSince is what they paid after it; dueNow is today's balance. One query over indexed lookups
+// per customer, so it stays fast with years of data.
+router.get('/customer-unpaid', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId } = req.user!
+    const q = req.query as Record<string, string | undefined>
+    const month = q.month && monthRe.test(q.month) ? q.month : new Date().toISOString().slice(0, 7)
+    const { start, end } = monthBounds(month)
+    const routeFilter = q.routeId
+      ? Prisma.sql`AND EXISTS (SELECT 1 FROM "RouteCustomer" rc WHERE rc."customerId" = c.id AND rc."routeId" = ${q.routeId}
+          ${q.areaId ? Prisma.sql`AND rc."areaId" = ${q.areaId}` : Prisma.empty})`
+      : Prisma.empty
+
+    const rows = await prisma.$queryRaw<
+      {
+        id: string
+        name: string
+        phone: string | null
+        isActive: boolean
+        route: string | null
+        dueNow: number
+        laterSales: number
+        paidSince: number
+        paidInMonth: boolean
+        lastPaid: string | null
+        monthSales: number
+      }[]
+    >`
+      SELECT c.id, c.name, c.phone, c."isActive", rt.name AS route,
+        c.balance::float8 AS "dueNow",
+        later.s AS "laterSales", since.s AS "paidSince", inm.paid AS "paidInMonth",
+        lp.d AS "lastPaid", ms.s AS "monthSales"
+      FROM "Customer" c
+      LEFT JOIN LATERAL (SELECT COALESCE(SUM(d."totalAmount"), 0)::float8 AS s FROM "Delivery" d
+        WHERE d."customerId" = c.id AND d.status = 'DELIVERED' AND d.date > ${end}::date) later ON true
+      LEFT JOIN LATERAL (SELECT COALESCE(SUM(p.amount), 0)::float8 AS s FROM "Payment" p
+        WHERE p."customerId" = c.id AND p.date > ${end}::date) since ON true
+      LEFT JOIN LATERAL (SELECT EXISTS (SELECT 1 FROM "Payment" p
+        WHERE p."customerId" = c.id AND p.date BETWEEN ${start}::date AND ${end}::date) AS paid) inm ON true
+      LEFT JOIN LATERAL (SELECT to_char(MAX(p.date), 'YYYY-MM-DD') AS d FROM "Payment" p
+        WHERE p."customerId" = c.id AND p.date <= ${end}::date) lp ON true
+      LEFT JOIN LATERAL (SELECT COALESCE(SUM(d."totalAmount"), 0)::float8 AS s FROM "Delivery" d
+        WHERE d."customerId" = c.id AND d.status = 'DELIVERED' AND d.date BETWEEN ${start}::date AND ${end}::date) ms ON true
+      LEFT JOIN LATERAL (SELECT r.name FROM "RouteCustomer" rc JOIN "Route" r ON r.id = rc."routeId"
+        WHERE rc."customerId" = c.id ORDER BY r.name LIMIT 1) rt ON true
+      WHERE c."businessId" = ${businessId} ${routeFilter}`
+
+    const unpaid = rows
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        phone: r.phone,
+        isActive: r.isActive,
+        route: r.route,
+        dueAtMonthEnd: Math.round((r.dueNow - r.laterSales + r.paidSince) * 100) / 100,
+        monthSales: r.monthSales,
+        lastPaid: r.lastPaid,
+        paidSince: r.paidSince,
+        dueNow: r.dueNow,
+        paidInMonth: r.paidInMonth
+      }))
+      .filter((r) => r.dueAtMonthEnd > 0.005 && !r.paidInMonth)
+      .sort((a, b) => b.dueAtMonthEnd - a.dueAtMonthEnd)
+      .map(({ paidInMonth: _paid, ...r }) => r)
+
+    return res.json({
+      success: true,
+      data: {
+        month,
+        monthStart: start,
+        monthEnd: end,
+        customers: unpaid,
+        summary: {
+          customers: unpaid.length,
+          dueAtMonthEnd: unpaid.reduce((s, r) => s + r.dueAtMonthEnd, 0),
+          paidSince: unpaid.filter((r) => r.paidSince > 0).length,
+          stillOwing: unpaid.filter((r) => r.dueNow > 0.005).length
+        }
+      }
+    })
+  } catch (error) {
+    console.error('Customer unpaid report error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to generate unpaid customers report' })
+  }
+})
+
+// GET /api/reports/customer-pending/:id - What one customer owes, split by month, most recent first.
+// Today's balance is set against their most recent monthly bills first (payments clear the oldest
+// bills), so the months always add up to the balance. Anything beyond all bills is "earlier".
+router.get('/customer-pending/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId } = req.user!
+    const customer = await prisma.customer.findFirst({
+      where: { id: String(req.params.id), businessId },
+      select: { id: true, name: true, balance: true }
+    })
+    if (!customer) return res.status(404).json({ success: false, error: 'Customer not found' })
+
+    const balance = Number(customer.balance)
+    const months: { month: string; amount: number; billed: number }[] = []
+    let remaining = Math.round(balance * 100) / 100
+    if (remaining > 0) {
+      const bills = await prisma.$queryRaw<{ month: string; billed: number }[]>`
+        SELECT to_char(date_trunc('month', date), 'YYYY-MM') AS month, SUM("totalAmount")::float8 AS billed
+        FROM "Delivery"
+        WHERE "businessId" = ${businessId} AND "customerId" = ${customer.id} AND status = 'DELIVERED'
+        GROUP BY 1 ORDER BY 1 DESC`
+      for (const b of bills) {
+        if (remaining <= 0.005) break
+        const amount = Math.min(b.billed, remaining)
+        months.push({ month: b.month, amount: Math.round(amount * 100) / 100, billed: b.billed })
+        remaining = Math.round((remaining - amount) * 100) / 100
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: { id: customer.id, name: customer.name, balance, months, earlier: remaining > 0.005 ? remaining : 0 }
+    })
+  } catch (error) {
+    console.error('Customer pending months error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to split pending by month' })
+  }
+})
+
 // GET /api/reports/farmer-dues - Farmer dues report (balances are kept on the farmer row)
 router.get('/farmer-dues', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -229,7 +375,7 @@ router.get('/farmer-dues', authenticateToken, async (req: AuthRequest, res: Resp
     // `period`: liters and amount collected and amount paid in that range.
     const [farmers, period] = await Promise.all([
       prisma.farmer.findMany({
-        where: { businessId, isActive: true },
+        where: { businessId, isActive: true, ...routeWhere(req.query.routeId, req.query.areaId) },
         select: { id: true, name: true, phone: true, village: true, balance: true },
         orderBy: { balance: 'desc' }
       }),
@@ -275,7 +421,7 @@ router.get('/customer-dues', authenticateToken, async (req: AuthRequest, res: Re
     // `period`: liters and amount delivered and amount paid in that range.
     const [customers, period] = await Promise.all([
       prisma.customer.findMany({
-        where: { businessId, isActive: true },
+        where: { businessId, isActive: true, ...routeWhere(req.query.routeId, req.query.areaId) },
         select: { id: true, name: true, phone: true, address: true, balance: true },
         orderBy: { balance: 'desc' }
       }),
