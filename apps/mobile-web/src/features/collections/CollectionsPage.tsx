@@ -1,40 +1,21 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Phone, MapPin, ChevronRight, Users, Sun, Moon } from 'lucide-react'
+import { Phone, MapPin, ChevronRight } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
-import { ShiftToggle, RouteFilter, SortableList } from '@/components/common'
+import { ShiftToggle, RouteFilter, SortableList, ShiftBadge } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
 import { useSortOrder } from '@/hooks/useSortOrder'
-import { routesApi, collectionsApi } from '@/services/api'
+import { collectionsApi } from '@/services/api'
+import { useFarmers, useRouteFarmerIds } from '@/hooks'
 import { getToday } from '@/utils/format'
 import type { ApiResponse, Collection } from '@/types'
+import { formatCurrency } from '@/utils'
 
-interface RouteFarmerItem {
-  id: string
-  farmerId: string
-  areaId?: string | null
-  farmer: {
-    id: string
-    name: string
-    phone?: string
-    village?: string
-    defaultRate: number
-    collectAM?: boolean
-    collectPM?: boolean
-    subscriptionQtyAM?: number
-    subscriptionQtyPM?: number
-    isActive: boolean
-    balance: number
-  }
-}
-
-interface RouteDetailData {
-  id: string
-  routeFarmers: RouteFarmerItem[]
-}
-
+// Milk collection for today and the chosen shift: farmers still to collect at the top (drag to
+// reorder), entries already collected below. Works with or without a route; the route/area filter
+// narrows both lists. Same layout as the phone app's Collect tab.
 export function CollectionsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -43,75 +24,55 @@ export function CollectionsPage() {
   const selectedRouteId = useRouteStore((state) => state.selectedRouteId)
   const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
 
-  const [farmers, setFarmers] = useState<RouteFarmerItem[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const { activeFarmers, isLoading: farmersLoading } = useFarmers()
+  const { farmerIds: routeFarmerIds } = useRouteFarmerIds(selectedRouteId, selectedAreaId)
   const { applySortOrder, saveSortOrder } = useSortOrder('farmer')
 
-  const [completedFarmerIds, setCompletedFarmerIds] = useState<Set<string>>(new Set())
-
-  // Track which farmers already have a collection today for the current shift
+  // Today's collections (the whole day: a day is a bounded list)
+  // The list endpoint includes each entry's farmer name
+  const [todayCollections, setTodayCollections] = useState<(Collection & { farmer?: { name: string } })[] | null>(null)
   useEffect(() => {
-    const fetchCompletedCollections = async () => {
-      try {
-        const today = getToday()
-        const response = await collectionsApi.list({ date: today }) as ApiResponse<Collection[]>
-        if (response.success && response.data) {
-          const ids = new Set(
-            response.data
-              .filter((c) => c.shift === currentShift)
-              .map((c) => c.farmerId)
-          )
-          setCompletedFarmerIds(ids)
-        }
-      } catch (error) {
+    let cancelled = false
+    collectionsApi
+      .list({ date: getToday() })
+      .then((res) => {
+        const data = (res as ApiResponse<(Collection & { farmer?: { name: string } })[]>).data
+        if (!cancelled) setTodayCollections(data ?? [])
+      })
+      .catch((error) => {
         console.error('Failed to fetch today collections:', error)
-      }
+        if (!cancelled) setTodayCollections([])
+      })
+    return () => {
+      cancelled = true
     }
-    fetchCompletedCollections()
-  }, [currentShift])
+  }, [])
 
-  useEffect(() => {
-    if (!selectedRouteId) {
-      setFarmers([])
-      return
-    }
+  const inScope = useCallback((farmerId: string) => !routeFarmerIds || routeFarmerIds.has(farmerId), [routeFarmerIds])
 
-    const fetchRouteFarmers = async () => {
-      setIsLoading(true)
-      try {
-        const response = await routesApi.get(selectedRouteId) as ApiResponse<RouteDetailData>
-        if (response.success && response.data) {
-          setFarmers(response.data.routeFarmers.filter(rf => rf.farmer.isActive))
-        }
-      } catch (error) {
-        console.error('Failed to fetch route farmers:', error)
-        setFarmers([])
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchRouteFarmers()
-  }, [selectedRouteId])
-
-  const areaFilteredFarmers = selectedAreaId
-    ? farmers.filter((rf) => rf.areaId === selectedAreaId)
-    : farmers
-
-  // Only show farmers who are pending (no collection yet today for this shift)
-  const filteredFarmers = areaFilteredFarmers.filter(
-    (rf) => !completedFarmerIds.has(rf.farmer.id)
+  // Collected this shift, in the chosen route/area
+  const done = useMemo(
+    () => (todayCollections ?? []).filter((c) => c.shift === currentShift && inScope(c.farmerId)),
+    [todayCollections, currentShift, inScope]
   )
 
-  const farmerMap = useMemo(() => {
-    const map = new Map<string, RouteFarmerItem>()
-    filteredFarmers.forEach((rf) => map.set(rf.farmer.id, rf))
-    return map
-  }, [filteredFarmers])
+  // Farmers in the route/area who collect in this shift and have no entry yet
+  const pendingFarmers = useMemo(() => {
+    const doneIds = new Set(done.map((c) => c.farmerId))
+    return activeFarmers.filter(
+      (f) =>
+        inScope(f.id) &&
+        (currentShift === 'MORNING' ? f.collectAM !== false : f.collectPM !== false) &&
+        !doneIds.has(f.id)
+    )
+  }, [activeFarmers, done, currentShift, inScope])
 
-  const sortedFarmerIds = useMemo(() => {
-    const items = filteredFarmers.map((rf) => ({ id: rf.farmer.id }))
-    return applySortOrder(items).map((i) => i.id)
-  }, [filteredFarmers, applySortOrder])
+  const farmerMap = useMemo(() => new Map(pendingFarmers.map((f) => [f.id, f])), [pendingFarmers])
+  const sortedFarmerIds = useMemo(
+    () => applySortOrder(pendingFarmers.map((f) => ({ id: f.id }))).map((i) => i.id),
+    [pendingFarmers, applySortOrder]
+  )
+  const isLoading = farmersLoading || todayCollections === null
 
   const handleReorder = useCallback((newIds: string[]) => {
     saveSortOrder(newIds)
@@ -130,100 +91,93 @@ export function CollectionsPage() {
         {/* Route Filter (includes Area Filter) */}
         <RouteFilter />
 
-        {/* Farmer List */}
-        {!selectedRouteId ? (
-          <div className="text-center py-12">
-            <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 dark:text-gray-400">
-              {t('routes.allRoutes')}
-            </p>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-              {t('collection.selectRouteHint')}
-            </p>
-          </div>
-        ) : isLoading ? (
-          <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}
-          </div>
-        ) : filteredFarmers.length === 0 ? (
-          <div className="text-center py-12">
-            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 dark:text-gray-400">
-              {areaFilteredFarmers.length > 0
-                ? t('collection.allCompleted')
-                : selectedAreaId ? t('areas.noFarmersAssigned') : t('routes.noFarmersAssigned')}
-            </p>
-          </div>
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
         ) : (
-          <div className="space-y-2">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {filteredFarmers.length} {t('common.pending')} / {areaFilteredFarmers.length} {t('farmer.farmersFound')}
-            </p>
-            <SortableList
-              items={sortedFarmerIds}
-              onReorder={handleReorder}
-              renderItem={(id) => {
-                const rf = farmerMap.get(id)
-                if (!rf) return null
-                const hasAM = rf.farmer.collectAM !== false
-                const hasPM = !!rf.farmer.collectPM
-                const isCurrentShiftActive = currentShift === 'MORNING' ? hasAM : hasPM
-                return (
-                  <Card
-                    className={`cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 ${
-                      !isCurrentShiftActive ? 'opacity-50' : ''
-                    }`}
-                    onClick={() => navigate(`/collect/add?farmerId=${rf.farmer.id}`)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
+          <>
+            {/* Still to collect (drag to reorder) */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300">
+                {t('collection.toCollect')} ({pendingFarmers.length})
+              </h3>
+              {pendingFarmers.length === 0 ? (
+                <p className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">{t('collection.allCompleted')}</p>
+              ) : (
+                <SortableList
+                  items={sortedFarmerIds}
+                  onReorder={handleReorder}
+                  renderItem={(id) => {
+                    const farmer = farmerMap.get(id)
+                    if (!farmer) return null
+                    const qty = currentShift === 'MORNING' ? farmer.subscriptionQtyAM : farmer.subscriptionQtyPM
+                    return (
+                      <Card
+                        className="cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50"
+                        onClick={() => navigate(`/collect/add?farmerId=${farmer.id}`)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900 dark:text-white truncate">{farmer.name}</p>
+                              <ShiftBadge shift={currentShift} label={qty ? `${qty}L` : undefined} />
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                              {farmer.phone && (
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />
+                                  {farmer.phone}
+                                </span>
+                              )}
+                              {farmer.village && (
+                                <span className="flex items-center gap-1 truncate">
+                                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                                  {farmer.village}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
+                        </div>
+                      </Card>
+                    )
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Already collected */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300">
+                {t('collection.collectedList')} ({done.length})
+              </h3>
+              {done.length === 0 ? (
+                <p className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">{t('collection.noCollections')}</p>
+              ) : (
+                <Card padding="none">
+                  {done.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => navigate(`/collect/${c.id}`)}
+                      className="w-full flex items-center justify-between px-4 py-3 text-left border-b last:border-b-0 border-gray-100 dark:border-gray-700 active:bg-gray-50 dark:active:bg-gray-700/50"
+                    >
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-gray-900 dark:text-white truncate">
-                            {rf.farmer.name}
+                            {c.farmer?.name ?? activeFarmers.find((f) => f.id === c.farmerId)?.name ?? t('common.unknown')}
                           </p>
-                          {hasAM && (
-                            <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                              currentShift === 'MORNING'
-                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
-                                : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-                            }`}>
-                              <Sun className="w-3 h-3" />
-                              {rf.farmer.subscriptionQtyAM ? `${rf.farmer.subscriptionQtyAM}L` : 'AM'}
-                            </span>
-                          )}
-                          {hasPM && (
-                            <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                              currentShift === 'EVENING'
-                                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
-                                : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-                            }`}>
-                              <Moon className="w-3 h-3" />
-                              {rf.farmer.subscriptionQtyPM ? `${rf.farmer.subscriptionQtyPM}L` : 'PM'}
-                            </span>
-                          )}
+                          <ShiftBadge shift={c.shift} />
                         </div>
-                        <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                          {rf.farmer.phone && (
-                            <span className="flex items-center gap-1">
-                              <Phone className="w-3 h-3" />
-                              {rf.farmer.phone}
-                            </span>
-                          )}
-                          {rf.farmer.village && (
-                            <span className="flex items-center gap-1 truncate">
-                              <MapPin className="w-3 h-3 flex-shrink-0" />
-                              {rf.farmer.village}
-                            </span>
-                          )}
-                        </div>
+                        <p className="text-sm text-gray-500">
+                          {Number(c.quantity)} L × ₹{Number(c.ratePerLiter).toFixed(2)}
+                        </p>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
-                    </div>
-                  </Card>
-                )
-              }}
-            />
-          </div>
+                      <span className="font-semibold text-gray-900 dark:text-white ml-2">{formatCurrency(Number(c.totalAmount))}</span>
+                    </button>
+                  ))}
+                </Card>
+              )}
+            </div>
+          </>
         )}
       </div>
     </AppShell>

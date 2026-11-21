@@ -93,10 +93,20 @@ export function useDeliveries(options?: { skipInitialFetch?: boolean }) {
         ratePerLiter: number
         status: DeliveryStatus
         notes?: string
+        date?: string
+        shift?: Shift
       }>
     ) => {
       try {
-        const response = await deliveriesApi.update(id, updates) as ApiResponse<Delivery>
+        let response: ApiResponse<Delivery>
+        try {
+          response = await deliveriesApi.update(id, updates) as ApiResponse<Delivery>
+        } catch (error) {
+          // Moving it onto a day/shift that already has an entry: ask, like a new entry
+          if (!(error instanceof ApiError && error.code === 'DUPLICATE_ENTRY')) throw error
+          if (!window.confirm('A delivery is already entered for this customer in this shift. Add another delivery?')) return
+          response = await deliveriesApi.update(id, { ...updates, allowDuplicate: true }) as ApiResponse<Delivery>
+        }
         if (response.success && response.data) {
           addToast({ type: 'success', message: 'Delivery updated' })
           await fetchDeliveries()

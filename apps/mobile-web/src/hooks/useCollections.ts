@@ -91,10 +91,20 @@ export function useCollections(options?: { skipInitialFetch?: boolean }) {
         fatContent?: number
         ratePerLiter: number
         notes?: string
+        date?: string
+        shift?: Shift
       }>
     ) => {
       try {
-        const response = await collectionsApi.update(id, updates) as ApiResponse<Collection>
+        let response: ApiResponse<Collection>
+        try {
+          response = await collectionsApi.update(id, updates) as ApiResponse<Collection>
+        } catch (error) {
+          // Moving it onto a day/shift that already has an entry: ask, like a new entry
+          if (!(error instanceof ApiError && error.code === 'DUPLICATE_ENTRY')) throw error
+          if (!window.confirm('Milk is already entered for this farmer in this shift. Add another entry?')) return
+          response = await collectionsApi.update(id, { ...updates, allowDuplicate: true }) as ApiResponse<Collection>
+        }
         if (response.success && response.data) {
           addToast({ type: 'success', message: 'Collection updated' })
           await fetchCollections()

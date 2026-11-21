@@ -228,6 +228,10 @@ export const collectionsApi = {
     fatContent?: number
     ratePerLiter: number
     notes?: string
+    // Move to another day/shift (409 DUPLICATE_ENTRY → resend with allowDuplicate; 409 PAID_PERIOD → blocked)
+    date?: string
+    shift?: string
+    allowDuplicate?: boolean
   }>) => api.put(`/collections/${id}`, data),
   delete: (id: string) => api.delete(`/collections/${id}`)
 }
@@ -255,6 +259,10 @@ export const deliveriesApi = {
     ratePerLiter: number
     status: string
     notes?: string
+    // Move to another day/shift (409 DUPLICATE_ENTRY → resend with allowDuplicate; 409 PAID_PERIOD → blocked)
+    date?: string
+    shift?: string
+    allowDuplicate?: boolean
   }>) => api.put(`/deliveries/${id}`, data),
   delete: (id: string) => api.delete(`/deliveries/${id}`),
   bulkUpdate: (deliveries: { id: string; status: string }[]) =>

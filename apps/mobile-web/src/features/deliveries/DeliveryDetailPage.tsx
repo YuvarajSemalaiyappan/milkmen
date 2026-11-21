@@ -21,14 +21,16 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useDeliveries, useCustomers } from '@/hooks'
 import { deliveriesApi } from '@/services/api'
-import { formatCurrency, formatDate } from '@/utils'
+import { formatCurrency, formatDate, getToday } from '@/utils'
 import type { Delivery, Customer, DeliveryStatus, ApiResponse } from '@/types'
 
 const deliverySchema = z.object({
   quantity: z.number().min(0.1, 'Quantity must be at least 0.1'),
   ratePerLiter: z.number().min(1, 'Rate must be greater than 0'),
   status: z.enum(['DELIVERED', 'SKIPPED', 'CANCELLED']),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  shift: z.enum(['MORNING', 'EVENING'])
 })
 
 type DeliveryFormData = z.infer<typeof deliverySchema>
@@ -75,7 +77,9 @@ export function DeliveryDetailPage() {
           quantity: found.quantity,
           ratePerLiter: found.ratePerLiter,
           status: found.status,
-          notes: found.notes || ''
+          notes: found.notes || '',
+          date: found.date.slice(0, 10),
+          shift: found.shift
         })
 
         // Load customer details
@@ -101,7 +105,10 @@ export function DeliveryDetailPage() {
         quantity: data.quantity,
         ratePerLiter: data.ratePerLiter,
         status: data.status,
-        notes: data.notes || undefined
+        notes: data.notes || undefined,
+        // Only send a move when the date or shift actually changed
+        ...(data.date !== delivery?.date.slice(0, 10) ? { date: data.date } : {}),
+        ...(data.shift !== delivery?.shift ? { shift: data.shift } : {})
       })
       setIsEditing(false)
       loadDelivery()
@@ -170,6 +177,20 @@ export function DeliveryDetailPage() {
           // Edit Form
           <Card>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* Date and shift: moving an entry is checked by the server (duplicates, paid periods) */}
+              <div className="grid grid-cols-2 gap-3">
+                <Input label={t('common.date')} type="date" max={getToday()} {...register('date')} />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('collection.shift')}</label>
+                  <select
+                    {...register('shift')}
+                    className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="MORNING">{t('shifts.morning')}</option>
+                    <option value="EVENING">{t('shifts.evening')}</option>
+                  </select>
+                </div>
+              </div>
               {/* Status Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

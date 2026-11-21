@@ -18,14 +18,16 @@ import { AppShell } from '@/components/layout'
 import { Button, Input, Card, Badge } from '@/components/ui'
 import { useCollections, useFarmers } from '@/hooks'
 import { collectionsApi } from '@/services/api'
-import { formatCurrency, formatDate } from '@/utils'
+import { formatCurrency, formatDate, getToday } from '@/utils'
 import type { Collection, Farmer, ApiResponse } from '@/types'
 
 const collectionSchema = z.object({
   quantity: z.number().min(0.1, 'Quantity must be at least 0.1'),
   fatContent: z.number().min(0).max(15).optional(),
   ratePerLiter: z.number().min(1, 'Rate must be greater than 0'),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  shift: z.enum(['MORNING', 'EVENING'])
 })
 
 type CollectionFormData = z.infer<typeof collectionSchema>
@@ -70,7 +72,9 @@ export function CollectionDetailPage() {
           quantity: found.quantity,
           fatContent: found.fatContent,
           ratePerLiter: found.ratePerLiter,
-          notes: found.notes || ''
+          notes: found.notes || '',
+          date: found.date.slice(0, 10),
+          shift: found.shift
         })
 
         // Load farmer details
@@ -96,7 +100,10 @@ export function CollectionDetailPage() {
         quantity: data.quantity,
         fatContent: data.fatContent,
         ratePerLiter: data.ratePerLiter,
-        notes: data.notes || undefined
+        notes: data.notes || undefined,
+        // Only send a move when the date or shift actually changed
+        ...(data.date !== collection?.date.slice(0, 10) ? { date: data.date } : {}),
+        ...(data.shift !== collection?.shift ? { shift: data.shift } : {})
       })
       setIsEditing(false)
       loadCollection()
@@ -154,6 +161,20 @@ export function CollectionDetailPage() {
           // Edit Form
           <Card>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* Date and shift: moving an entry is checked by the server (duplicates, paid periods) */}
+              <div className="grid grid-cols-2 gap-3">
+                <Input label={t('common.date')} type="date" max={getToday()} {...register('date')} />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('collection.shift')}</label>
+                  <select
+                    {...register('shift')}
+                    className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="MORNING">{t('shifts.morning')}</option>
+                    <option value="EVENING">{t('shifts.evening')}</option>
+                  </select>
+                </div>
+              </div>
               <Input
                 label={t('collection.quantity')}
                 type="number"

@@ -201,6 +201,8 @@
     "unpaidAmount": "Unpaid Amount"
   },
   "collection": {
+    "toCollect": "To collect",
+    "collectedList": "Collected",
     "title": "Milk Collection",
     "addCollection": "Add Collection",
     "selectFarmer": "Select Farmer",
@@ -228,6 +230,8 @@
     "allCompleted": "All collections completed for this shift!"
   },
   "delivery": {
+    "toDeliver": "To deliver",
+    "deliveredList": "Done",
     "title": "Deliveries",
     "todayDeliveries": "Today's Deliveries",
     "addDelivery": "Add Delivery",

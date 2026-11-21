@@ -3,13 +3,16 @@ import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
 import type { Prisma } from '@prisma/client'
-import { DuplicateEntryError, duplicateResponse, lockEntrySlot } from '../../lib/duplicates.js'
+import { checkEntryMove, DuplicateEntryError, duplicateResponse, lockEntrySlot, PaidPeriodError } from '../../lib/duplicates.js'
 import { lockOwnedRow, NotFoundError, wantsTotal } from '../../lib/db.js'
 
 const router = Router()
 
 // Columns read back by lockOwnedRow (raw query: decimals arrive as Prisma.Decimal)
 interface CollectionRow {
+  date: Date
+  shift: 'MORNING' | 'EVENING'
+  createdAt: Date
   farmerId: string
   quantity: Prisma.Decimal
   ratePerLiter: Prisma.Decimal
@@ -37,7 +40,11 @@ const updateCollectionSchema = z.object({
   quantity: z.number().positive().optional(),
   fatContent: z.number().min(0).max(10).optional().nullable(),
   ratePerLiter: z.number().positive().optional(),
-  notes: z.string().max(500).optional().nullable()
+  notes: z.string().max(500).optional().nullable(),
+  // Move the entry to another day/shift (checked for duplicates and paid periods)
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  shift: z.enum(['MORNING', 'EVENING']).optional(),
+  allowDuplicate: z.boolean().optional()
 })
 
 // GET /api/collections - List collections with filters
@@ -303,12 +310,33 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       })
     }
 
-    const { quantity, fatContent, ratePerLiter, notes } = validation.data
+    const { quantity, fatContent, ratePerLiter, notes, date, shift, allowDuplicate } = validation.data
 
     // Update collection and adjust farmer balance. The row is read and locked inside the
     // transaction so two edits at once cannot both apply their balance change.
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const existing = await lockOwnedRow<CollectionRow>(tx, 'Collection', id, businessId)
+
+      // Moving to another day/shift: blocked inside paid periods, duplicate-checked like a new entry
+      const fromDate = new Date(existing.date).toISOString().slice(0, 10)
+      const toDate = date ?? fromDate
+      const toShift = shift ?? existing.shift
+      const moving = toDate !== fromDate || toShift !== existing.shift
+      if (moving) {
+        await checkEntryMove(tx, {
+          kind: 'collection',
+          businessId,
+          personId: existing.farmerId,
+          entryId: id,
+          entryCreatedAt: new Date(existing.createdAt),
+          fromDate,
+          fromShift: existing.shift,
+          toDate,
+          toShift,
+          allowDuplicate
+        })
+      }
+
       const newQuantity = quantity ?? Number(existing.quantity)
       const newRate = ratePerLiter ?? Number(existing.ratePerLiter)
       const newTotal = newQuantity * newRate
@@ -317,6 +345,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       const collection = await tx.collection.update({
         where: { id },
         data: {
+          ...(moving ? { date: new Date(toDate), shift: toShift } : {}),
           quantity: newQuantity,
           fatContent: fatContent !== undefined ? fatContent : existing.fatContent,
           ratePerLiter: newRate,
@@ -347,6 +376,12 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   } catch (error) {
     if (error instanceof NotFoundError) {
       return res.status(404).json({ success: false, error: 'Collection not found' })
+    }
+    if (error instanceof DuplicateEntryError) {
+      return res.status(409).json(duplicateResponse('collection', error.existing))
+    }
+    if (error instanceof PaidPeriodError) {
+      return res.status(409).json({ success: false, code: 'PAID_PERIOD', error: error.message })
     }
     console.error('Update collection error:', error)
     return res.status(500).json({

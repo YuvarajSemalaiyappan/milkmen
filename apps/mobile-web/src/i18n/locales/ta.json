@@ -201,6 +201,8 @@
     "unpaidAmount": "செலுத்தாத தொகை"
   },
   "collection": {
+    "toCollect": "சேகரிக்க வேண்டியவை",
+    "collectedList": "சேகரிக்கப்பட்டவை",
     "title": "பால் சேகரிப்பு",
     "addCollection": "சேகரிப்பு சேர்",
     "selectFarmer": "விவசாயியை தேர்வு செய்க",
@@ -228,6 +230,8 @@
     "allCompleted": "இந்த ஷிப்டிற்கான அனைத்து சேகரிப்புகளும் முடிந்தன!"
   },
   "delivery": {
+    "toDeliver": "விநியோகிக்க வேண்டியவை",
+    "deliveredList": "முடிந்தவை",
     "title": "விநியோகங்கள்",
     "todayDeliveries": "இன்றைய விநியோகங்கள்",
     "addDelivery": "விநியோகம் சேர்",

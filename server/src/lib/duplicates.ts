@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
 // Thrown inside a create transaction when the farmer or customer already has an entry
 // for the same date and shift, and the client did not confirm a second one.
@@ -25,4 +25,67 @@ export function duplicateResponse(kind: 'collection' | 'delivery', existing: { i
         : 'A delivery is already entered for this customer in this shift',
     existing: existing.map((e) => ({ id: e.id, quantity: Number(e.quantity) }))
   }
+}
+
+// Thrown when an entry can't be moved to another date/shift because of a payment period
+export class PaidPeriodError extends Error {
+  code = 'PAID_PERIOD'
+}
+
+// Checks run inside the edit transaction before an entry moves to another date or shift:
+// 1. The entry already counts as paid (a payment period covers it and it existed when that payment
+//    was recorded): moving it would take it out of what was paid. Blocked.
+// 2. The new date/shift is inside a paid period: the entry would look paid without being paid. Blocked.
+// 3. The new slot already has an entry for this person: DuplicateEntryError unless allowDuplicate.
+// The new slot is locked like a create, so a move and a new entry can't both pass the duplicate check.
+export async function checkEntryMove(
+  tx: Prisma.TransactionClient,
+  opts: {
+    kind: 'collection' | 'delivery'
+    businessId: string
+    personId: string
+    entryId: string
+    entryCreatedAt: Date
+    fromDate: string
+    fromShift: string
+    toDate: string
+    toShift: string
+    allowDuplicate?: boolean
+  }
+) {
+  const personCol = Prisma.raw(opts.kind === 'collection' ? '"farmerId"' : '"customerId"')
+  const periods = Prisma.sql`"Payment" p WHERE p."businessId" = ${opts.businessId} AND p.${personCol} = ${opts.personId}
+    AND p."periodFromDate" IS NOT NULL AND p."periodToDate" IS NOT NULL
+    AND p."periodFromShift" IS NOT NULL AND p."periodToShift" IS NOT NULL`
+  const covers = (date: string, shift: string) => Prisma.sql`
+    (${date}::date, ${shift}::"Shift") >= (p."periodFromDate", p."periodFromShift")
+    AND (${date}::date, ${shift}::"Shift") <= (p."periodToDate", p."periodToShift")`
+
+  const [state] = await tx.$queryRaw<{ isPaid: boolean; targetPaid: boolean }[]>`
+    SELECT
+      EXISTS (SELECT 1 FROM ${periods} AND ${opts.entryCreatedAt.toISOString()}::timestamp <= p."createdAt" AND ${covers(opts.fromDate, opts.fromShift)}) AS "isPaid",
+      EXISTS (SELECT 1 FROM ${periods} AND ${covers(opts.toDate, opts.toShift)}) AS "targetPaid"`
+  if (state.isPaid) throw new PaidPeriodError('This entry is already paid, so its date or shift cannot be changed')
+  if (state.targetPaid) throw new PaidPeriodError('That date and shift are inside a paid period')
+
+  await lockEntrySlot(tx, `${opts.kind}:${opts.personId}:${opts.toDate}:${opts.toShift}`)
+  if (opts.allowDuplicate) return
+  const existing =
+    opts.kind === 'collection'
+      ? await tx.collection.findMany({
+          where: { businessId: opts.businessId, farmerId: opts.personId, date: new Date(opts.toDate), shift: opts.toShift as 'MORNING' | 'EVENING', id: { not: opts.entryId } },
+          select: { id: true, quantity: true }
+        })
+      : await tx.delivery.findMany({
+          where: {
+            businessId: opts.businessId,
+            customerId: opts.personId,
+            date: new Date(opts.toDate),
+            shift: opts.toShift as 'MORNING' | 'EVENING',
+            status: { not: 'CANCELLED' },
+            id: { not: opts.entryId }
+          },
+          select: { id: true, quantity: true }
+        })
+  if (existing.length) throw new DuplicateEntryError(existing)
 }
