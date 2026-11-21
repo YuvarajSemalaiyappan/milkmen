@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { MapPin } from 'lucide-react'
 import { useRouteStore } from '@/store'
 import { routesApi } from '@/services/api'
-import { useAreas } from '@/hooks'
+import { useAreas, useRouteScope } from '@/hooks'
 import type { ApiResponse, RouteWithCounts } from '@/types'
 
 export function RouteFilter() {
@@ -15,6 +15,8 @@ export function RouteFilter() {
   const [routes, setRoutes] = useState<RouteWithCounts[]>([])
 
   const { areas } = useAreas(selectedRouteId)
+  // Light route data (ids and active areas); null until loaded for this exact route
+  const { scope } = useRouteScope(selectedRouteId)
 
   useEffect(() => {
     const fetchRoutes = async () => {
@@ -22,13 +24,25 @@ export function RouteFilter() {
         const response = await routesApi.list({ active: 'true' }) as ApiResponse<RouteWithCounts[]>
         if (response.success && response.data) {
           setRoutes(response.data)
+          // A route saved in this browser that no longer exists (deleted or deactivated) would keep
+          // filtering every list to nothing while the dropdown shows "All Routes". Clear it, like
+          // the phone app does. This also covers a business with no routes left (filter hidden).
+          const saved = useRouteStore.getState().selectedRouteId
+          if (saved && !response.data.some((r) => r.id === saved)) setSelectedRoute(null)
         }
       } catch {
         // Silently fail - routes may not be set up yet
       }
     }
     fetchRoutes()
-  }, [])
+  }, [setSelectedRoute])
+
+  // Same for a saved area that is no longer an active area of the chosen route
+  useEffect(() => {
+    if (scope && selectedAreaId && !scope.areas.some((a) => a.id === selectedAreaId)) {
+      setSelectedArea(null)
+    }
+  }, [scope, selectedAreaId, setSelectedArea])
 
   if (routes.length === 0) return null
 
