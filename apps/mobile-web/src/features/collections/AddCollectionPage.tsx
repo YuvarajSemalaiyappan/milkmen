@@ -55,7 +55,7 @@ export function AddCollectionPage() {
     setFilteredFarmers(activeFarmers)
   }, [activeFarmers])
 
-  const { applySortOrder, saveSortOrder } = useSortOrder('farmer')
+  const { applySortOrder, saveSortOrder } = useSortOrder('farmer', currentShift)
 
   // Filter by route/area
   const routeFilteredFarmers = useMemo(() => {

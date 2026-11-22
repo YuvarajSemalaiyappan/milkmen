@@ -5,9 +5,10 @@ import type { Shift, ApiResponse } from '@/types'
 
 type OrderType = 'customer' | 'farmer'
 
-type FarmerOrderRow = { farmerId: string; sortOrder: number }
+type FarmerOrderRow = { farmerId: string; sortOrder: number; shift: Shift | null }
 type CustomerOrderRow = { customerId: string; sortOrder: number; shift: Shift | null }
 
+// Farmers and customers each keep a separate order per shift (pass the shift)
 export function useSortOrder(type: OrderType, shift?: Shift) {
   const userId = useAuthStore((s) => s.user?.id)
   const [orderMap, setOrderMap] = useState<Map<string, number>>(new Map())
@@ -25,7 +26,7 @@ export function useSortOrder(type: OrderType, shift?: Shift) {
       try {
         const newMap = new Map<string, number>()
         if (type === 'farmer') {
-          const res = (await farmersApi.getSortOrder()) as ApiResponse<FarmerOrderRow[]>
+          const res = (await farmersApi.getSortOrder(shift)) as ApiResponse<FarmerOrderRow[]>
           res.data?.forEach((row) => newMap.set(row.farmerId, row.sortOrder))
         } else {
           const res = (await customersApi.getSortOrder(shift)) as ApiResponse<CustomerOrderRow[]>
@@ -72,7 +73,7 @@ export function useSortOrder(type: OrderType, shift?: Shift) {
         )
       } else {
         await farmersApi.updateSortOrder(
-          orderedIds.map((id, index) => ({ farmerId: id, sortOrder: index }))
+          orderedIds.map((id, index) => ({ farmerId: id, shift, sortOrder: index }))
         )
       }
     } catch (error) {

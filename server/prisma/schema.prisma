@@ -98,10 +98,11 @@ model UserFarmerOrder {
   user      User   @relation(fields: [userId], references: [id])
   farmerId  String
   farmer    Farmer @relation(fields: [farmerId], references: [id])
+  shift     Shift? // MORNING/EVENING order; null = the old single order, used when a shift has none
   sortOrder Int    // Lower number = higher in list
 
-  @@unique([userId, farmerId])
-  @@index([userId, sortOrder])
+  @@unique([userId, farmerId, shift])
+  @@index([userId, shift, sortOrder])
 }
 
 model Customer {

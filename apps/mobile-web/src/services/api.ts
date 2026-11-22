@@ -168,9 +168,10 @@ export const farmersApi = {
   update: (id: string, data: Partial<{ name: string; phone?: string; village?: string; defaultRate: number; collectAM: boolean; collectPM: boolean; subscriptionQtyAM?: number; subscriptionQtyPM?: number; isActive: boolean }>) =>
     api.put(`/farmers/${id}`, data),
   delete: (id: string) => api.delete(`/farmers/${id}`),
-  updateSortOrder: (orders: { farmerId: string; sortOrder: number }[]) =>
+  updateSortOrder: (orders: { farmerId: string; shift?: string; sortOrder: number }[]) =>
     api.put('/farmers/sort-order', { orders }),
-  getSortOrder: () => api.get('/farmers/sort-order')
+  getSortOrder: (shift?: string) =>
+    api.get(`/farmers/sort-order${shift ? `?shift=${shift}` : ''}`)
 }
 
 // Customers API

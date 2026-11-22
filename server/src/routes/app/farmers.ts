@@ -77,15 +77,25 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/farmers/sort-order - Get current user's farmer sort order map
+// Optional ?shift=MORNING|EVENING: that shift's order. A farmer with no row for the shift falls back
+// to the shared (null shift) order, so the order kept before shifts existed still works for both.
 // NOTE: Must be before /:id routes to avoid "sort-order" matching as an ID
 router.get('/sort-order', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.user!
+    const shiftParam = req.query.shift
+    const shift: 'MORNING' | 'EVENING' | null = shiftParam === 'MORNING' || shiftParam === 'EVENING' ? shiftParam : null
     const rows = await prisma.userFarmerOrder.findMany({
-      where: { userId },
-      select: { farmerId: true, sortOrder: true }
+      where: { userId, shift },
+      select: { farmerId: true, sortOrder: true, shift: true }
     })
-    return res.json({ success: true, data: rows })
+    if (!shift) return res.json({ success: true, data: rows })
+    const shared = await prisma.userFarmerOrder.findMany({
+      where: { userId, shift: null },
+      select: { farmerId: true, sortOrder: true, shift: true }
+    })
+    const own = new Set(rows.map((r) => r.farmerId))
+    return res.json({ success: true, data: [...rows, ...shared.filter((r) => !own.has(r.farmerId))] })
   } catch (error) {
     console.error('Get farmer sort order error:', error)
     return res.status(500).json({
@@ -117,13 +127,29 @@ router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Respo
     })
     const validIds = new Set(farmers.map((f) => f.id))
 
-    // Replace this user's order for these farmers: two statements, however many farmers there are
-    const valid = (orders as { farmerId: string; sortOrder: number }[]).filter((o) => validIds.has(o.farmerId))
+    // Replace this user's order for these farmers: a fixed number of statements, however many
+    // farmers there are. Shift may be null (one order for both shifts), so rows are deleted per shift.
+    // Last entry wins if the same farmer and shift is sent twice
+    const valid = [
+      ...new Map(
+        (orders as { farmerId: string; sortOrder: number; shift?: string }[])
+          .filter((o) => validIds.has(o.farmerId))
+          .map((o) => {
+            const shift: 'MORNING' | 'EVENING' | null = o.shift === 'MORNING' || o.shift === 'EVENING' ? o.shift : null
+            const row = { farmerId: o.farmerId, sortOrder: o.sortOrder, shift }
+            return [`${row.farmerId}:${row.shift}`, row] as const
+          })
+      ).values()
+    ]
+    const shifts = [...new Set(valid.map((o) => o.shift))]
     await prisma.$transaction([
-      prisma.userFarmerOrder.deleteMany({ where: { userId, farmerId: { in: valid.map((o) => o.farmerId) } } }),
+      ...shifts.map((shift) =>
+        prisma.userFarmerOrder.deleteMany({
+          where: { userId, shift, farmerId: { in: valid.filter((o) => o.shift === shift).map((o) => o.farmerId) } }
+        })
+      ),
       prisma.userFarmerOrder.createMany({
-        data: valid.map((o) => ({ userId, farmerId: o.farmerId, sortOrder: o.sortOrder })),
-        skipDuplicates: true
+        data: valid.map((o) => ({ userId, ...o }))
       })
     ])
 
@@ -326,6 +352,7 @@ router.post('/:id/sort-order', authenticateToken, async (req: AuthRequest, res: 
     const { userId, businessId } = req.user!
     const farmerId = req.params.id as string
     const { sortOrder } = req.body
+    const shift: 'MORNING' | 'EVENING' | null = req.body.shift === 'MORNING' || req.body.shift === 'EVENING' ? req.body.shift : null
 
     if (typeof sortOrder !== 'number') {
       return res.status(400).json({
@@ -346,14 +373,11 @@ router.post('/:id/sort-order', authenticateToken, async (req: AuthRequest, res: 
       })
     }
 
-    // Upsert sort order
-    await prisma.userFarmerOrder.upsert({
-      where: {
-        userId_farmerId: { userId, farmerId }
-      },
-      update: { sortOrder },
-      create: { userId, farmerId, sortOrder }
-    })
+    // Replace the sort order for this farmer and shift (null shift can't be used in an upsert key)
+    await prisma.$transaction([
+      prisma.userFarmerOrder.deleteMany({ where: { userId, farmerId, shift } }),
+      prisma.userFarmerOrder.create({ data: { userId, farmerId, shift, sortOrder } })
+    ])
 
     return res.json({
       success: true,

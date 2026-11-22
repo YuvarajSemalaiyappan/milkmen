@@ -26,7 +26,7 @@ export function CollectionsPage() {
 
   const { activeFarmers, isLoading: farmersLoading } = useFarmers()
   const { farmerIds: routeFarmerIds } = useRouteFarmerIds(selectedRouteId, selectedAreaId)
-  const { applySortOrder, saveSortOrder } = useSortOrder('farmer')
+  const { applySortOrder, saveSortOrder } = useSortOrder('farmer', currentShift)
 
   // Today's collections (the whole day: a day is a bounded list)
   // The list endpoint includes each entry's farmer name
