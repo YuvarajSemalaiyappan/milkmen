@@ -66,7 +66,10 @@ Platform-only (no parity needed): fingerprint lock and on-phone reminder notific
 install/offline PWA behaviour (web).
 
 ### Known differences (fix these to match)
-- None right now.
+- Map pins (phone app only for now, owner's choice): farmers and customers have `latitude`, `longitude`,
+  `locationAccuracy` and `landmark`, set from the phone (GPS or dragging a pin; anyone in the business).
+  The phone shows them on the delivery round / collect map with a Navigate button (Google Maps link).
+  The web app has no map yet; its forms don't send these fields, so saving there keeps the pin.
 
 Dues reports (both apps): a month (this month by default) and the route/area filter. Each row
 shows the running balance, with what was delivered/collected and paid in the month

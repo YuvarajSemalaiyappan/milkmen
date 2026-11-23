@@ -78,6 +78,14 @@ model Farmer {
   subscriptionQtyPM Decimal? @db.Decimal(5, 2) // Evening collection quantity
   isActive    Boolean  @default(true)
   balance     Decimal  @default(0) @db.Decimal(10, 2) // Positive = we owe them
+
+  // Map pin (phone app). Set by anyone in the business; who/when kept for checking a wrong pin
+  latitude            Decimal?  @db.Decimal(9, 6)
+  longitude           Decimal?  @db.Decimal(9, 6)
+  locationAccuracy    Int?      // metres, as reported by the phone when pinned
+  landmark            String?
+  locationUpdatedAt   DateTime?
+  locationUpdatedById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -121,6 +129,14 @@ model Customer {
 
   isActive  Boolean  @default(true)
   balance   Decimal  @default(0) @db.Decimal(10, 2) // Positive = they owe us
+
+  // Map pin (phone app). Set by anyone in the business; who/when kept for checking a wrong pin
+  latitude            Decimal?  @db.Decimal(9, 6)
+  longitude           Decimal?  @db.Decimal(9, 6)
+  locationAccuracy    Int?      // metres, as reported by the phone when pinned
+  landmark            String?
+  locationUpdatedAt   DateTime?
+  locationUpdatedById String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

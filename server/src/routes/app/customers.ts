@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
+import { locationFields, pinAudit, pinIsComplete, pinMessage } from '../../lib/location.js'
 
 const router = Router()
 
@@ -12,8 +13,9 @@ const createCustomerSchema = z.object({
   address: z.string().max(200).optional(),
   defaultRate: z.number().positive(),
   subscriptionQtyAM: z.number().positive().optional(),
-  subscriptionQtyPM: z.number().positive().optional()
-})
+  subscriptionQtyPM: z.number().positive().optional(),
+  ...locationFields
+}).refine(pinIsComplete, pinMessage)
 
 const updateCustomerSchema = z.object({
   name: z.string().min(2).max(100).optional(),
@@ -22,8 +24,9 @@ const updateCustomerSchema = z.object({
   defaultRate: z.number().positive().optional(),
   subscriptionQtyAM: z.number().positive().optional().nullable(),
   subscriptionQtyPM: z.number().positive().optional().nullable(),
-  isActive: z.boolean().optional()
-})
+  isActive: z.boolean().optional(),
+  ...locationFields
+}).refine(pinIsComplete, pinMessage)
 
 // GET /api/customers - List all customers for the business
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -246,7 +249,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { name, phone, address, defaultRate, subscriptionQtyAM, subscriptionQtyPM } = validation.data
+    const { name, phone, address, defaultRate, subscriptionQtyAM, subscriptionQtyPM, latitude, longitude, locationAccuracy, landmark } = validation.data
 
     // Check for duplicate phone within business
     if (phone) {
@@ -269,7 +272,12 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         address,
         defaultRate,
         subscriptionQtyAM,
-        subscriptionQtyPM
+        subscriptionQtyPM,
+        latitude,
+        longitude,
+        locationAccuracy,
+        landmark,
+        ...pinAudit({ latitude }, req.user!.userId)
       }
     })
 
@@ -330,7 +338,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 
     const customer = await prisma.customer.update({
       where: { id },
-      data: validation.data
+      data: { ...validation.data, ...pinAudit(validation.data, req.user!.userId, existing) }
     })
 
     return res.json({

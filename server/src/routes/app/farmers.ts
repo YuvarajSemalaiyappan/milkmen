@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
+import { locationFields, pinAudit, pinIsComplete, pinMessage } from '../../lib/location.js'
 
 const router = Router()
 
@@ -14,8 +15,9 @@ const createFarmerSchema = z.object({
   collectAM: z.boolean().optional(),
   collectPM: z.boolean().optional(),
   subscriptionQtyAM: z.number().nonnegative().optional().nullable(),
-  subscriptionQtyPM: z.number().nonnegative().optional().nullable()
-})
+  subscriptionQtyPM: z.number().nonnegative().optional().nullable(),
+  ...locationFields
+}).refine(pinIsComplete, pinMessage)
 
 const updateFarmerSchema = z.object({
   name: z.string().min(2).max(100).optional(),
@@ -26,8 +28,9 @@ const updateFarmerSchema = z.object({
   collectPM: z.boolean().optional(),
   subscriptionQtyAM: z.number().nonnegative().optional().nullable(),
   subscriptionQtyPM: z.number().nonnegative().optional().nullable(),
-  isActive: z.boolean().optional()
-})
+  isActive: z.boolean().optional(),
+  ...locationFields
+}).refine(pinIsComplete, pinMessage)
 
 // GET /api/farmers - List all farmers for the business
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -208,7 +211,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { name, phone, village, defaultRate, collectAM, collectPM, subscriptionQtyAM, subscriptionQtyPM } = validation.data
+    const { name, phone, village, defaultRate, collectAM, collectPM, subscriptionQtyAM, subscriptionQtyPM, latitude, longitude, locationAccuracy, landmark } = validation.data
 
     // Check for duplicate phone within business
     if (phone) {
@@ -233,7 +236,12 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         collectAM: collectAM ?? true,
         collectPM: collectPM ?? false,
         subscriptionQtyAM,
-        subscriptionQtyPM
+        subscriptionQtyPM,
+        latitude,
+        longitude,
+        locationAccuracy,
+        landmark,
+        ...pinAudit({ latitude }, req.user!.userId)
       }
     })
 
@@ -294,7 +302,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 
     const farmer = await prisma.farmer.update({
       where: { id },
-      data: validation.data
+      data: { ...validation.data, ...pinAudit(validation.data, req.user!.userId, existing) }
     })
 
     return res.json({
