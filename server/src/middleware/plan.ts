@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
-import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 import { effectiveStatus, PLAN_ERRORS, PlanLike } from '../lib/plan.js'
-import { JWT_SECRET } from './auth.js'
+import { verifyAccessToken } from './auth.js'
 
 // Write guard: a business whose plan has expired, is suspended or was never activated can still
 // log in and read everything, but every save (POST/PUT/PATCH/DELETE) on the app API is refused
@@ -41,12 +40,7 @@ export async function requireActivePlan(req: Request, res: Response, next: NextF
   // No or bad token: let the route's own authenticateToken answer 401.
   const token = req.headers.authorization?.split(' ')[1]
   if (!token) return next()
-  let businessId: string | undefined
-  try {
-    businessId = (jwt.verify(token, JWT_SECRET) as { businessId?: string }).businessId
-  } catch {
-    return next()
-  }
+  const businessId = verifyAccessToken(token)?.businessId
   if (!businessId) return next()
 
   try {

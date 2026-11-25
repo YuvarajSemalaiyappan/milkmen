@@ -29,7 +29,7 @@ const registerSchema = z.object({
 // Generate tokens
 function generateTokens(userId: string, businessId: string) {
   const token = jwt.sign(
-    { userId, businessId },
+    { userId, businessId, type: 'access' },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   )

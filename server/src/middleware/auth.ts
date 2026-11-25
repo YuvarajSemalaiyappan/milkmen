@@ -12,6 +12,24 @@ export interface AuthRequest extends Request {
   }
 }
 
+// Staff/owner access tokens carry type 'access' plus userId and businessId. Refresh, admin and
+// (later) customer tokens are signed with the same secret, so the type must be checked: a refresh
+// token must not work as an access token, and a token without businessId would make
+// `where: { businessId: undefined }` match every business. Returns null for anything else.
+// Tokens issued before the type existed are refused too; the apps then refresh once (the refresh
+// token is unchanged), so nobody is logged out.
+export function verifyAccessToken(token: string): { userId: string; businessId: string } | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { type?: unknown; userId?: unknown; businessId?: unknown }
+    if (decoded.type !== 'access') return null
+    if (typeof decoded.userId !== 'string' || !decoded.userId) return null
+    if (typeof decoded.businessId !== 'string' || !decoded.businessId) return null
+    return { userId: decoded.userId, businessId: decoded.businessId }
+  } catch {
+    return null
+  }
+}
+
 // Middleware to verify JWT token
 export function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
@@ -24,24 +42,16 @@ export function authenticateToken(req: AuthRequest, res: Response, next: NextFun
     })
   }
 
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
-      userId: string
-      businessId: string
-    }
-
-    req.user = {
-      userId: decoded.userId,
-      businessId: decoded.businessId
-    }
-
-    next()
-  } catch {
+  const user = verifyAccessToken(token)
+  if (!user) {
     return res.status(401).json({
       success: false,
       error: 'Invalid or expired token'
     })
   }
+
+  req.user = user
+  next()
 }
 
 // Middleware to check if user is owner

@@ -37,25 +37,17 @@ so the server and database are not the limit. Deliveries and payments are alread
 
 What is missing is below, in the order it has to happen.
 
-## Phase 0: fix token checks (must happen first)
+## Phase 0: fix token checks (done, 25 Nov 2026)
 
-`middleware/auth.ts` → `authenticateToken` verifies the JWT signature but **never checks the token's
-`type`** or that `businessId` is present:
+`authenticateToken` used to verify only the JWT signature, so a refresh token worked as an access
+token, and a token without `businessId` would have passed with `where: { businessId: undefined }`
+(which Prisma treats as no filter: every business).
 
-- The **refresh token** (`type: 'refresh'`, long-lived) is accepted as an access token on every app route.
-- A token **without `businessId`** passes with `req.user.businessId = undefined`. Prisma ignores
-  `where: { businessId: undefined }`, so such a token would read **every business's** data.
-  Today only the admin token lacks it (and only the admin holds that), but a customer token would be
-  exactly this case.
-
-Fix:
-
-1. Access tokens get `type: 'access'`; `authenticateToken` accepts only `type === 'access'` with a
-   `userId` and `businessId`, and answers 401 otherwise.
-2. For a transition period also accept old access tokens (no `type`, has `userId` + `businessId`)
-   until they expire, then remove that branch. Never accept `type: 'refresh'`, `'admin'` or `'customer'`.
-3. `/auth/refresh` already accepts only `type: 'refresh'` (checked); keep it that way.
-4. Same check in `middleware/plan.ts`, which decodes the token itself.
+Now access tokens carry `type: 'access'`, and `verifyAccessToken()` in `middleware/auth.ts` accepts
+only that type with a `userId` and `businessId`; `middleware/plan.ts` uses the same function.
+Refresh, admin, old untyped and (future) customer tokens get 401. The apps refresh once on that 401
+(refresh tokens are unchanged and `/auth/refresh` already checked their type), so nobody was logged out.
+Customer tokens must use their own type and their own middleware.
 
 ## Phase 1: server for customers
 
@@ -161,7 +153,7 @@ staff and customer endpoints share one copy.
 
 ## Order of work
 
-1. Phase 0 token fix (server only, small, ship on its own).
+1. ~~Phase 0 token fix~~ (done).
 2. Rate limiting + lockout (helps staff login too).
 3. `CustomerLogin` migration, staff "App access / Reset PIN" in both apps.
 4. Customer endpoints.
