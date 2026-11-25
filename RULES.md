@@ -92,6 +92,13 @@ Dues reminders (WhatsApp/SMS) list the pending amount by month, most recent firs
 `GET /reports/customer-pending/:id` (the balance is matched to the latest months' bills first;
 the rest is "Earlier").
 
+Advance and pending (both apps): `GET /payments/summary?customerId|farmerId` returns the unpaid entries
+over the whole history, the balance, and the gap between them. `advance` = paid more than the entries of
+the periods paid for (or an advance payment), taken off the next payment; `pending` = paid less, added to
+the next payment. `GET /payments/period` returns the same `advance`/`pending`; the payment screen shows
+"To pay" = period total − advance + pending and warns before saving an amount that doesn't match.
+Detail pages take their unpaid totals from the summary, not from the listed rows.
+
 Not a difference: the web's Collections, Deliveries and Payments round pages load the full route
 because they show the route's people with their details; screens that only filter by route use
 `GET /routes/:id?scope=1` in both apps.

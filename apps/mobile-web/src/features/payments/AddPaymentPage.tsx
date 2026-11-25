@@ -48,6 +48,8 @@ export function AddPaymentPage() {
   const [periodCount, setPeriodCount] = useState(0)
   const [isCalculating, setIsCalculating] = useState(false)
   const [existingPaymentForPeriod, setExistingPaymentForPeriod] = useState(false)
+  // Carried over from earlier payments (server): advance comes off, pending is added
+  const [carry, setCarry] = useState({ advance: 0, pending: 0 })
 
   // Pre-select from URL params
   useEffect(() => {
@@ -78,6 +80,7 @@ export function AddPaymentPage() {
     setPeriodAmount(data.unpaid.amount)
     setPeriodCount(data.unpaid.count)
     setExistingPaymentForPeriod(data.overlaps)
+    setCarry({ advance: data.advance ?? 0, pending: data.pending ?? 0 })
   }
 
   // When the person changes: ask for the default period ending now
@@ -110,6 +113,7 @@ export function AddPaymentPage() {
           setPeriodAmount(null)
           setPeriodCount(0)
           setExistingPaymentForPeriod(false)
+          setCarry({ advance: 0, pending: 0 })
           setAutoSelectDone(true)
         }
       })
@@ -126,6 +130,7 @@ export function AddPaymentPage() {
       setPeriodAmount(null)
       setPeriodCount(0)
       setExistingPaymentForPeriod(false)
+      setCarry({ advance: 0, pending: 0 })
       return
     }
     if (!selected || !autoSelectDone) return
@@ -149,6 +154,7 @@ export function AddPaymentPage() {
           setPeriodAmount(null)
           setPeriodCount(0)
           setExistingPaymentForPeriod(false)
+          setCarry({ advance: 0, pending: 0 })
         }
       })
       .finally(() => !cancelled && setIsCalculating(false))
@@ -197,6 +203,14 @@ export function AddPaymentPage() {
       setIsSubmitting(false)
     }
   }
+
+  // What this payment should be: the period's entries, less any advance, plus any pending
+  const toPay = periodAmount !== null
+    ? Math.max(0, Math.round((periodAmount - carry.advance + carry.pending) * 100) / 100)
+    : null
+  // Positive = paying more than due (kept as advance), negative = less (stays pending)
+  const enteredAmount = parseFloat(amount) || 0
+  const mismatch = !isAdvance && toPay !== null && enteredAmount > 0 ? Math.round((enteredAmount - toPay) * 100) / 100 : 0
 
   const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
   const balance = selected
@@ -348,6 +362,26 @@ export function AddPaymentPage() {
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {periodCount} {t('payment.entries')}
                         </p>
+                        {(carry.advance > 0 || carry.pending > 0) && toPay !== null && (
+                          <div className="mt-3 space-y-1 text-sm text-left">
+                            {carry.advance > 0 && (
+                              <div className="flex justify-between text-green-700 dark:text-green-400">
+                                <span>{t('payment.advanceCarried')}</span>
+                                <span>− {formatCurrency(carry.advance)}</span>
+                              </div>
+                            )}
+                            {carry.pending > 0 && (
+                              <div className="flex justify-between text-red-700 dark:text-red-400">
+                                <span>{t('payment.pendingCarried')}</span>
+                                <span>+ {formatCurrency(carry.pending)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between font-semibold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-gray-600">
+                              <span>{t('payment.toPay')}</span>
+                              <span>{formatCurrency(toPay)}</span>
+                            </div>
+                          </div>
+                        )}
                         {existingPaymentForPeriod && (
                           <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/30 rounded-lg text-left">
                             <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
@@ -375,16 +409,27 @@ export function AddPaymentPage() {
               </div>
 
               {/* Quick amount buttons */}
-              {!isAdvance && periodAmount !== null && periodAmount > 0 && (
+              {!isAdvance && toPay !== null && toPay > 0 && (
                 <div className="flex gap-2 mb-4">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setAmount((Math.round(periodAmount * 100) / 100).toString())}
+                    onClick={() => setAmount(toPay.toString())}
                     fullWidth
                   >
-                    {t('payment.fullPayment')} ({formatCurrency(periodAmount)})
+                    {t('payment.fullPayment')} ({formatCurrency(toPay)})
                   </Button>
+                </div>
+              )}
+
+              {mismatch !== 0 && (
+                <div className="mb-4 flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    {mismatch > 0
+                      ? t('payment.extraAsAdvance', { amount: formatCurrency(mismatch) })
+                      : t('payment.shortAsPending', { amount: formatCurrency(-mismatch) })}
+                  </p>
                 </div>
               )}
 
@@ -460,6 +505,19 @@ export function AddPaymentPage() {
                       <span>{t('common.amount')}</span>
                       <span className="font-bold text-xl text-gray-900 dark:text-white">{formatCurrency(parseFloat(amount))}</span>
                     </div>
+                    {mismatch !== 0 && (
+                      <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
+                        <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-amber-900 dark:text-amber-100">{t('payment.amountMismatch')}</p>
+                          <p className="text-amber-800 dark:text-amber-200">
+                            {mismatch > 0
+                              ? t('payment.extraAsAdvance', { amount: formatCurrency(mismatch) })
+                              : t('payment.shortAsPending', { amount: formatCurrency(-mismatch) })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {isAdvance && (
                       <div className="flex justify-between">
                         <span>{t('payment.advance')}</span>

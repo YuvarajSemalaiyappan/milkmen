@@ -232,6 +232,17 @@ export interface PaymentPeriod {
   to: { date: string; shift: Shift }
   unpaid: { count: number; liters: number; amount: number }
   overlaps: boolean
+  // Carried over from earlier payments: advance is taken off this payment, pending is added
+  advance: number
+  pending: number
+}
+
+// GET /payments/summary: unpaid entries over the whole history, balance, advance and pending
+export interface PaymentSummary {
+  balance: number
+  unpaid: { count: number; liters: number; amount: number }
+  advance: number
+  pending: number
 }
 
 export interface ApiResponse<T> {

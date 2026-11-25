@@ -17,8 +17,9 @@ import {
   Moon
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
+import { CarryOver } from '@/components/common'
 import { Button, Input, Card, Badge } from '@/components/ui'
-import { useCustomers, useDeliveries, usePayments, useRoutes, useAreas } from '@/hooks'
+import { useCustomers, useDeliveries, usePayments, useRoutes, useAreas, usePaymentSummary } from '@/hooks'
 import { routesApi } from '@/services/api'
 import { formatCurrency, formatDate, isEntryPaid } from '@/utils'
 import type { Customer, Delivery } from '@/types'
@@ -47,6 +48,8 @@ export function CustomerDetailPage() {
   const { routes } = useRoutes()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
+  // Unpaid over the whole history plus advance/pending, from the server. Reloads when the balance changes.
+  const summary = usePaymentSummary({ customerId: id }, customer?.balance)
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [paidPayments, setPaidPayments] = useState<PaidPeriodPayment[]>([])
   const [isEditing, setIsEditing] = useState(false)
@@ -197,14 +200,17 @@ export function CustomerDetailPage() {
     isEntryPaid(d.date, d.shift, d.createdAt, paidPayments)
 
   const unpaidDeliveries = deliveries.filter((d) => !isDeliveryPaid(d))
-  const unpaidQty = unpaidDeliveries.reduce(
+  const listedUnpaidQty = unpaidDeliveries.reduce(
     (sum, d) => sum + Number(d.quantity),
     0
   )
-  const unpaidAmount = unpaidDeliveries.reduce(
+  const listedUnpaidAmount = unpaidDeliveries.reduce(
     (sum, d) => sum + Number(d.totalAmount),
     0
   )
+  // The page lists only recent entries; the totals cover the whole history (server)
+  const unpaidQty = summary?.unpaid.liters ?? listedUnpaidQty
+  const unpaidAmount = summary?.unpaid.amount ?? listedUnpaidAmount
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -446,6 +452,7 @@ export function CustomerDetailPage() {
                   </p>
                 </div>
               </div>
+              {summary && <CarryOver advance={summary.advance} pending={summary.pending} />}
             </Card>
 
             {/* Unpaid Stats Cards */}

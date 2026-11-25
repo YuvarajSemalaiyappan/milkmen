@@ -310,7 +310,15 @@
     "overpaid": "Overpaid",
     "sortByName": "Sort by Name",
     "sortByBalance": "Sort by Balance",
-    "paymentDeleted": "Payment deleted"
+    "paymentDeleted": "Payment deleted",
+    "advanceCarried": "Advance from earlier payments",
+    "pendingCarried": "Pending from earlier payments",
+    "advanceNote": "Will be adjusted in the next payment",
+    "pendingNote": "Will be added to the next payment",
+    "toPay": "To pay",
+    "amountMismatch": "Amount does not match",
+    "extraAsAdvance": "{{amount}} more than due. The extra will be kept as advance and adjusted in the next payment.",
+    "shortAsPending": "{{amount}} less than due. It will stay pending and be added to the next payment."
   },
   "reports": {
     "duesView": "Dues",

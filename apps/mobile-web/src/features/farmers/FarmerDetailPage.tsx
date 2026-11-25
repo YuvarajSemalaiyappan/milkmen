@@ -17,8 +17,9 @@ import {
   Moon
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
+import { CarryOver } from '@/components/common'
 import { Button, Input, Card, Badge } from '@/components/ui'
-import { useFarmers, useCollections, usePayments, useRoutes, useAreas } from '@/hooks'
+import { useFarmers, useCollections, usePayments, useRoutes, useAreas, usePaymentSummary } from '@/hooks'
 import { routesApi } from '@/services/api'
 import { formatCurrency, formatDate, isEntryPaid } from '@/utils'
 import type { Farmer, Collection } from '@/types'
@@ -47,6 +48,8 @@ export function FarmerDetailPage() {
   const { routes } = useRoutes()
 
   const [farmer, setFarmer] = useState<Farmer | null>(null)
+  // Unpaid over the whole history plus advance/pending, from the server. Reloads when the balance changes.
+  const summary = usePaymentSummary({ farmerId: id }, farmer?.balance)
   const [collections, setCollections] = useState<Collection[]>([])
   const [paidPayments, setPaidPayments] = useState<PaidPeriodPayment[]>([])
   const [isEditing, setIsEditing] = useState(false)
@@ -205,14 +208,17 @@ export function FarmerDetailPage() {
     isEntryPaid(c.date, c.shift, c.createdAt, paidPayments)
 
   const unpaidCollections = collections.filter((c) => !isCollectionPaid(c))
-  const unpaidQty = unpaidCollections.reduce(
+  const listedUnpaidQty = unpaidCollections.reduce(
     (sum, c) => sum + Number(c.quantity),
     0
   )
-  const unpaidAmount = unpaidCollections.reduce(
+  const listedUnpaidAmount = unpaidCollections.reduce(
     (sum, c) => sum + Number(c.totalAmount),
     0
   )
+  // The page lists only recent entries; the totals cover the whole history (server)
+  const unpaidQty = summary?.unpaid.liters ?? listedUnpaidQty
+  const unpaidAmount = summary?.unpaid.amount ?? listedUnpaidAmount
 
   return (
     <AppShell
@@ -445,6 +451,7 @@ export function FarmerDetailPage() {
                   </p>
                 </div>
               </div>
+              {summary && <CarryOver advance={summary.advance} pending={summary.pending} />}
             </Card>
 
             {/* Unpaid Stats Cards */}

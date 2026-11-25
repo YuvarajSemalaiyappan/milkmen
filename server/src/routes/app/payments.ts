@@ -206,6 +206,77 @@ router.get('/today', authenticateToken, async (req: AuthRequest, res: Response) 
   }
 })
 
+type Person = { farmerId: string | null; customerId: string | null }
+
+// SQL pieces shared by /period and /summary: the person's entries (delivered only for customers)
+// and their payments that cover a period.
+function personSql(businessId: string, { farmerId, customerId }: Person) {
+  const personPayment = farmerId ? Prisma.sql`p."farmerId" = ${farmerId}` : Prisma.sql`p."customerId" = ${customerId}`
+  const entries = farmerId
+    ? Prisma.sql`"Collection" e WHERE e."businessId" = ${businessId} AND e."farmerId" = ${farmerId}`
+    : Prisma.sql`"Delivery" e WHERE e."businessId" = ${businessId} AND e."customerId" = ${customerId} AND e.status = 'DELIVERED'`
+  const periodPayments = Prisma.sql`"Payment" p WHERE p."businessId" = ${businessId} AND ${personPayment}
+      AND p."periodFromDate" IS NOT NULL AND p."periodToDate" IS NOT NULL
+      AND p."periodFromShift" IS NOT NULL AND p."periodToShift" IS NOT NULL`
+  // An entry is paid only if a payment's period covers it AND it existed when that payment was recorded
+  const notPaid = Prisma.sql`NOT EXISTS (
+            SELECT 1 FROM ${periodPayments}
+              AND e."createdAt" <= p."createdAt"
+              AND (e.date, e.shift) >= (p."periodFromDate", p."periodFromShift")
+              AND (e.date, e.shift) <= (p."periodToDate", p."periodToShift")
+          )`
+  return { entries, periodPayments, notPaid }
+}
+
+// Unpaid entries over the person's whole history, their balance, and the gap between them.
+// balance = all entries - all payments, unpaid = entries no payment period covers, so
+// balance - unpaid = what payments for covered periods missed (+) or paid on top (-):
+//   advance  paid more than the entries of the periods paid for (or an advance payment);
+//            it is taken off the next payment
+//   pending  paid less than the entries of the periods paid for; it is added to the next payment
+// One query. Returns null when the person isn't in the business.
+async function personDues(businessId: string, person: Person) {
+  const { entries, notPaid } = personSql(businessId, person)
+  const balanceSql = person.farmerId
+    ? Prisma.sql`(SELECT f.balance FROM "Farmer" f WHERE f.id = ${person.farmerId} AND f."businessId" = ${businessId})`
+    : Prisma.sql`(SELECT c.balance FROM "Customer" c WHERE c.id = ${person.customerId} AND c."businessId" = ${businessId})`
+  const [row] = await prisma.$queryRaw<{ count: number; liters: number; amount: number; balance: number | null }[]>`
+    SELECT COUNT(*)::int AS count,
+      COALESCE(SUM(e.quantity), 0)::float8 AS liters,
+      COALESCE(SUM(e."totalAmount"), 0)::float8 AS amount,
+      ${balanceSql}::float8 AS balance
+    FROM ${entries} AND ${notPaid}`
+  if (!row || row.balance === null) return null
+  const round = (n: number) => Math.round(n * 100) / 100
+  const gap = round(row.balance - row.amount)
+  return {
+    balance: row.balance,
+    unpaid: { count: row.count, liters: row.liters, amount: row.amount },
+    advance: gap < 0 ? -gap : 0,
+    pending: gap > 0 ? gap : 0
+  }
+}
+
+// GET /api/payments/summary?farmerId|customerId - Unpaid entries over the whole history, balance,
+// advance and pending (see personDues). Used by the farmer and customer detail pages.
+router.get('/summary', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId } = req.user!
+    const q = req.query as Record<string, string | undefined>
+    const farmerId = q.farmerId || null
+    const customerId = farmerId ? null : q.customerId || null
+    if (!farmerId && !customerId) {
+      return res.status(400).json({ success: false, error: 'farmerId or customerId is required' })
+    }
+    const dues = await personDues(businessId, { farmerId, customerId })
+    if (!dues) return res.status(404).json({ success: false, error: farmerId ? 'Farmer not found' : 'Customer not found' })
+    return res.json({ success: true, data: dues })
+  } catch (error) {
+    console.error('Payment summary error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to calculate payment summary' })
+  }
+})
+
 // GET /api/payments/period - Everything the payment screen needs for one farmer or customer,
 // computed in the database over all their entries and payments (no row limits):
 //   from      default start: the shift after the last paid period, else the first entry, else `to`
@@ -213,6 +284,7 @@ router.get('/today', authenticateToken, async (req: AuthRequest, res: Response) 
 //             (an entry is paid only if a payment's period covers it AND it existed when that
 //             payment was recorded, same rule as the apps' paymentPeriod utils)
 //   overlaps  true if from..to overlaps an existing payment period
+//   advance / pending  carried over from earlier payments (see personDues)
 // Query: farmerId or customerId, to + toShift (required), from + fromShift (optional).
 router.get('/period', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -232,13 +304,7 @@ router.get('/period', authenticateToken, async (req: AuthRequest, res: Response)
       return res.status(400).json({ success: false, error: 'from (YYYY-MM-DD) and fromShift must be given together' })
     }
 
-    const personPayment = farmerId ? Prisma.sql`p."farmerId" = ${farmerId}` : Prisma.sql`p."customerId" = ${customerId}`
-    const entries = farmerId
-      ? Prisma.sql`"Collection" e WHERE e."businessId" = ${businessId} AND e."farmerId" = ${farmerId}`
-      : Prisma.sql`"Delivery" e WHERE e."businessId" = ${businessId} AND e."customerId" = ${customerId} AND e.status = 'DELIVERED'`
-    const periodPayments = Prisma.sql`"Payment" p WHERE p."businessId" = ${businessId} AND ${personPayment}
-      AND p."periodFromDate" IS NOT NULL AND p."periodToDate" IS NOT NULL
-      AND p."periodFromShift" IS NOT NULL AND p."periodToShift" IS NOT NULL`
+    const { entries, periodPayments, notPaid } = personSql(businessId, { farmerId, customerId })
 
     // Default start, only when the client didn't choose one
     let from = isDay(q.from) && isShift(q.fromShift) ? { date: q.from, shift: q.fromShift } : null
@@ -269,7 +335,7 @@ router.get('/period', authenticateToken, async (req: AuthRequest, res: Response)
 
     const fromKey = Prisma.sql`(${from.date}::date, ${from.shift}::"Shift")`
     const toKey = Prisma.sql`(${to.date}::date, ${to.shift}::"Shift")`
-    const [[unpaid], [overlap]] = await Promise.all([
+    const [[unpaid], [overlap], dues] = await Promise.all([
       prisma.$queryRaw<{ count: number; liters: number; amount: number }[]>`
         SELECT COUNT(*)::int AS count,
           COALESCE(SUM(e.quantity), 0)::float8 AS liters,
@@ -277,23 +343,21 @@ router.get('/period', authenticateToken, async (req: AuthRequest, res: Response)
         FROM ${entries}
           AND e.date BETWEEN ${from.date}::date AND ${to.date}::date
           AND (e.date, e.shift) >= ${fromKey} AND (e.date, e.shift) <= ${toKey}
-          AND NOT EXISTS (
-            SELECT 1 FROM ${periodPayments}
-              AND e."createdAt" <= p."createdAt"
-              AND (e.date, e.shift) >= (p."periodFromDate", p."periodFromShift")
-              AND (e.date, e.shift) <= (p."periodToDate", p."periodToShift")
-          )`,
+          AND ${notPaid}`,
       prisma.$queryRaw<{ overlaps: boolean }[]>`
         SELECT EXISTS (
           SELECT 1 FROM ${periodPayments}
             AND (p."periodToDate", p."periodToShift") >= ${fromKey}
             AND (p."periodFromDate", p."periodFromShift") <= ${toKey}
-        ) AS overlaps`
+        ) AS overlaps`,
+      personDues(businessId, { farmerId, customerId })
     ])
 
+    // advance / pending carry over from earlier payments: the amount to pay for this period is
+    // unpaid.amount - advance + pending (see personDues)
     return res.json({
       success: true,
-      data: { from, to, unpaid, overlaps: overlap.overlaps }
+      data: { from, to, unpaid, overlaps: overlap.overlaps, advance: dues?.advance ?? 0, pending: dues?.pending ?? 0 }
     })
   } catch (error) {
     console.error('Payment period error:', error)
