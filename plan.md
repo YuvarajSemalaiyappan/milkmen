@@ -1062,8 +1062,8 @@ export const syncService = new SyncService();
 
 ```json
 {
-  "name": "DudhWala - Milk Management",
-  "short_name": "DudhWala",
+  "name": "Milkmen - Milk Management",
+  "short_name": "Milkmen",
   "description": "Milk collection and sales management for milkmen",
   "start_url": "/",
   "display": "standalone",
@@ -1490,7 +1490,7 @@ SETUP_SECRET=your-super-secret-key-change-this-abc123xyz
 ### Step 2: Hit the Endpoint from Postman
 
 ```
-POST https://api.dudhwala.com/api/setup/init-admin
+POST https://api.milkmen.com/api/setup/init-admin
 
 Headers:
   Content-Type: application/json
@@ -1608,7 +1608,7 @@ export default router;
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                                                             │
-│                          DudhWala Platform                                  │
+│                          Milkmen Platform                                   │
 │                                                                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
@@ -1625,7 +1625,7 @@ export default router;
 │  │  - Quick entry  │  │  - Print bills  │  │  - Revenue tracking         │ │
 │  │  - Offline      │  │  - Desktop UX   │  │                             │ │
 │  │                 │  │                 │  │                             │ │
-│  │  app.dudhwala   │  │  app.dudhwala   │  │  admin.dudhwala.com         │ │
+│  │  app.milkmen    │  │  app.milkmen    │  │  admin.milkmen.com          │ │
 │  │  .com           │  │  .com (desktop) │  │                             │ │
 │  │                 │  │                 │  │                             │ │
 │  │  Login: Phone   │  │  Login: Phone   │  │  Login: Email + Password    │ │
@@ -1673,7 +1673,7 @@ The Mobile PWA and Owner Web are the **SAME application** - just responsive:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  🥛 DudhWala                               Murugan Milk Supply    [Logout]  │
+│  🥛 Milkmen                               Murugan Milk Supply    [Logout]   │
 ├────────────────┬────────────────────────────────────────────────────────────┤
 │                │                                                            │
 │  📊 Dashboard  │   Dashboard                              Feb 3, 2025       │
@@ -1743,9 +1743,9 @@ The Mobile PWA and Owner Web are the **SAME application** - just responsive:
 
 ```
 Production URLs:
-├── https://app.dudhwala.com        → Mobile PWA + Owner Web (same app)
-├── https://admin.dudhwala.com      → Your Admin Panel (separate app)
-└── https://api.dudhwala.com        → Backend API
+├── https://app.milkmen.com        → Mobile PWA + Owner Web (same app)
+├── https://admin.milkmen.com      → Your Admin Panel (separate app)
+└── https://api.milkmen.com        → Backend API
 
 Development URLs:
 ├── http://localhost:3000           → Mobile PWA + Owner Web
@@ -1761,7 +1761,7 @@ Development URLs:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  🔐 DudhWala Admin                                        yourname@gmail.com │
+│  🔐 Milkmen Admin                                        yourname@gmail.com  │
 ├────────────────┬────────────────────────────────────────────────────────────┤
 │                │                                                            │
 │  📊 Dashboard  │   Admin Dashboard                                          │
@@ -1857,7 +1857,7 @@ Development URLs:
 ## Project Structure
 
 ```
-dudhwala/
+milkmen/
 │
 ├── apps/
 │   │
