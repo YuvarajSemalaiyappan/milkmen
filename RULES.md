@@ -47,6 +47,19 @@ database round trip costs network time. Check every new or changed endpoint agai
    and every server start are saved with method `PROCESS`. `GET /health/db` returns 503 when the
    database doesn't answer: point an uptime monitor at it, since nothing can be logged then.
 
+## Subscription (plan) Rules
+
+- A plan is active when its status is `ACTIVE` and its end date is in the future. The stored status
+  only changes when the admin acts, so always use `effectiveStatus()` from `server/src/lib/plan.ts`
+  (an `ACTIVE` plan past its end date counts as `EXPIRED`) in API responses and admin filters.
+- Without an active plan a business can log in and read everything, but every POST/PUT/PATCH/DELETE on
+  the app API is refused with **402** and `code` `PLAN_EXPIRED`, `PLAN_SUSPENDED` or `PLAN_INACTIVE`
+  (`server/src/middleware/plan.ts`). Changing one's own profile or PIN stays open.
+- The guard caches each business's plan for a minute; admin plan actions call `clearPlanCache()`
+  so a renewal works on the next save. Add that call to any new code that changes a plan.
+- Both apps show the 402 message in the user's language (`plan.*` here, `app.plan*` in the phone app)
+  and show the plan state on the dashboard / Home.
+
 ## App Parity Rule (web <-> phone app)
 
 The web app (`apps/mobile-web`, this repo) and the phone app (`YuvarajSemalaiyappan/milkmen-app`)

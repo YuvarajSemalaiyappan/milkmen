@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+export const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 
 // Extend Express Request type
 export interface AuthRequest extends Request {

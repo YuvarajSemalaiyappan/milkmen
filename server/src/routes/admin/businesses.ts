@@ -1,6 +1,8 @@
 import { Router, Response } from 'express'
 import bcrypt from 'bcrypt'
 import prisma from '../../lib/prisma.js'
+import { effectiveStatus, EXPIRING_DAYS } from '../../lib/plan.js'
+import { clearPlanCache } from '../../middleware/plan.js'
 import { authenticateAdmin, AdminRequest } from '../../middleware/adminAuth.js'
 
 const router = Router()
@@ -24,11 +26,28 @@ router.get('/', authenticateAdmin, async (req: AdminRequest, res: Response) => {
         }
       : {}
 
-    const statusFilter = status && status !== 'all'
-      ? { subscription: { status: status.toUpperCase() as 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'SUSPENDED' } }
-      : {}
+    // Status filters use the effective status: an ACTIVE plan past its end date counts as expired.
+    const now = new Date()
+    const soon = new Date(now.getTime() + EXPIRING_DAYS * 24 * 60 * 60 * 1000)
+    const statusFilters: Record<string, object> = {
+      active: { subscription: { status: 'ACTIVE' as const, endDate: { gt: now } } },
+      expiring: { subscription: { status: 'ACTIVE' as const, endDate: { gt: now, lte: soon } } },
+      expired: {
+        OR: [
+          { subscription: { status: 'EXPIRED' as const } },
+          { subscription: { status: 'ACTIVE' as const, OR: [{ endDate: { lte: now } }, { endDate: null }] } }
+        ]
+      },
+      suspended: { subscription: { status: 'SUSPENDED' as const } },
+      inactive: { OR: [{ subscription: { status: 'INACTIVE' as const } }, { subscription: null }] }
+    }
+    const statusFilter = (status && statusFilters[status.toLowerCase()]) || {}
 
-    const where = { ...searchFilter, ...statusFilter }
+    const where = { AND: [searchFilter, statusFilter] }
+    // Expiring soon lists the nearest end date first
+    const orderBy = status === 'expiring'
+      ? { subscription: { endDate: 'asc' as const } }
+      : { createdAt: 'desc' as const }
 
     const [businesses, total] = await Promise.all([
       prisma.business.findMany({
@@ -43,7 +62,7 @@ router.get('/', authenticateAdmin, async (req: AdminRequest, res: Response) => {
             }
           }
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (pageNum - 1) * pageSize,
         take: pageSize
       }),
@@ -61,7 +80,7 @@ router.get('/', authenticateAdmin, async (req: AdminRequest, res: Response) => {
         id: b.subscription.id,
         businessId: b.subscription.businessId,
         plan: b.subscription.plan,
-        status: b.subscription.status,
+        status: effectiveStatus(b.subscription),
         startDate: b.subscription.startDate?.toISOString() || null,
         endDate: b.subscription.endDate?.toISOString() || null,
         createdAt: b.subscription.createdAt.toISOString(),
@@ -133,7 +152,7 @@ router.get('/:id', authenticateAdmin, async (req: AdminRequest, res: Response) =
           id: business.subscription.id,
           businessId: business.subscription.businessId,
           plan: business.subscription.plan,
-          status: business.subscription.status,
+          status: effectiveStatus(business.subscription),
           startDate: business.subscription.startDate?.toISOString() || null,
           endDate: business.subscription.endDate?.toISOString() || null,
           createdAt: business.subscription.createdAt.toISOString(),
@@ -171,7 +190,7 @@ router.get('/:id/subscription', authenticateAdmin, async (req: AdminRequest, res
         id: subscription.id,
         businessId: subscription.businessId,
         plan: subscription.plan,
-        status: subscription.status,
+        status: effectiveStatus(subscription),
         startDate: subscription.startDate?.toISOString() || null,
         endDate: subscription.endDate?.toISOString() || null,
         createdAt: subscription.createdAt.toISOString(),
@@ -240,6 +259,7 @@ router.delete('/:id', authenticateAdmin, async (req: AdminRequest, res: Response
       prisma.subscription.deleteMany({ where: { businessId: id } }),
       prisma.business.delete({ where: { id } })
     ])
+    clearPlanCache(id)
 
     return res.json({ success: true, message: 'Business deleted' })
   } catch (error) {

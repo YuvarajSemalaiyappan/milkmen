@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, Input, Button } from '@/components/ui'
 import { useAuthStore, useAppStore } from '@/store'
+import { authApi, subscriptionsApi } from '@/services'
+import { PLANS, pricesFrom } from '@/plans'
+
+const errorText = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback)
 
 export function SettingsPage() {
   const user = useAuthStore((state) => state.user)
+  const updateUser = useAuthStore((state) => state.updateUser)
   const addToast = useAppStore((state) => state.addToast)
 
   const [name, setName] = useState(user?.name || '')
@@ -11,20 +16,36 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [passwordSaving, setPasswordSaving] = useState(false)
+
+  // Plan prices as text while editing; loaded from the server
+  const [prices, setPrices] = useState<Record<string, string>>({})
+  const [pricingLoaded, setPricingLoaded] = useState(false)
+  const [pricingSaving, setPricingSaving] = useState(false)
+
+  useEffect(() => {
+    subscriptionsApi.getPricing()
+      .then((res) => {
+        const loaded = pricesFrom(res.data)
+        setPrices(Object.fromEntries(PLANS.map((p) => [p.value, String(loaded[p.value])])))
+        setPricingLoaded(true)
+      })
+      .catch((error) => addToast({ type: 'error', message: errorText(error, 'Failed to load pricing') }))
+  }, [addToast])
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setProfileSaving(true)
 
     try {
-      // TODO: API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const res = await authApi.updateProfile({ name, email })
+      updateUser({ name: res.data.name, email: res.data.email })
       addToast({ type: 'success', message: 'Profile updated successfully' })
-    } catch {
-      addToast({ type: 'error', message: 'Failed to update profile' })
+    } catch (error) {
+      addToast({ type: 'error', message: errorText(error, 'Failed to update profile') })
     } finally {
-      setIsLoading(false)
+      setProfileSaving(false)
     }
   }
 
@@ -41,19 +62,36 @@ export function SettingsPage() {
       return
     }
 
-    setIsLoading(true)
+    setPasswordSaving(true)
 
     try {
-      // TODO: API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await authApi.changePassword(currentPassword, newPassword)
       addToast({ type: 'success', message: 'Password changed successfully' })
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-    } catch {
-      addToast({ type: 'error', message: 'Failed to change password' })
+    } catch (error) {
+      addToast({ type: 'error', message: errorText(error, 'Failed to change password') })
     } finally {
-      setIsLoading(false)
+      setPasswordSaving(false)
+    }
+  }
+
+  const handleSavePricing = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const rows = PLANS.map((p) => ({ plan: p.value, amount: Number(prices[p.value]) }))
+    if (rows.some((r) => !Number.isFinite(r.amount) || r.amount < 0 || prices[r.plan] === '')) {
+      addToast({ type: 'error', message: 'Enter a price of 0 or more for every plan' })
+      return
+    }
+    setPricingSaving(true)
+    try {
+      await subscriptionsApi.updatePricing(rows)
+      addToast({ type: 'success', message: 'Prices saved' })
+    } catch (error) {
+      addToast({ type: 'error', message: errorText(error, 'Failed to save prices') })
+    } finally {
+      setPricingSaving(false)
     }
   }
 
@@ -81,7 +119,7 @@ export function SettingsPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <Button type="submit" isLoading={isLoading}>
+          <Button type="submit" isLoading={profileSaving}>
             Save Changes
           </Button>
         </form>
@@ -112,7 +150,7 @@ export function SettingsPage() {
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
           />
-          <Button type="submit" isLoading={isLoading}>
+          <Button type="submit" isLoading={passwordSaving}>
             Change Password
           </Button>
         </form>
@@ -120,29 +158,29 @@ export function SettingsPage() {
 
       {/* Pricing Settings */}
       <Card>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Subscription Pricing</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 border border-gray-200 rounded-lg">
-            <p className="text-sm text-gray-500">Monthly</p>
-            <p className="text-2xl font-bold text-gray-900">₹299</p>
-            <p className="text-xs text-gray-400">30 days</p>
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">Subscription Pricing</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Filled in as the amount when you activate or extend a plan. Businesses see these prices on their Subscription screen.
+        </p>
+        <form onSubmit={handleSavePricing} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            {PLANS.map((p) => (
+              <Input
+                key={p.value}
+                label={`${p.label} (${p.days} days), ₹`}
+                type="number"
+                min={0}
+                value={prices[p.value] ?? ''}
+                onChange={(e) => setPrices((cur) => ({ ...cur, [p.value]: e.target.value }))}
+                disabled={!pricingLoaded}
+                required
+              />
+            ))}
           </div>
-          <div className="p-4 border border-gray-200 rounded-lg">
-            <p className="text-sm text-gray-500">Quarterly</p>
-            <p className="text-2xl font-bold text-gray-900">₹799</p>
-            <p className="text-xs text-gray-400">90 days</p>
-          </div>
-          <div className="p-4 border border-gray-200 rounded-lg">
-            <p className="text-sm text-gray-500">Half Yearly</p>
-            <p className="text-2xl font-bold text-gray-900">₹1,499</p>
-            <p className="text-xs text-gray-400">180 days</p>
-          </div>
-          <div className="p-4 border border-gray-200 rounded-lg">
-            <p className="text-sm text-gray-500">Annual</p>
-            <p className="text-2xl font-bold text-gray-900">₹2,499</p>
-            <p className="text-xs text-gray-400">365 days</p>
-          </div>
-        </div>
+          <Button type="submit" isLoading={pricingSaving} disabled={!pricingLoaded}>
+            Save Prices
+          </Button>
+        </form>
       </Card>
     </div>
   )

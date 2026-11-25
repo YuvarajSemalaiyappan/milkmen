@@ -40,6 +40,20 @@ export const authApi = {
 
   me: async () => {
     return fetchWithAuth('/auth/me')
+  },
+
+  updateProfile: async (data: { name: string; email: string }) => {
+    return fetchWithAuth('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    return fetchWithAuth('/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword })
+    })
   }
 }
 
@@ -121,6 +135,17 @@ export const subscriptionsApi = {
   reactivate: async (businessId: string) => {
     return fetchWithAuth(`/subscriptions/${businessId}/reactivate`, {
       method: 'POST'
+    })
+  },
+
+  getPricing: async (): Promise<{ data: { plan: string; amount: number }[] }> => {
+    return fetchWithAuth('/subscriptions/pricing')
+  },
+
+  updatePricing: async (prices: { plan: string; amount: number }[]) => {
+    return fetchWithAuth('/subscriptions/pricing', {
+      method: 'PUT',
+      body: JSON.stringify({ prices })
     })
   }
 }

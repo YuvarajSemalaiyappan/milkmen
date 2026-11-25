@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import bcrypt from 'bcrypt'
 import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
+import { effectiveStatus } from '../../lib/plan.js'
 import { authenticateToken, requireOwner, requireOwnerOrManager, AuthRequest } from '../../middleware/auth.js'
 
 const router = Router()
@@ -56,7 +57,8 @@ router.get('/subscription', authenticateToken, async (req: AuthRequest, res: Res
     }
 
     const now = new Date()
-    const active = subscription.status === 'ACTIVE' && subscription.endDate != null && subscription.endDate > now
+    const status = effectiveStatus(subscription, now)
+    const active = status === 'ACTIVE'
     let daysRemaining = 0
     if (subscription.endDate) {
       daysRemaining = Math.ceil((subscription.endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
@@ -75,7 +77,7 @@ router.get('/subscription', authenticateToken, async (req: AuthRequest, res: Res
       success: true,
       data: {
         plan: subscription.plan,
-        status: subscription.status,
+        status,
         active,
         startDate: subscription.startDate,
         endDate: subscription.endDate,

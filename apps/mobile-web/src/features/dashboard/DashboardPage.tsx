@@ -12,6 +12,9 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
   const subscription = useAuthStore((state) => state.subscription)
+  // Not active (expired, suspended, never activated): the server refuses saves until renewal
+  const planBlocked = subscription ? !subscription.active : false
+  const planKey = subscription?.status === 'SUSPENDED' ? 'suspended' : subscription?.status === 'INACTIVE' ? 'inactive' : 'expired'
 
   const { todayTotals: collectionTotals, todayCollections, isLoading: collectionsLoading, error: collectionsError, fetchCollections } = useCollections()
   const { todayTotals: deliveryTotals, todayDeliveries, isLoading: deliveriesLoading, error: deliveriesError, fetchDeliveries } = useDeliveries()
@@ -114,7 +117,7 @@ export function DashboardPage() {
           <div
             onClick={() => navigate('/settings/subscription')}
             className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
-              subscription.daysRemaining <= 0
+              planBlocked
                 ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'
                 : subscription.daysRemaining <= 7
                   ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700'
@@ -122,15 +125,15 @@ export function DashboardPage() {
             }`}
           >
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-              subscription.daysRemaining <= 0
+              planBlocked
                 ? 'bg-red-100 dark:bg-red-900/50'
                 : subscription.daysRemaining <= 7
                   ? 'bg-amber-100 dark:bg-amber-900/50'
                   : 'bg-blue-100 dark:bg-blue-900/50'
             }`}>
-              {subscription.daysRemaining <= 7 && subscription.daysRemaining > 0 ? (
+              {!planBlocked && subscription.daysRemaining <= 7 ? (
                 <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-              ) : subscription.daysRemaining <= 0 ? (
+              ) : planBlocked ? (
                 <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
               ) : (
                 <Crown className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -138,23 +141,23 @@ export function DashboardPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className={`text-sm font-semibold ${
-                subscription.daysRemaining <= 0
+                planBlocked
                   ? 'text-red-700 dark:text-red-300'
                   : subscription.daysRemaining <= 7
                     ? 'text-amber-700 dark:text-amber-300'
                     : 'text-blue-700 dark:text-blue-300'
               }`}>
-                {subscription.plan} Plan
+                {planBlocked ? t(`plan.${planKey}Title`) : `${subscription.plan} Plan`}
               </p>
               <p className={`text-xs ${
-                subscription.daysRemaining <= 0
+                planBlocked
                   ? 'text-red-600 dark:text-red-400'
                   : subscription.daysRemaining <= 7
                     ? 'text-amber-600 dark:text-amber-400'
                     : 'text-blue-600 dark:text-blue-400'
               }`}>
-                {subscription.daysRemaining <= 0
-                  ? 'Plan expired'
+                {planBlocked
+                  ? t(`plan.${planKey}`)
                   : subscription.daysRemaining <= 7
                     ? `Expiring soon - ${subscription.daysRemaining} days left`
                     : `${subscription.daysRemaining} days remaining`

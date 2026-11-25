@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
+import { clearPlanCache } from '../../middleware/plan.js'
 import { authenticateAdmin, AdminRequest } from '../../middleware/adminAuth.js'
 
 const router = Router()
@@ -75,6 +76,7 @@ router.post('/:businessId/activate', authenticateAdmin, async (req: AdminRequest
       }
     })
 
+    clearPlanCache(businessId)
     return res.json({
       success: true,
       data: {
@@ -143,6 +145,7 @@ router.post('/:businessId/extend', authenticateAdmin, async (req: AdminRequest, 
       }
     })
 
+    clearPlanCache(businessId)
     return res.json({
       success: true,
       data: {
@@ -183,6 +186,7 @@ router.post('/:businessId/suspend', authenticateAdmin, async (req: AdminRequest,
       data: { status: 'SUSPENDED' }
     })
 
+    clearPlanCache(businessId)
     return res.json({
       success: true,
       data: {
@@ -232,6 +236,7 @@ router.post('/:businessId/reactivate', authenticateAdmin, async (req: AdminReque
       data: { status: 'ACTIVE' }
     })
 
+    clearPlanCache(businessId)
     return res.json({
       success: true,
       data: {

@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
+import { effectiveStatus } from '../../lib/plan.js'
 import type { Prisma } from '@prisma/client'
 
 const router = Router()
@@ -192,9 +193,8 @@ router.post('/login', async (req, res) => {
 
     // Check subscription status
     const subscription = user.business.subscription
-    const subscriptionActive = subscription?.status === 'ACTIVE' &&
-      subscription.endDate &&
-      new Date(subscription.endDate) > new Date()
+    const subscriptionStatus = effectiveStatus(subscription)
+    const subscriptionActive = subscriptionStatus === 'ACTIVE'
 
     // Calculate days remaining
     let daysRemaining = 0
@@ -222,7 +222,7 @@ router.post('/login', async (req, res) => {
         },
         subscription: {
           plan: subscription?.plan || 'FREE',
-          status: subscription?.status || 'INACTIVE',
+          status: subscriptionStatus,
           active: subscriptionActive,
           endDate: subscription?.endDate,
           daysRemaining

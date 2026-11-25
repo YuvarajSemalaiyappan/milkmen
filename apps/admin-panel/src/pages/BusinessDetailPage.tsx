@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { businessesApi, subscriptionsApi } from '@/services'
 import type { Business, SubscriptionPayment, SubscriptionPlan } from '@/types'
 import { format } from 'date-fns'
+import { PLANS, pricesFrom, type Prices } from '@/plans'
 
 interface BusinessUser {
   id: string
@@ -15,13 +16,6 @@ interface BusinessUser {
   isActive: boolean
   createdAt: string
 }
-
-const PLAN_OPTIONS: { value: SubscriptionPlan; label: string; price: number }[] = [
-  { value: 'MONTHLY', label: 'Monthly (30 days)', price: 299 },
-  { value: 'QUARTERLY', label: 'Quarterly (90 days)', price: 799 },
-  { value: 'HALF_YEARLY', label: 'Half Yearly (180 days)', price: 1499 },
-  { value: 'ANNUAL', label: 'Annual (365 days)', price: 2499 }
-]
 
 export function BusinessDetailPage() {
   const { id } = useParams()
@@ -37,13 +31,26 @@ export function BusinessDetailPage() {
 
   // Activate/Extend form
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>('MONTHLY')
-  const [amount, setAmount] = useState(299)
+  const [amount, setAmount] = useState(PLANS[0].fallback)
+  const [prices, setPrices] = useState<Prices>(() => pricesFrom([]))
   const [paymentMethod, setPaymentMethod] = useState('')
   const [transactionId, setTransactionId] = useState('')
 
   useEffect(() => {
     loadBusiness()
   }, [id])
+
+  useEffect(() => {
+    subscriptionsApi.getPricing()
+      .then((res) => setPrices(pricesFrom(res.data)))
+      .catch((error) => console.error('Failed to load pricing:', error))
+  }, [])
+
+  const openPlanForm = (extend: boolean) => {
+    setIsExtend(extend)
+    setAmount(prices[selectedPlan])
+    setShowActivateModal(true)
+  }
 
   const loadBusiness = async () => {
     if (!id) return
@@ -86,7 +93,7 @@ export function BusinessDetailPage() {
       setTransactionId('')
       loadBusiness()
     } catch (error) {
-      addToast({ type: 'error', message: 'Failed to update subscription' })
+      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Failed to update subscription' })
     } finally {
       setActionLoading(false)
     }
@@ -114,7 +121,7 @@ export function BusinessDetailPage() {
       addToast({ type: 'success', message: 'Subscription reactivated' })
       loadBusiness()
     } catch (error) {
-      addToast({ type: 'error', message: 'Failed to reactivate subscription' })
+      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Failed to reactivate subscription' })
     } finally {
       setActionLoading(false)
     }
@@ -213,13 +220,13 @@ export function BusinessDetailPage() {
           <h3 className="text-lg font-semibold text-gray-900">Subscription</h3>
           <div className="flex gap-2">
             {(!business.subscription || business.subscription.status === 'INACTIVE' || business.subscription.status === 'EXPIRED') && (
-              <Button onClick={() => { setIsExtend(false); setShowActivateModal(true) }}>
+              <Button onClick={() => openPlanForm(false)}>
                 Activate Subscription
               </Button>
             )}
             {business.subscription?.status === 'ACTIVE' && (
               <>
-                <Button variant="secondary" onClick={() => { setIsExtend(true); setShowActivateModal(true) }}>
+                <Button variant="secondary" onClick={() => openPlanForm(true)}>
                   Extend
                 </Button>
                 <Button variant="danger" size="sm" onClick={handleSuspend} isLoading={actionLoading}>
@@ -282,12 +289,11 @@ export function BusinessDetailPage() {
                 onChange={(e) => {
                   const plan = e.target.value as SubscriptionPlan
                   setSelectedPlan(plan)
-                  const option = PLAN_OPTIONS.find(o => o.value === plan)
-                  if (option) setAmount(option.price)
+                  setAmount(prices[plan])
                 }}
               >
-                {PLAN_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                {PLANS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label} ({opt.days} days)</option>
                 ))}
               </select>
             </div>

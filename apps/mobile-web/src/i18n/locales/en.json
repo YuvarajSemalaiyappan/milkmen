@@ -538,5 +538,13 @@
     "invalidQuantity": "Enter a valid quantity",
     "invalidRate": "Enter a valid rate",
     "positiveNumber": "Must be a positive number"
+  },
+  "plan": {
+    "expiredTitle": "Plan expired",
+    "expired": "Your plan has expired. You can still see your data, but saving is stopped until the plan is renewed. Contact admin to renew.",
+    "suspendedTitle": "Plan suspended",
+    "suspended": "Your plan is suspended. You can still see your data, but saving is stopped. Contact admin.",
+    "inactiveTitle": "Plan not active",
+    "inactive": "Your plan is not active. You can still see your data, but saving is stopped. Contact admin."
   }
 }

@@ -91,4 +91,71 @@ router.get('/me', authenticateAdmin, async (req: AdminRequest, res: Response) =>
   }
 })
 
+const profileSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  email: z.string().trim().email()
+})
+
+// PUT /api/admin/auth/profile - Change the admin's name and email
+router.put('/profile', authenticateAdmin, async (req: AdminRequest, res: Response) => {
+  try {
+    const validation = profileSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({ success: false, error: 'Enter a name and a valid email' })
+    }
+    const { name, email } = validation.data
+    const taken = await prisma.adminUser.findFirst({
+      where: { email, NOT: { id: req.admin!.adminId } },
+      select: { id: true }
+    })
+    if (taken) {
+      return res.status(409).json({ success: false, error: 'Another admin already uses this email' })
+    }
+    const admin = await prisma.adminUser.update({
+      where: { id: req.admin!.adminId },
+      data: { name, email },
+      select: { id: true, email: true, name: true }
+    })
+    return res.json({ success: true, data: admin })
+  } catch (error) {
+    console.error('Admin profile update error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to update profile' })
+  }
+})
+
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(200)
+})
+
+// PUT /api/admin/auth/password - Change the admin's password (needs the current one)
+router.put('/password', authenticateAdmin, async (req: AdminRequest, res: Response) => {
+  try {
+    const validation = passwordSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 8 characters' })
+    }
+    const { currentPassword, newPassword } = validation.data
+    const admin = await prisma.adminUser.findUnique({
+      where: { id: req.admin!.adminId },
+      select: { passwordHash: true }
+    })
+    if (!admin) {
+      return res.status(404).json({ success: false, error: 'Admin not found' })
+    }
+    // 400, not 401: a 401 would sign the admin out in the panel
+    if (!(await bcrypt.compare(currentPassword, admin.passwordHash))) {
+      return res.status(400).json({ success: false, error: 'Current password is wrong' })
+    }
+    await prisma.adminUser.update({
+      where: { id: req.admin!.adminId },
+      data: { passwordHash: await bcrypt.hash(newPassword, 12), resetToken: null, resetExpires: null }
+    })
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Admin password change error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to change password' })
+  }
+})
+
 export default router

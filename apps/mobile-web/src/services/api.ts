@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/store'
+import i18n from '@/i18n'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -16,6 +17,21 @@ export class ApiError extends Error {
 
 async function toApiError(response: Response): Promise<ApiError> {
   const body = await response.json().catch(() => ({ error: 'Unknown error' }))
+  // 402 PLAN_EXPIRED / PLAN_SUSPENDED / PLAN_INACTIVE: the server refused a save because the plan
+  // isn't active. Show it in the user's language and mark the stored plan inactive so the
+  // dashboard shows it too.
+  if (typeof body.code === 'string' && body.code.startsWith('PLAN_')) {
+    const key = body.code.slice(5).toLowerCase() as 'expired' | 'suspended' | 'inactive'
+    const auth = useAuthStore.getState()
+    if (auth.subscription) {
+      auth.setSubscription({
+        ...auth.subscription,
+        active: false,
+        status: key.toUpperCase() as 'EXPIRED' | 'SUSPENDED' | 'INACTIVE'
+      })
+    }
+    return new ApiError(i18n.t(`plan.${key}`), response.status, body.code)
+  }
   return new ApiError(body.error || `API Error: ${response.status}`, response.status, body.code)
 }
 

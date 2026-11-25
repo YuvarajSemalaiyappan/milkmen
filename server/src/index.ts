@@ -27,6 +27,7 @@ import adminBusinessesRoutes from './routes/admin/businesses.js'
 import adminSubscriptionsRoutes from './routes/admin/subscriptions.js'
 import adminLogsRoutes from './routes/admin/logs.js'
 import prisma from './lib/prisma.js'
+import { requireActivePlan } from './middleware/plan.js'
 import { installProcessErrorLogging, logServerEvent, requestLog, startRequestLogCleanup } from './middleware/requestLog.js'
 
 const app = express()
@@ -67,6 +68,12 @@ app.get('/health/db', async (_req, res) => {
 // API Routes
 app.use('/api/setup', setupRoutes)
 app.use('/api/auth', authRoutes)
+// Saves need an active plan (reads and login always work): see middleware/plan.ts
+app.use(
+  ['/api/farmers', '/api/customers', '/api/collections', '/api/deliveries', '/api/payments', '/api/reports',
+    '/api/settings', '/api/rates', '/api/routes', '/api/areas'],
+  requireActivePlan
+)
 app.use('/api/farmers', farmerRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/collections', collectionRoutes)

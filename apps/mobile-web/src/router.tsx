@@ -2,6 +2,9 @@ import { useEffect, useRef, useSyncExternalStore } from 'react'
 import type { Location, NavigationType as Action, To } from 'react-router-dom'
 import { Router, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '@/store'
+import { subscriptionApi } from '@/services/api'
+import i18n from '@/i18n'
+import type { SubscriptionInfo } from '@/types'
 
 // Feature pages
 import { DashboardPage } from '@/features/dashboard'
@@ -151,12 +154,36 @@ function ProtectedRoute() {
   const addToast = useAppStore((state) => state.addToast)
   const expiryWarningShown = useRef(false)
 
+  // The stored plan comes from login; refresh it once per app load so a renewal, suspension or
+  // expiry since then shows up.
+  const setSubscription = useAuthStore((state) => state.setSubscription)
+  const refreshed = useRef(false)
+  useEffect(() => {
+    if (!isAuthenticated || refreshed.current) return
+    refreshed.current = true
+    subscriptionApi.get()
+      .then((result) => {
+        const r = result as { success: boolean; data: SubscriptionInfo }
+        if (r.success) {
+          setSubscription({
+            plan: r.data.plan,
+            status: r.data.status,
+            active: r.data.active,
+            endDate: r.data.endDate,
+            daysRemaining: r.data.daysRemaining
+          })
+        }
+      })
+      .catch((err) => console.error('Failed to refresh subscription:', err))
+  }, [isAuthenticated, setSubscription])
+
   useEffect(() => {
     if (!subscription || expiryWarningShown.current) return
     expiryWarningShown.current = true
 
-    if (subscription.daysRemaining <= 0) {
-      addToast({ type: 'error', message: 'Your plan has expired. Contact admin to renew.', duration: 5000 })
+    if (!subscription.active) {
+      const key = subscription.status === 'SUSPENDED' ? 'suspended' : subscription.status === 'INACTIVE' ? 'inactive' : 'expired'
+      addToast({ type: 'error', message: i18n.t(`plan.${key}`), duration: 6000 })
     } else if (subscription.daysRemaining <= 7) {
       addToast({ type: 'warning', message: `Your plan expires in ${subscription.daysRemaining} days`, duration: 5000 })
     }
