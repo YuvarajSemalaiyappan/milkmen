@@ -29,7 +29,8 @@ import {
   StaffManagementPage,
   RateSettingsPage,
   SubscriptionPage,
-  AboutPage
+  AboutPage,
+  DeleteAccountPage
 } from '@/features/settings'
 import {
   RoutesPage,
@@ -48,6 +49,7 @@ import {
 } from '@/features/areas'
 import { MorePage } from '@/features/more'
 import { LoginPage, RegisterPage } from '@/features/auth'
+import { PrivacyPolicyPage, PublicDeleteAccountPage } from '@/features/legal'
 
 // Custom history + subscriber registry. We bypass BrowserRouter's internal
 // subscription (which was failing to fire for navigations between protected
@@ -211,6 +213,10 @@ export function AppRoutes() {
     <HistoryRouter>
       <ScrollToTop />
       <Routes>
+        {/* Open to everyone, signed in or not (linked from the Play Store listing) */}
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/delete-account" element={<PublicDeleteAccountPage />} />
+
         <Route element={<PublicRoute />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -249,6 +255,7 @@ export function AppRoutes() {
           <Route path="/settings/subscription" element={<SubscriptionPage />} />
           <Route path="/settings/rates" element={<RateSettingsPage />} />
           <Route path="/settings/about" element={<AboutPage />} />
+          <Route path="/settings/delete-account" element={<DeleteAccountPage />} />
           <Route path="/routes" element={<RoutesPage />} />
           <Route path="/routes/add" element={<AddRoutePage />} />
           <Route path="/routes/:id" element={<RouteDetailPage />} />

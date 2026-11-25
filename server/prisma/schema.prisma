@@ -498,3 +498,44 @@ model RequestLog {
   @@index([businessId, createdAt])
   @@index([status, createdAt])
 }
+
+// A request to delete an account, sent from either app (signed in) or from the public
+// /delete-account page (not signed in). Nothing is deleted automatically: the admin reads the
+// request, deletes the business (owner) or the login (staff) and marks it DONE.
+// No foreign keys, so the record outlives the business it names.
+model DeletionRequest {
+  id           String                @id @default(cuid())
+  createdAt    DateTime              @default(now())
+  source       DeletionRequestSource
+  status       DeletionRequestStatus @default(PENDING)
+
+  // Set when sent from an app (signed in)
+  userId     String?
+  businessId String?
+  role       String?
+
+  name         String
+  phone        String
+  businessName String?
+  reason       String?
+
+  handledAt DateTime?
+  handledBy String? // Admin user ID
+  adminNote String?
+
+  @@index([status, createdAt])
+  @@index([userId, status])
+  @@index([phone, status])
+}
+
+enum DeletionRequestSource {
+  APP      // Signed in, from the phone app or the web app
+  WEB_FORM // The public /delete-account page
+}
+
+enum DeletionRequestStatus {
+  PENDING
+  DONE
+  REJECTED
+  CANCELLED // Withdrawn by the user
+}

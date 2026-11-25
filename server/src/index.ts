@@ -21,11 +21,13 @@ import settingsRoutes from './routes/app/settings.js'
 import ratesRoutes from './routes/app/rates.js'
 import routesRoutes from './routes/app/routes.js'
 import areasRoutes from './routes/app/areas.js'
+import accountRoutes from './routes/app/account.js'
 import adminAuthRoutes from './routes/admin/auth.js'
 import adminDashboardRoutes from './routes/admin/dashboard.js'
 import adminBusinessesRoutes from './routes/admin/businesses.js'
 import adminSubscriptionsRoutes from './routes/admin/subscriptions.js'
 import adminLogsRoutes from './routes/admin/logs.js'
+import adminDeletionRequestsRoutes from './routes/admin/deletionRequests.js'
 import prisma from './lib/prisma.js'
 import { requireActivePlan } from './middleware/plan.js'
 import { installProcessErrorLogging, logServerEvent, requestLog, startRequestLogCleanup } from './middleware/requestLog.js'
@@ -84,6 +86,8 @@ app.use('/api/settings', settingsRoutes)
 app.use('/api/rates', ratesRoutes)
 app.use('/api/routes', routesRoutes)
 app.use('/api/areas', areasRoutes)
+// Account deletion requests: outside the plan guard, so an expired business can still ask
+app.use('/api/account', accountRoutes)
 
 // Admin Routes
 app.use('/api/admin/auth', adminAuthRoutes)
@@ -91,6 +95,7 @@ app.use('/api/admin/dashboard', adminDashboardRoutes)
 app.use('/api/admin/businesses', adminBusinessesRoutes)
 app.use('/api/admin/subscriptions', adminSubscriptionsRoutes)
 app.use('/api/admin/logs', adminLogsRoutes)
+app.use('/api/admin/deletion-requests', adminDeletionRequestsRoutes)
 
 // Serve frontend static files in production
 if (process.env.NODE_ENV === 'production') {

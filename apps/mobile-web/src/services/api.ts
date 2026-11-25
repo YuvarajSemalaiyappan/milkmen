@@ -379,3 +379,21 @@ export const subscriptionApi = {
 }
 
 export default api
+
+// Account deletion requests. Nothing is deleted at once: the admin handles each request.
+export interface DeletionRequestInfo {
+  id: string
+  createdAt: string
+  status: string
+}
+
+export const accountApi = {
+  getDeletionRequest: () =>
+    api.get<{ success: boolean; data: DeletionRequestInfo | null }>('/account/deletion-request'),
+  requestDeletion: (reason?: string) =>
+    api.post<{ success: boolean; data: DeletionRequestInfo }>('/account/deletion-request', { reason }),
+  withdrawDeletion: () => api.delete('/account/deletion-request'),
+  // The public /delete-account page (no sign-in)
+  requestDeletionPublic: (data: { name: string; phone: string; businessName?: string; reason?: string }) =>
+    api.post<{ success: boolean; data: DeletionRequestInfo }>('/account/deletion-request/public', data, { skipAuth: true })
+}

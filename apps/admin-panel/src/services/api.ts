@@ -151,3 +151,18 @@ export const subscriptionsApi = {
 }
 
 export { fetchWithAuth }
+
+// Account deletion requests (from the apps and the public /delete-account page)
+export const deletionRequestsApi = {
+  list: async (status?: string) => {
+    const query = status ? `?status=${status}` : ''
+    return fetchWithAuth(`/deletion-requests${query}`)
+  },
+
+  update: async (id: string, data: { status: 'PENDING' | 'DONE' | 'REJECTED'; adminNote?: string }) => {
+    return fetchWithAuth(`/deletion-requests/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
+  }
+}

@@ -102,3 +102,14 @@ Detail pages take their unpaid totals from the summary, not from the listed rows
 Not a difference: the web's Collections, Deliveries and Payments round pages load the full route
 because they show the route's people with their details; screens that only filter by route use
 `GET /routes/:id?scope=1` in both apps.
+
+## Account deletion and privacy (Google Play)
+
+- Both apps: Settings → Delete account sends a request (`POST /api/account/deletion-request`, can be withdrawn
+  with DELETE). Nothing is deleted automatically. `/api/account` is outside the plan guard on purpose.
+- Public pages in the web app, no sign-in: `/privacy` (privacy policy, `features/legal/PrivacyPolicyPage.tsx`;
+  update its effective date when the text changes) and `/delete-account` (form → `POST /api/account/deletion-request/public`,
+  rate-limited per address). These URLs go in the Play Console listing.
+- Admin panel → Deletion requests: delete the business (owner) or the login (staff), then mark the request Done.
+  The `DeletionRequest` row has no foreign keys, so it stays as the record that the request was handled.
+- If the privacy policy's facts change (new data collected, new service provider, analytics), update the page.

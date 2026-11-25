@@ -68,3 +68,19 @@ export interface Toast {
   type: 'success' | 'error' | 'warning' | 'info'
   message: string
 }
+
+export interface DeletionRequest {
+  id: string
+  createdAt: string
+  source: 'APP' | 'WEB_FORM'
+  status: 'PENDING' | 'DONE' | 'REJECTED' | 'CANCELLED'
+  userId: string | null
+  businessId: string | null
+  role: string | null
+  name: string
+  phone: string
+  businessName: string | null
+  reason: string | null
+  handledAt: string | null
+  adminNote: string | null
+}

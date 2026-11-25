@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next'
-import { Info, Heart, Code, Globe, Mail, ExternalLink } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Info, Heart, Code, Globe, Mail, ExternalLink, Shield } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
+import { SUPPORT_EMAIL, WEBSITE } from '@/utils/contact'
 
 export function AboutPage() {
   const { t } = useTranslation()
@@ -72,7 +74,7 @@ export function AboutPage() {
           </h3>
           <div className="space-y-2">
             <a
-              href="mailto:support@milkmen.app"
+              href={`mailto:${SUPPORT_EMAIL}`}
               className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
               <div className="flex items-center gap-3">
@@ -82,7 +84,7 @@ export function AboutPage() {
               <ExternalLink className="w-4 h-4 text-gray-400" />
             </a>
             <a
-              href="https://milkmen.app"
+              href={WEBSITE}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -93,6 +95,16 @@ export function AboutPage() {
               </div>
               <ExternalLink className="w-4 h-4 text-gray-400" />
             </a>
+            <Link
+              to="/privacy"
+              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Shield className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                <span className="text-gray-700 dark:text-gray-200">{t('account.privacy')}</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </Link>
           </div>
         </Card>
 

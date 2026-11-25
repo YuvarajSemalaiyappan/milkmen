@@ -5,6 +5,7 @@ import {
   Building2,
   CreditCard,
   Settings,
+  UserX,
   LogOut,
   Milk,
   X
@@ -15,6 +16,7 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/businesses', icon: Building2, label: 'Businesses' },
   { to: '/subscriptions', icon: CreditCard, label: 'Subscriptions' },
+  { to: '/deletion-requests', icon: UserX, label: 'Deletion requests' },
   { to: '/settings', icon: Settings, label: 'Settings' }
 ]
 

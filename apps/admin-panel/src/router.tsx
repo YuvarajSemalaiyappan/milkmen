@@ -7,7 +7,8 @@ import {
   BusinessesPage,
   BusinessDetailPage,
   SubscriptionsPage,
-  SettingsPage
+  SettingsPage,
+  DeletionRequestsPage
 } from '@/pages'
 
 // Protected route wrapper
@@ -66,6 +67,10 @@ export const router = createBrowserRouter([
           {
             path: '/subscriptions',
             element: <SubscriptionsPage />
+          },
+          {
+            path: '/deletion-requests',
+            element: <DeletionRequestsPage />
           },
           {
             path: '/settings',

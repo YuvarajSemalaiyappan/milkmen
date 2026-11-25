@@ -1,1 +1,1 @@
-export { authApi, dashboardApi, businessesApi, subscriptionsApi } from './api'
+export { authApi, dashboardApi, businessesApi, subscriptionsApi, deletionRequestsApi } from './api'

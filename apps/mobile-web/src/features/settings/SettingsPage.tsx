@@ -14,7 +14,8 @@ import {
   Moon,
   Monitor,
   MapPin,
-  Crown
+  Crown,
+  UserX
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
@@ -80,6 +81,12 @@ export function SettingsPage() {
       titleKey: 'settings.about',
       path: '/settings/about',
       color: 'bg-gray-100 text-gray-600'
+    },
+    {
+      icon: UserX,
+      titleKey: 'account.deleteTitle',
+      path: '/settings/delete-account',
+      color: 'bg-red-100 text-red-600'
     }
   ]
 
