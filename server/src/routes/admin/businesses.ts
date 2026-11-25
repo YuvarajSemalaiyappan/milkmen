@@ -246,6 +246,14 @@ router.delete('/:id', authenticateAdmin, async (req: AdminRequest, res: Response
     }
 
     await prisma.$transaction([
+      // Saved collect/deliver orders point at users, farmers and customers with ON DELETE RESTRICT,
+      // so they must go first or deleting customers/farmers/users fails (P2003) and nothing is deleted.
+      prisma.userFarmerOrder.deleteMany({
+        where: { OR: [{ user: { businessId: id } }, { farmer: { businessId: id } }] }
+      }),
+      prisma.userCustomerOrder.deleteMany({
+        where: { OR: [{ user: { businessId: id } }, { customer: { businessId: id } }] }
+      }),
       prisma.collection.deleteMany({ where: { businessId: id } }),
       prisma.delivery.deleteMany({ where: { businessId: id } }),
       prisma.payment.deleteMany({ where: { businessId: id } }),
