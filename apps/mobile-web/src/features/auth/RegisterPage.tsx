@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -33,6 +33,9 @@ const steps = ['business', 'owner', 'pin'] as const
 export function RegisterPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  // Phone passed from the login screen when the number has no account
+  const [searchParams] = useSearchParams()
+  const prefillPhone = (searchParams.get('phone') ?? '').replace(/\D/g, '').slice(0, 10)
   const [step, setStep] = useState<'business' | 'owner' | 'pin'>('business')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -48,9 +51,9 @@ export function RegisterPage() {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       businessName: '',
-      businessPhone: '',
+      businessPhone: prefillPhone,
       ownerName: '',
-      ownerPhone: '',
+      ownerPhone: prefillPhone,
       pin: '',
       confirmPin: ''
     }

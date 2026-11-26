@@ -20,10 +20,15 @@ export function LoginPage() {
   const [pin, setPin] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [notRegistered, setNotRegistered] = useState(false)
 
-  const handlePhoneSubmit = (e: React.FormEvent) => {
+  // Next checks the number first: no account sends the person to Create Account instead of the PIN step.
+  const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (checking) return
     setError('')
+    setNotRegistered(false)
 
     // Validate phone number (10 digits)
     const cleanPhone = phone.replace(/\D/g, '')
@@ -32,7 +37,24 @@ export function LoginPage() {
       return
     }
 
-    setStep('pin')
+    setChecking(true)
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/check-phone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone })
+      })
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || t('auth.loginFailed'))
+      }
+      if (result.data.exists) setStep('pin')
+      else setNotRegistered(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('auth.loginFailed'))
+    } finally {
+      setChecking(false)
+    }
   }
 
   const handlePinComplete = async (enteredPin: string) => {
@@ -107,19 +129,37 @@ export function LoginPage() {
                 type="tel"
                 placeholder={t('auth.enterPhone')}
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value)
+                  setNotRegistered(false)
+                }}
                 leftIcon={<Phone className="w-5 h-5" />}
                 error={error}
                 autoFocus
               />
-              <Button
-                type="submit"
-                fullWidth
-                size="lg"
-                disabled={phone.replace(/\D/g, '').length < 10}
-              >
-                {t('common.next')}
-              </Button>
+              {notRegistered ? (
+                <div className="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{t('auth.phoneNotRegistered')}</p>
+                  <Button
+                    type="button"
+                    fullWidth
+                    size="lg"
+                    onClick={() => navigate(`/register?phone=${phone.replace(/\D/g, '')}`)}
+                  >
+                    {t('auth.createAccount')}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="submit"
+                  fullWidth
+                  size="lg"
+                  isLoading={checking}
+                  disabled={phone.replace(/\D/g, '').length < 10}
+                >
+                  {t('common.next')}
+                </Button>
+              )}
             </form>
           ) : (
             <div className="space-y-6">

@@ -100,7 +100,8 @@
     "setupPin": "Set Up PIN",
     "pinDescription": "Create a 4-digit PIN to secure your account. You'll use this to log in.",
     "haveAccount": "Already have an account?",
-    "newHere": "New to Milkmen?"
+    "newHere": "New to Milkmen?",
+    "phoneNotRegistered": "No account with this number. Create an account to start using Milkmen."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -114,7 +115,8 @@
     "noActivity": "No activity yet today",
     "viewAll": "View All",
     "toFarmers": "To farmers",
-    "welcome": "Welcome back"
+    "welcome": "Welcome back",
+    "milkLeft": "Left: {{value}}"
   },
   "farmer": {
     "title": "Farmers",

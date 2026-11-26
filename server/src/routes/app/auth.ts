@@ -43,6 +43,51 @@ function generateTokens(userId: string, businessId: string) {
   return { token, refreshToken }
 }
 
+// The login screen asks whether a number has an account before the PIN step, so new people are
+// sent to Create Account. Limited per address so the list of numbers can't be scraped.
+const CHECK_LIMIT = 30
+const CHECK_WINDOW_MS = 15 * 60 * 1000
+const checkHits = new Map<string, { count: number; start: number }>()
+
+function tooManyChecks(req: import('express').Request): boolean {
+  const forwarded = req.headers['x-forwarded-for']
+  const key = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'
+  const now = Date.now()
+  if (checkHits.size > 10_000) {
+    for (const [k, v] of checkHits) if (now - v.start > CHECK_WINDOW_MS) checkHits.delete(k)
+  }
+  const hit = checkHits.get(key)
+  if (!hit || now - hit.start > CHECK_WINDOW_MS) {
+    checkHits.set(key, { count: 1, start: now })
+    return false
+  }
+  hit.count += 1
+  return hit.count > CHECK_LIMIT
+}
+
+const checkPhoneSchema = z.object({ phone: z.string().min(10).max(15) })
+
+// POST /api/auth/check-phone - { exists } for an active login with this phone number
+router.post('/check-phone', async (req, res) => {
+  try {
+    if (tooManyChecks(req)) {
+      return res.status(429).json({ success: false, error: 'Too many requests. Please try again later.' })
+    }
+    const validation = checkPhoneSchema.safeParse(req.body ?? {})
+    if (!validation.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input' })
+    }
+    const user = await prisma.user.findFirst({
+      where: { phone: validation.data.phone, isActive: true },
+      select: { id: true }
+    })
+    return res.json({ success: true, data: { exists: !!user } })
+  } catch (error) {
+    console.error('Check phone error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to check phone number' })
+  }
+})
+
 // POST /api/auth/register - Register new business
 router.post('/register', async (req, res) => {
   try {

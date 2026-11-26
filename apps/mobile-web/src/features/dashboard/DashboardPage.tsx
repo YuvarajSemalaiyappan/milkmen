@@ -47,6 +47,10 @@ export function DashboardPage() {
   const pmCollection = calcShiftTotals(todayCollections, 'EVENING')
   const amDelivery = calcShiftTotals(todayDeliveries, 'MORNING')
   const pmDelivery = calcShiftTotals(todayDeliveries, 'EVENING')
+  // Milk left per shift: collected minus delivered (negative = sold more than collected)
+  const amLeft = amCollection.liters - amDelivery.liters
+  const pmLeft = pmCollection.liters - pmDelivery.liters
+  const leftClass = (v: number) => v < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
 
   // Get recent activity (combine collections and deliveries)
   const recentActivity = [
@@ -232,9 +236,15 @@ export function DashboardPage() {
                     <span className="text-gray-500 dark:text-gray-400">{t('common.morning')}</span>
                     <span className="font-medium text-gray-900 dark:text-white">{amDelivery.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(amDelivery.amount)}</span>
                   </div>
+                  <div className={`flex justify-end text-xs font-semibold -mt-1 ${leftClass(amLeft)}`}>
+                    {t('dashboard.milkLeft', { value: `${amLeft.toFixed(1)}${t('common.liter')}` })}
+                  </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500 dark:text-gray-400">{t('common.evening')}</span>
                     <span className="font-medium text-gray-900 dark:text-white">{pmDelivery.liters.toFixed(1)}{t('common.liter')} &middot; {formatCurrency(pmDelivery.amount)}</span>
+                  </div>
+                  <div className={`flex justify-end text-xs font-semibold -mt-1 ${leftClass(pmLeft)}`}>
+                    {t('dashboard.milkLeft', { value: `${pmLeft.toFixed(1)}${t('common.liter')}` })}
                   </div>
                   <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 flex justify-between text-sm font-bold">
                     <span className="text-gray-700 dark:text-gray-300">{t('common.total')}</span>
