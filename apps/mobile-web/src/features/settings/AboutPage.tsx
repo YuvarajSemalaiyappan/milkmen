@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { Info, Heart, Code, Globe, Mail, ExternalLink, Shield } from 'lucide-react'
+import { Info, Heart, Code, Globe, Mail, ExternalLink, Shield, FileText } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card } from '@/components/ui'
 import { SUPPORT_EMAIL, WEBSITE } from '@/utils/contact'
@@ -102,6 +102,16 @@ export function AboutPage() {
               <div className="flex items-center gap-3">
                 <Shield className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                 <span className="text-gray-700 dark:text-gray-200">{t('account.privacy')}</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </Link>
+            <Link
+              to="/terms"
+              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <FileText className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                <span className="text-gray-700 dark:text-gray-200">{t('account.terms')}</span>
               </div>
               <ExternalLink className="w-4 h-4 text-gray-400" />
             </Link>

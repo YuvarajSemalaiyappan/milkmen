@@ -49,7 +49,7 @@ import {
 } from '@/features/areas'
 import { MorePage } from '@/features/more'
 import { LoginPage, RegisterPage } from '@/features/auth'
-import { PrivacyPolicyPage, PublicDeleteAccountPage } from '@/features/legal'
+import { PrivacyPolicyPage, PublicDeleteAccountPage, TermsPage } from '@/features/legal'
 
 // Custom history + subscriber registry. We bypass BrowserRouter's internal
 // subscription (which was failing to fire for navigations between protected
@@ -215,6 +215,7 @@ export function AppRoutes() {
       <Routes>
         {/* Open to everyone, signed in or not (linked from the Play Store listing) */}
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route path="/delete-account" element={<PublicDeleteAccountPage />} />
 
         <Route element={<PublicRoute />}>

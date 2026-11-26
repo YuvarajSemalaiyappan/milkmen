@@ -574,6 +574,7 @@
     "withdrawn": "Request withdrawn",
     "contact": "Questions? Email {{email}}",
     "privacy": "Privacy policy",
+    "terms": "Terms of service",
     "publicTitle": "Delete your Milkmen account",
     "publicIntro": "Use this form to ask us to delete your Milkmen account and its data. To make sure it's you, we will call or message the phone number you give before deleting anything.",
     "publicSignedIn": "You can also ask from the app: Settings → Delete account.",
