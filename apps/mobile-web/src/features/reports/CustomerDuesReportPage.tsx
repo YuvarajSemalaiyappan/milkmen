@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { UserCircle, ChevronRight, Calendar, MessageCircle, MessageSquare } from 'lucide-react'
+import { UserCircle, ChevronRight, Calendar, MessageCircle, MessageSquare, Loader2 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Badge, Input } from '@/components/ui'
+import { Card, Badge, Input, InlineLoader } from '@/components/ui'
 import { EmptyState, RouteFilter } from '@/components/common'
 import api, { reportsApi } from '@/services/api'
 import { useRouteStore } from '@/store'
@@ -52,6 +52,8 @@ export function CustomerDuesReportPage() {
   const selectedAreaId = useRouteStore((state) => state.selectedAreaId)
 
   const [month, setMonth] = useState(thisMonth)
+  // '<id>:whatsapp' or '<id>:sms' while that message's monthly split loads
+  const [preparing, setPreparing] = useState<string | null>(null)
   const [view, setView] = useState<'dues' | 'unpaid'>('dues')
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<DuesRow[]>([])
@@ -119,9 +121,15 @@ export function CustomerDuesReportPage() {
   // WhatsApp opens in a new tab: open it right away (browsers block pop-ups opened after a wait),
   // then point it at the message once the month split has loaded.
   const remind = async (channel: 'whatsapp' | 'sms', r: { id: string; name: string; phone?: string | null; balance: number }) => {
-    if (!r.phone) return
+    if (!r.phone || preparing) return
     const tab = channel === 'whatsapp' ? window.open('', '_blank') : null
-    const text = await duesReminderText(t, i18n.language, r, business)
+    setPreparing(`${r.id}:${channel}`)
+    let text: string
+    try {
+      text = await duesReminderText(t, i18n.language, r, business)
+    } finally {
+      setPreparing(null)
+    }
     if (channel === 'whatsapp') {
       const url = whatsAppUrl(r.phone, text)
       if (tab) tab.location.href = url
@@ -137,17 +145,19 @@ export function CustomerDuesReportPage() {
         <button
           type="button"
           onClick={() => remind('whatsapp', r)}
-          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+          disabled={!!preparing}
+          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 disabled:opacity-60"
         >
-          <MessageCircle className="w-3.5 h-3.5" />
+          {preparing === `${r.id}:whatsapp` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />}
           {t('reports.whatsapp')}
         </button>
         <button
           type="button"
           onClick={() => remind('sms', r)}
-          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+          disabled={!!preparing}
+          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-60"
         >
-          <MessageSquare className="w-3.5 h-3.5" />
+          {preparing === `${r.id}:sms` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
           {t('reports.sms')}
         </button>
       </div>
@@ -203,7 +213,7 @@ export function CustomerDuesReportPage() {
             </div>
 
             {isLoading ? (
-              <div className="text-center py-8 text-gray-500">{t('common.loading')}...</div>
+              <div className="text-center py-8 text-gray-500"><InlineLoader label={t('common.loading')} /></div>
             ) : shownRows.length === 0 ? (
               <EmptyState icon={<UserCircle className="w-16 h-16" />} title={t('reports.noData')} />
             ) : (
@@ -263,7 +273,7 @@ export function CustomerDuesReportPage() {
           <Card>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{t('reports.notPaidHint', { month: monthLabel })}</p>
             {!unpaid ? (
-              <div className="text-center py-8 text-gray-500">{t('common.loading')}...</div>
+              <div className="text-center py-8 text-gray-500"><InlineLoader label={t('common.loading')} /></div>
             ) : (
               <>
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">

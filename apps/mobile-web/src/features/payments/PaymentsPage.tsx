@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { MapPin, Users, ChevronRight, IndianRupee, Search, ArrowUpDown, History } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card } from '@/components/ui'
+import { Card, InlineLoader } from '@/components/ui'
 import { RouteFilter } from '@/components/common'
 import { useRouteStore } from '@/store'
 import { routesApi } from '@/services/api'
@@ -174,7 +174,7 @@ export function PaymentsPage() {
           </div>
         ) : isLoading ? (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}
+            <InlineLoader label={t('common.loading')} />
           </div>
         ) : recipientType === 'farmer' ? (
           filteredFarmers.length === 0 ? (

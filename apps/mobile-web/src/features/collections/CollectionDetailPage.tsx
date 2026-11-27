@@ -15,7 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Input, Card, Badge } from '@/components/ui'
+import { Button, Input, Card, Badge, InlineLoader } from '@/components/ui'
 import { useCollections, useFarmers } from '@/hooks'
 import { collectionsApi } from '@/services/api'
 import { formatCurrency, formatDate, getToday } from '@/utils'
@@ -131,7 +131,7 @@ export function CollectionDetailPage() {
     return (
       <AppShell title={t('collection.editCollection')} showBack>
         <div className="p-4 text-center text-gray-500">
-          {t('common.loading')}...
+          <InlineLoader label={t('common.loading')} />
         </div>
       </AppShell>
     )

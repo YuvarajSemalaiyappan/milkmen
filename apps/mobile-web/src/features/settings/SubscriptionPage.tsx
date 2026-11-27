@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Crown, Calendar, Clock, AlertTriangle, Phone } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card } from '@/components/ui'
+import { Card, InlineLoader } from '@/components/ui'
 import { useAuthStore } from '@/store'
 import { subscriptionApi } from '@/services/api'
 import type { SubscriptionPlan } from '@/types'
@@ -86,7 +86,7 @@ export function SubscriptionPage() {
       <div className="px-4 pt-5 pb-4 space-y-4">
         {loading ? (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            {t('common.loading')}
+            <InlineLoader label={t('common.loading')} />
           </div>
         ) : (
           <>

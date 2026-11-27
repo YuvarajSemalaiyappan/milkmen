@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { DollarSign, Plus, Trash2, Edit2, Save, X, TrendingUp } from 'lucide-react'
+import { DollarSign, Plus, Trash2, Edit2, Save, X, TrendingUp, Loader2 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Button, Input } from '@/components/ui'
+import { Card, Button, Input, InlineLoader } from '@/components/ui'
 import { useAuthStore, selectCanEditRates } from '@/store'
 import { api } from '@/services/api'
 import { formatCurrency } from '@/utils'
@@ -17,6 +17,7 @@ export function RateSettingsPage() {
   const [isAddingRate, setIsAddingRate] = useState(false)
   const [editingRate, setEditingRate] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -134,12 +135,15 @@ export function RateSettingsPage() {
     setError('')
     if (!confirm(t('settings.confirmDeleteRate'))) return
 
+    setDeletingId(rateId)
     try {
       await api.delete<ApiResponse<void>>(`/rates/${rateId}`)
       setRates(rates.filter(r => r.id !== rateId))
       setSuccess(t('settings.rateDeleted'))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('common.error'))
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -248,7 +252,7 @@ export function RateSettingsPage() {
                 <Button
                   className="flex-1"
                   onClick={handleAddRate}
-                  disabled={isSaving}
+                  isLoading={isSaving}
                 >
                   {isSaving ? t('common.loading') : t('common.add')}
                 </Button>
@@ -260,7 +264,7 @@ export function RateSettingsPage() {
         {/* Rate Slabs List */}
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}
+            <InlineLoader label={t('common.loading')} />
           </div>
         ) : rates.length === 0 ? (
           <Card className="text-center py-8">
@@ -323,7 +327,7 @@ export function RateSettingsPage() {
                       <Button
                         size="sm"
                         onClick={() => handleUpdateRate(rate.id)}
-                        disabled={isSaving}
+                        isLoading={isSaving}
                         leftIcon={<Save className="w-4 h-4" />}
                       >
                         {isSaving ? t('common.loading') : t('common.save')}
@@ -357,8 +361,9 @@ export function RateSettingsPage() {
                         <button
                           className="p-2 hover:bg-red-50 rounded-lg transition-colors"
                           onClick={() => handleDeleteRate(rate.id)}
+                          disabled={!!deletingId}
                         >
-                          <Trash2 className="w-4 h-4 text-red-500" />
+                          {deletingId === rate.id ? <Loader2 className="w-4 h-4 text-red-500 animate-spin" /> : <Trash2 className="w-4 h-4 text-red-500" />}
                         </button>
                       </div>
                     )}

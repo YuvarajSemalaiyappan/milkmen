@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { CarryOver } from '@/components/common'
-import { Button, Input, Card, Badge } from '@/components/ui'
+import { Button, Input, Card, Badge, InlineLoader } from '@/components/ui'
 import { useCustomers, useDeliveries, usePayments, useRoutes, useAreas, usePaymentSummary } from '@/hooks'
 import { routesApi } from '@/services/api'
 import { formatCurrency, formatDate, isEntryPaid } from '@/utils'
@@ -190,7 +190,7 @@ export function CustomerDetailPage() {
     return (
       <AppShell title={t('customer.details')} showBack>
         <div className="p-4 text-center text-gray-500">
-          {t('common.loading')}...
+          <InlineLoader label={t('common.loading')} />
         </div>
       </AppShell>
     )

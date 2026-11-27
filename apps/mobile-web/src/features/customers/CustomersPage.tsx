@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, Search, UserCircle, Phone, MapPin, ChevronRight, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Input, Card, Badge } from '@/components/ui'
+import { Button, Input, Card, Badge, InlineLoader } from '@/components/ui'
 import { EmptyState, RouteFilter } from '@/components/common'
 import { useCustomers, useRouteScope } from '@/hooks'
 import { useRouteStore } from '@/store'
@@ -115,7 +115,7 @@ export function CustomersPage() {
         {/* Loading State */}
         {isLoading && (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            {t('common.loading')}...
+            <InlineLoader label={t('common.loading')} />
           </div>
         )}
 

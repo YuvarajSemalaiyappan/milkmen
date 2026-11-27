@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { CarryOver } from '@/components/common'
-import { Button, Input, Card, Badge } from '@/components/ui'
+import { Button, Input, Card, Badge, InlineLoader } from '@/components/ui'
 import { useFarmers, useCollections, usePayments, useRoutes, useAreas, usePaymentSummary } from '@/hooks'
 import { routesApi } from '@/services/api'
 import { formatCurrency, formatDate, isEntryPaid } from '@/utils'
@@ -198,7 +198,7 @@ export function FarmerDetailPage() {
     return (
       <AppShell title={t('farmer.details')} showBack>
         <div className="p-4 text-center text-gray-500">
-          {t('common.loading')}...
+          <InlineLoader label={t('common.loading')} />
         </div>
       </AppShell>
     )

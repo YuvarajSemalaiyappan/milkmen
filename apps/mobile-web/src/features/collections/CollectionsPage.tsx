@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Phone, MapPin, ChevronRight } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card } from '@/components/ui'
+import { Card, InlineLoader } from '@/components/ui'
 import { ShiftToggle, RouteFilter, SortableList, ShiftBadge } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
 import { useSortOrder } from '@/hooks/useSortOrder'
@@ -92,7 +92,7 @@ export function CollectionsPage() {
         <RouteFilter />
 
         {isLoading ? (
-          <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
+          <div className="text-center py-8 text-gray-500"><InlineLoader label={t('common.loading')} /></div>
         ) : (
           <>
             {/* Still to collect (drag to reorder) */}

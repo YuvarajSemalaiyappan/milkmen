@@ -38,6 +38,8 @@ export function AddCollectionPage() {
   const [selectedDate, setSelectedDate] = useState(getToday())
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Which save button was tapped, so only that one spins
+  const [submitTarget, setSubmitTarget] = useState<'save' | 'pay'>('save')
 
   // Check if farmer is pre-selected
 
@@ -330,9 +332,12 @@ export function AddCollectionPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <Button
-                  onClick={() => handleSubmit()}
-                  isLoading={isSubmitting}
-                  disabled={!quantity || parseFloat(quantity) <= 0}
+                  onClick={() => {
+                    setSubmitTarget('save')
+                    handleSubmit()
+                  }}
+                  isLoading={isSubmitting && submitTarget === 'save'}
+                  disabled={isSubmitting || !quantity || parseFloat(quantity) <= 0}
                   size="lg"
                   className="px-8"
                 >
@@ -340,9 +345,12 @@ export function AddCollectionPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => handleSubmit(`/payments/add?type=farmer&farmerId=${selectedFarmer.id}&from=/collect`)}
-                  isLoading={isSubmitting}
-                  disabled={!quantity || parseFloat(quantity) <= 0}
+                  onClick={() => {
+                    setSubmitTarget('pay')
+                    handleSubmit(`/payments/add?type=farmer&farmerId=${selectedFarmer.id}&from=/collect`)
+                  }}
+                  isLoading={isSubmitting && submitTarget === 'pay'}
+                  disabled={isSubmitting || !quantity || parseFloat(quantity) <= 0}
                   size="sm"
                 >
                   {t('payment.saveAndPay')}

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Truck, Calendar, UserCircle, ChevronRight, Filter, Download } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Input, Badge } from '@/components/ui'
+import { Card, Input, Badge, InlineLoader } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useCustomers } from '@/hooks'
 import { reportsApi, deliveriesApi } from '@/services/api'
@@ -266,7 +266,7 @@ export function DeliveriesReportPage() {
         {/* Loading */}
         {isLoading && (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}...
+            <InlineLoader label={t('common.loading')} />
           </div>
         )}
 

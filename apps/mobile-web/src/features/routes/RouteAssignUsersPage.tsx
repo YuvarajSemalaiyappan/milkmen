@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Check } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Card } from '@/components/ui'
+import { Button, Card, InlineLoader } from '@/components/ui'
 import { useRoutes } from '@/hooks'
 import { api } from '@/services/api'
 import type { ApiResponse, User } from '@/types'
@@ -84,7 +84,7 @@ export function RouteAssignUsersPage() {
       <div className="px-4 pt-5 pb-4 space-y-4">
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}...
+            <InlineLoader label={t('common.loading')} />
           </div>
         ) : (
           <>

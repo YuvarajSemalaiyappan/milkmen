@@ -12,7 +12,7 @@ import {
   Plus
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Card, Badge } from '@/components/ui'
+import { Button, Card, Badge, InlineLoader } from '@/components/ui'
 import { ShiftToggle, EmptyState } from '@/components/common'
 import { useCustomers, useDeliveries } from '@/hooks'
 import { useAppStore } from '@/store'
@@ -35,6 +35,8 @@ export function TodayDeliveriesPage() {
   const [deliveryItems, setDeliveryItems] = useState<DeliveryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  // Which button on that row was tapped, so only it spins
+  const [processingStatus, setProcessingStatus] = useState<'DELIVERED' | 'SKIPPED' | null>(null)
 
 
   const loadDeliveryItems = useCallback(async () => {
@@ -82,7 +84,9 @@ export function TodayDeliveriesPage() {
       ? item.customer.subscriptionQtyAM
       : item.customer.subscriptionQtyPM
     if (!subscriptionQty) return
+    if (processingId) return
     setProcessingId(item.customer.id)
+    setProcessingStatus('DELIVERED')
 
     try {
       if (item.delivery) {
@@ -102,11 +106,14 @@ export function TodayDeliveriesPage() {
       }
     } finally {
       setProcessingId(null)
+      setProcessingStatus(null)
     }
   }
 
   const handleMarkSkipped = async (item: DeliveryItem) => {
+    if (processingId) return
     setProcessingId(item.customer.id)
+    setProcessingStatus('SKIPPED')
 
     try {
       if (item.delivery) {
@@ -127,6 +134,7 @@ export function TodayDeliveriesPage() {
       }
     } finally {
       setProcessingId(null)
+      setProcessingStatus(null)
     }
   }
 
@@ -182,7 +190,7 @@ export function TodayDeliveriesPage() {
         {/* Loading State */}
         {isLoading && (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}...
+            <InlineLoader label={t('common.loading')} />
           </div>
         )}
 
@@ -286,7 +294,8 @@ export function TodayDeliveriesPage() {
                     <div className="flex gap-2">
                       <Button
                         onClick={() => handleMarkDelivered(item)}
-                        isLoading={processingId === item.customer.id}
+                        isLoading={processingId === item.customer.id && processingStatus === 'DELIVERED'}
+                        disabled={!!processingId}
                         fullWidth
                         leftIcon={<Check className="w-4 h-4" />}
                       >
@@ -295,7 +304,8 @@ export function TodayDeliveriesPage() {
                       <Button
                         variant="outline"
                         onClick={() => handleMarkSkipped(item)}
-                        disabled={processingId === item.customer.id}
+                        isLoading={processingId === item.customer.id && processingStatus === 'SKIPPED'}
+                        disabled={!!processingId}
                         leftIcon={<X className="w-4 h-4" />}
                       >
                         {t('delivery.skip')}

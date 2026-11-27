@@ -12,10 +12,11 @@ import {
   UserPlus,
   ChevronRight,
   Phone,
-  X
+  X,
+  Loader2
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Input, Card, Badge } from '@/components/ui'
+import { Button, Input, Card, Badge, InlineLoader } from '@/components/ui'
 import { useRoutes } from '@/hooks'
 import { useAuthStore } from '@/store'
 import { formatCurrency } from '@/utils'
@@ -70,6 +71,7 @@ export function RouteDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   const {
     register,
@@ -127,28 +129,43 @@ export function RouteDetailPage() {
   }
 
   const handleRemoveUser = async (userId: string) => {
-    if (!id) return
-    await removeUser(id, userId)
-    loadRoute()
+    if (!id || removingId) return
+    setRemovingId(userId)
+    try {
+      await removeUser(id, userId)
+      await loadRoute()
+    } finally {
+      setRemovingId(null)
+    }
   }
 
   const handleRemoveFarmer = async (farmerId: string) => {
-    if (!id) return
-    await removeFarmer(id, farmerId)
-    loadRoute()
+    if (!id || removingId) return
+    setRemovingId(farmerId)
+    try {
+      await removeFarmer(id, farmerId)
+      await loadRoute()
+    } finally {
+      setRemovingId(null)
+    }
   }
 
   const handleRemoveCustomer = async (customerId: string) => {
-    if (!id) return
-    await removeCustomer(id, customerId)
-    loadRoute()
+    if (!id || removingId) return
+    setRemovingId(customerId)
+    try {
+      await removeCustomer(id, customerId)
+      await loadRoute()
+    } finally {
+      setRemovingId(null)
+    }
   }
 
   if (!route) {
     return (
       <AppShell title={t('routes.details')} showBack>
         <div className="p-4 text-center text-gray-500">
-          {t('common.loading')}...
+          <InlineLoader label={t('common.loading')} />
         </div>
       </AppShell>
     )
@@ -297,9 +314,10 @@ export function RouteDetailPage() {
                         {isOwner && ur.user.role !== 'OWNER' && (
                           <button
                             onClick={() => handleRemoveUser(ur.user.id)}
-                            className="p-1 text-gray-400 hover:text-red-500"
+                            disabled={!!removingId}
+                            className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-50"
                           >
-                            <X className="w-4 h-4" />
+                            {removingId === ur.user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                           </button>
                         )}
                       </div>
@@ -356,9 +374,10 @@ export function RouteDetailPage() {
                         {isManager && (
                           <button
                             onClick={() => handleRemoveFarmer(rf.farmer.id)}
-                            className="p-1 text-gray-400 hover:text-red-500"
+                            disabled={!!removingId}
+                            className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-50"
                           >
-                            <X className="w-4 h-4" />
+                            {removingId === rf.farmer.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                           </button>
                         )}
                         <ChevronRight
@@ -419,9 +438,10 @@ export function RouteDetailPage() {
                         {isManager && (
                           <button
                             onClick={() => handleRemoveCustomer(rc.customer.id)}
-                            className="p-1 text-gray-400 hover:text-red-500"
+                            disabled={!!removingId}
+                            className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-50"
                           >
-                            <X className="w-4 h-4" />
+                            {removingId === rc.customer.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                           </button>
                         )}
                         <ChevronRight

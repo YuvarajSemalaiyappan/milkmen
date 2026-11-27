@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Milk, Phone } from 'lucide-react'
-import { Button, Input, Card } from '@/components/ui'
+import { Button, Input, Card, InlineLoader } from '@/components/ui'
 import { PinPad } from '@/components/common'
 import { useAuthStore, useAppStore } from '@/store'
 
@@ -58,6 +58,7 @@ export function LoginPage() {
   }
 
   const handlePinComplete = async (enteredPin: string) => {
+    if (isLoading) return
     setIsLoading(true)
     setError('')
 
@@ -187,13 +188,10 @@ export function LoginPage() {
                 onChange={setPin}
                 onComplete={handlePinComplete}
                 length={4}
+                disabled={isLoading}
               />
 
-              {isLoading && (
-                <div className="text-center text-gray-500 dark:text-gray-400">
-                  {t('common.loading')}
-                </div>
-              )}
+              {isLoading && <InlineLoader label={t('common.loading')} />}
 
               <button
                 onClick={() => {/* TODO: Implement forgot PIN */}}

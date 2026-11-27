@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { IndianRupee, Trash2, Calendar, Sun, Moon } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Button, Input } from '@/components/ui'
+import { Card, Button, Input, InlineLoader } from '@/components/ui'
 import { useFarmers, useCustomers, usePayments } from '@/hooks'
 import { formatCurrency, formatDateDMY, getToday, toLocalDateString } from '@/utils'
 import { paymentsApi } from '@/services/api'
@@ -136,7 +136,7 @@ export function PaymentHistoryPage() {
           </>
         )}
         {isLoading ? (
-          <div className="text-center py-8 text-gray-500">{t('common.loading')}...</div>
+          <div className="text-center py-8 text-gray-500"><InlineLoader label={t('common.loading')} /></div>
         ) : payments.length === 0 ? (
           <div className="text-center py-12">
             <IndianRupee className="w-12 h-12 text-gray-300 mx-auto mb-3" />

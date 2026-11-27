@@ -8,7 +8,7 @@ import {
   Percent
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Input } from '@/components/ui'
+import { Card, Input, InlineLoader } from '@/components/ui'
 import { reportsApi } from '@/services/api'
 import { formatCurrency, formatDate, getToday, toLocalDateString } from '@/utils'
 import type { ApiResponse } from '@/types'
@@ -117,7 +117,7 @@ export function ProfitLossReportPage() {
 
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}...
+            <InlineLoader label={t('common.loading')} />
           </div>
         ) : (
           <>

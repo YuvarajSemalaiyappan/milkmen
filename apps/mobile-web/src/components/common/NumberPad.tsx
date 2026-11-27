@@ -202,6 +202,8 @@ export interface PinPadProps {
   onComplete?: (pin: string) => void
   length?: number
   className?: string
+  /** Ignore taps while the PIN is being checked */
+  disabled?: boolean
 }
 
 export function PinPad({
@@ -209,9 +211,11 @@ export function PinPad({
   onChange,
   onComplete,
   length = 4,
-  className
+  className,
+  disabled = false
 }: PinPadProps) {
   const handleKeyPress = (key: string) => {
+    if (disabled) return
     if (key === 'backspace') {
       onChange(value.slice(0, -1))
       return
@@ -256,12 +260,13 @@ export function PinPad({
             key={index}
             type="button"
             onClick={() => key && handleKeyPress(key)}
-            disabled={!key}
+            disabled={!key || disabled}
             className={clsx(
               'flex items-center justify-center',
               'min-h-[64px] rounded-xl font-semibold text-2xl',
               'transition-all duration-150',
               'active:scale-95 transform',
+              disabled && 'opacity-50 cursor-not-allowed',
               !key
                 ? 'invisible'
                 : key === 'backspace'

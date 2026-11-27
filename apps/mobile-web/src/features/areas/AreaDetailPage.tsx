@@ -13,7 +13,7 @@ import {
   Phone
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Input, Card } from '@/components/ui'
+import { Button, Input, Card, InlineLoader } from '@/components/ui'
 import { useAreas } from '@/hooks'
 import { useAuthStore } from '@/store'
 import { routesApi } from '@/services/api'
@@ -138,7 +138,7 @@ export function AreaDetailPage() {
     return (
       <AppShell title={t('areas.title')} showBack>
         <div className="p-4 text-center text-gray-500">
-          {t('common.loading')}
+          <InlineLoader label={t('common.loading')} />
         </div>
       </AppShell>
     )

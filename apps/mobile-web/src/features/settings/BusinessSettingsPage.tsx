@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Building2, Phone, MapPin, Save } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Button, Input } from '@/components/ui'
+import { Card, Button, Input, InlineLoader } from '@/components/ui'
 import { useAuthStore, selectIsOwner, selectIsManager } from '@/store'
 import { api } from '@/services/api'
 import type { ApiResponse, Business } from '@/types'
@@ -81,7 +81,7 @@ export function BusinessSettingsPage() {
     return (
       <AppShell title={t('settings.business')} showBack>
         <div className="p-4 text-center text-gray-500">
-          {t('common.loading')}
+          <InlineLoader label={t('common.loading')} />
         </div>
       </AppShell>
     )
@@ -166,7 +166,7 @@ export function BusinessSettingsPage() {
                 <Button
                   className="flex-1"
                   onClick={handleSave}
-                  disabled={isSaving}
+                  isLoading={isSaving}
                   leftIcon={<Save className="w-4 h-4" />}
                 >
                   {isSaving ? t('common.loading') : t('common.save')}

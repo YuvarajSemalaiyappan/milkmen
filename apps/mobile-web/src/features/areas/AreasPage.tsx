@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, MapPin, Users } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Card } from '@/components/ui'
+import { Button, Card, InlineLoader } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useAreas } from '@/hooks'
 import { useAuthStore } from '@/store'
@@ -35,7 +35,7 @@ export function AreasPage() {
       <div className="px-4 pt-5 pb-4 space-y-4">
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}
+            <InlineLoader label={t('common.loading')} />
           </div>
         ) : areas.length === 0 ? (
           <EmptyState

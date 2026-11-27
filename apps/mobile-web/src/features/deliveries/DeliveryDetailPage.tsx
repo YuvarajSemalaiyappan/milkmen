@@ -18,7 +18,7 @@ import {
   MinusCircle
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Input, Card, Badge } from '@/components/ui'
+import { Button, Input, Card, Badge, InlineLoader } from '@/components/ui'
 import { useDeliveries, useCustomers } from '@/hooks'
 import { deliveriesApi } from '@/services/api'
 import { formatCurrency, formatDate, getToday } from '@/utils'
@@ -147,7 +147,7 @@ export function DeliveryDetailPage() {
     return (
       <AppShell title={t('delivery.editDelivery')} showBack>
         <div className="p-4 text-center text-gray-500">
-          {t('common.loading')}...
+          <InlineLoader label={t('common.loading')} />
         </div>
       </AppShell>
     )

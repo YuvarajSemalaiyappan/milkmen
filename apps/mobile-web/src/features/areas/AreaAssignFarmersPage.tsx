@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Check, Search } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Input, Card } from '@/components/ui'
+import { Button, Input, Card, InlineLoader } from '@/components/ui'
 import { routesApi } from '@/services/api'
 import type { ApiResponse } from '@/types'
 
@@ -111,7 +111,7 @@ export function AreaAssignFarmersPage() {
       <div className="px-4 pt-5 pb-4 space-y-4">
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}
+            <InlineLoader label={t('common.loading')} />
           </div>
         ) : (
           <>

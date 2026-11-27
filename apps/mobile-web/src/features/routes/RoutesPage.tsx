@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, MapPin, Users, ChevronRight } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Button, Card, Badge } from '@/components/ui'
+import { Button, Card, Badge, InlineLoader } from '@/components/ui'
 import { EmptyState } from '@/components/common'
 import { useRoutes } from '@/hooks'
 
@@ -30,7 +30,7 @@ export function RoutesPage() {
       <div className="px-4 pt-5 pb-4 space-y-4">
         {isLoading && (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            {t('common.loading')}...
+            <InlineLoader label={t('common.loading')} />
           </div>
         )}
 

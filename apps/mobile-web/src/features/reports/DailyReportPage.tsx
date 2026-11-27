@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Calendar, TrendingUp, TrendingDown, IndianRupee, Package, ChevronLeft, ChevronRight } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Button, Badge } from '@/components/ui'
+import { Card, Button, Badge, InlineLoader } from '@/components/ui'
 import { useCollections, useDeliveries, usePayments } from '@/hooks'
 import { formatCurrency, formatDate, getToday, toLocalDateString } from '@/utils'
 
@@ -122,7 +122,7 @@ export function DailyReportPage() {
 
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}...
+            <InlineLoader label={t('common.loading')} />
           </div>
         ) : summary ? (
           <>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Users, ChevronRight, Calendar } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Badge, Input } from '@/components/ui'
+import { Card, Badge, Input, InlineLoader } from '@/components/ui'
 import { EmptyState, RouteFilter } from '@/components/common'
 import { reportsApi } from '@/services/api'
 import { useRouteStore } from '@/store'
@@ -115,7 +115,7 @@ export function FarmerDuesReportPage() {
         {/* Loading */}
         {isLoading && (
           <div className="text-center py-8 text-gray-500">
-            {t('common.loading')}...
+            <InlineLoader label={t('common.loading')} />
           </div>
         )}
 

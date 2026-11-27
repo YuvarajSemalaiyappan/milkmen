@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Users, Plus, Phone, Shield, MoreVertical, Key, Trash2, UserX, UserCheck } from 'lucide-react'
+import { Users, Plus, Phone, Shield, MoreVertical, Key, Trash2, UserX, UserCheck, Loader2 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { Card, Button, Input, Badge } from '@/components/ui'
+import { Card, Button, Input, Badge, InlineLoader } from '@/components/ui'
 import { useAuthStore, selectIsOwner } from '@/store'
 import { api } from '@/services/api'
 import type { ApiResponse, User, Role } from '@/types'
@@ -20,6 +20,17 @@ export function StaffManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isAddingStaff, setIsAddingStaff] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  // Which menu action is running (e.g. 'delete:<id>'): it spins, the others wait
+  const [busyAction, setBusyAction] = useState<string | null>(null)
+  const runAction = async (key: string, fn: () => Promise<void>) => {
+    if (busyAction) return
+    setBusyAction(key)
+    try {
+      await fn()
+    } finally {
+      setBusyAction(null)
+    }
+  }
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
@@ -95,42 +106,48 @@ export function StaffManagementPage() {
   const handleResetPin = async (staffId: string) => {
     setError('')
     setSuccess('')
-    try {
-      await api.post<ApiResponse<{ tempPin: string }>>(`/settings/staff/${staffId}/reset-pin`)
-      setSuccess(t('settings.pinResetSuccess'))
-      setActiveMenu(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.error'))
-    }
+    await runAction(`pin:${staffId}`, async () => {
+      try {
+        await api.post<ApiResponse<{ tempPin: string }>>(`/settings/staff/${staffId}/reset-pin`)
+        setSuccess(t('settings.pinResetSuccess'))
+        setActiveMenu(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t('common.error'))
+      }
+    })
   }
 
   const handleToggleActive = async (staffMember: StaffMember) => {
     setError('')
-    try {
-      await api.put<ApiResponse<StaffMember>>(`/settings/staff/${staffMember.id}`, {
-        isActive: !staffMember.isActive
-      })
-      setStaff(staff.map(s =>
-        s.id === staffMember.id ? { ...s, isActive: !s.isActive } : s
-      ))
-      setActiveMenu(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.error'))
-    }
+    await runAction(`active:${staffMember.id}`, async () => {
+      try {
+        await api.put<ApiResponse<StaffMember>>(`/settings/staff/${staffMember.id}`, {
+          isActive: !staffMember.isActive
+        })
+        setStaff(staff.map(s =>
+          s.id === staffMember.id ? { ...s, isActive: !s.isActive } : s
+        ))
+        setActiveMenu(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t('common.error'))
+      }
+    })
   }
 
   const handleDeleteStaff = async (staffId: string) => {
     setError('')
     if (!confirm(t('settings.confirmDeleteStaff'))) return
 
-    try {
-      await api.delete<ApiResponse<void>>(`/settings/staff/${staffId}`)
-      setStaff(staff.filter(s => s.id !== staffId))
-      setSuccess(t('settings.staffDeleted'))
-      setActiveMenu(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.error'))
-    }
+    await runAction(`delete:${staffId}`, async () => {
+      try {
+        await api.delete<ApiResponse<void>>(`/settings/staff/${staffId}`)
+        setStaff(staff.filter(s => s.id !== staffId))
+        setSuccess(t('settings.staffDeleted'))
+        setActiveMenu(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t('common.error'))
+      }
+    })
   }
 
   const getRoleLabel = (role: Role) => {
@@ -272,7 +289,7 @@ export function StaffManagementPage() {
                 <Button
                   className="flex-1"
                   onClick={handleAddStaff}
-                  disabled={isSaving}
+                  isLoading={isSaving}
                 >
                   {isSaving ? t('common.loading') : t('common.add')}
                 </Button>
@@ -284,7 +301,7 @@ export function StaffManagementPage() {
         {/* Staff List */}
         {isLoading ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            {t('common.loading')}
+            <InlineLoader label={t('common.loading')} />
           </div>
         ) : staff.length === 0 ? (
           <Card className="text-center py-8">
@@ -345,15 +362,22 @@ export function StaffManagementPage() {
                               <button
                                 className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
                                 onClick={() => handleResetPin(member.id)}
+                                disabled={!!busyAction}
                               >
-                                <Key className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                {busyAction === `pin:${member.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
                                 <span>{t('settings.resetPin')}</span>
                               </button>
                               <button
                                 className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
                                 onClick={() => handleToggleActive(member)}
+                                disabled={!!busyAction}
                               >
-                                {member.isActive ? (
+                                {busyAction === `active:${member.id}` ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>{member.isActive ? t('settings.deactivate') : t('settings.activate')}</span>
+                                  </>
+                                ) : member.isActive ? (
                                   <>
                                     <UserX className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                                     <span>{t('settings.deactivate')}</span>
@@ -368,8 +392,9 @@ export function StaffManagementPage() {
                               <button
                                 className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
                                 onClick={() => handleDeleteStaff(member.id)}
+                                disabled={!!busyAction}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                {busyAction === `delete:${member.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                                 <span>{t('common.delete')}</span>
                               </button>
                             </div>
