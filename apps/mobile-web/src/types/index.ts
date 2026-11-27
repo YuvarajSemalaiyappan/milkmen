@@ -73,6 +73,8 @@ export interface Customer {
 // Collection (Purchase from Farmer)
 export interface Collection {
   id: string
+  /** Only on lists asked with paid=1: the server decides (server lib/paid.ts) */
+  isPaid?: boolean
   businessId: string
   farmerId: string
   collectedBy: string
@@ -93,6 +95,8 @@ export interface Collection {
 // Delivery (Sale to Customer)
 export interface Delivery {
   id: string
+  /** Only on lists asked with paid=1: the server decides (server lib/paid.ts) */
+  isPaid?: boolean
   businessId: string
   customerId: string
   deliveredBy: string
@@ -243,6 +247,8 @@ export interface PaymentSummary {
   unpaid: { count: number; liters: number; amount: number }
   advance: number
   pending: number
+  /** End of the latest payment period; null when nothing has been paid for */
+  paidTill: { date: string; shift: Shift } | null
 }
 
 export interface ApiResponse<T> {

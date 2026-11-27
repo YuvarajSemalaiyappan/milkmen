@@ -19,11 +19,10 @@ import {
 import { AppShell } from '@/components/layout'
 import { CarryOver } from '@/components/common'
 import { Button, Input, Card, Badge, InlineLoader } from '@/components/ui'
-import { useCustomers, useDeliveries, usePayments, useRoutes, useAreas, usePaymentSummary } from '@/hooks'
+import { useCustomers, useDeliveries, useRoutes, useAreas, usePaymentSummary } from '@/hooks'
 import { routesApi } from '@/services/api'
-import { formatCurrency, formatDate, isEntryPaid } from '@/utils'
+import { formatCurrency, formatDate } from '@/utils'
 import type { Customer, Delivery } from '@/types'
-import type { PaidPeriodPayment } from '@/utils/paymentPeriod'
 
 const customerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -44,14 +43,12 @@ export function CustomerDetailPage() {
   const navigate = useNavigate()
   const { getCustomer, updateCustomer, deleteCustomer } = useCustomers()
   const { getDeliveriesByCustomer } = useDeliveries({ skipInitialFetch: true })
-  const { getPaymentsByCustomer } = usePayments({ skipInitialFetch: true })
   const { routes } = useRoutes()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   // Unpaid over the whole history plus advance/pending, from the server. Reloads when the balance changes.
   const summary = usePaymentSummary({ customerId: id }, customer?.balance)
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
-  const [paidPayments, setPaidPayments] = useState<PaidPeriodPayment[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -100,34 +97,12 @@ export function CustomerDetailPage() {
     setDeliveries(data)
   }, [getDeliveriesByCustomer, id])
 
-  const loadPaidPeriods = useCallback(async () => {
-    if (!id) return
-    const payments = await getPaymentsByCustomer(id)
-    if (payments.length === 0) {
-      setPaidPayments([])
-      return
-    }
-
-    const withPeriod = payments
-      .filter((p) => p.periodFromDate && p.periodToDate)
-      .map((p) => ({
-        periodFromDate: p.periodFromDate,
-        periodToDate: p.periodToDate,
-        periodFromShift: p.periodFromShift,
-        periodToShift: p.periodToShift,
-        createdAt: p.createdAt
-      })) as PaidPeriodPayment[]
-
-    setPaidPayments(withPeriod)
-  }, [getPaymentsByCustomer, id])
-
   useEffect(() => {
     if (id) {
       loadCustomer()
       loadDeliveries()
-      loadPaidPeriods()
     }
-  }, [id, loadCustomer, loadDeliveries, loadPaidPeriods])
+  }, [id, loadCustomer, loadDeliveries])
 
   const onSubmit = async (data: CustomerFormData) => {
     if (!id) return
@@ -196,8 +171,8 @@ export function CustomerDetailPage() {
     )
   }
 
-  const isDeliveryPaid = (d: Delivery) =>
-    isEntryPaid(d.date, d.shift, d.createdAt, paidPayments)
+  // Paid or not is the server's answer (isPaid), never worked out here
+  const isDeliveryPaid = (d: Delivery) => !!d.isPaid
 
   const unpaidDeliveries = deliveries.filter((d) => !isDeliveryPaid(d))
   const listedUnpaidQty = unpaidDeliveries.reduce(

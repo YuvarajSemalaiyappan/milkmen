@@ -227,7 +227,8 @@ function buildQuery(params?: Record<string, string | undefined>): string {
 
 // Collections API
 export const collectionsApi = {
-  list: (params?: { date?: string; farmerId?: string; from?: string; to?: string }) =>
+  // paid: '1' adds isPaid to each row (the server decides)
+  list: (params?: { date?: string; farmerId?: string; from?: string; to?: string; paid?: '1' }) =>
     api.get(`/collections${buildQuery(params)}`),
   get: (id: string) => api.get(`/collections/${id}`),
   create: (data: {
@@ -255,7 +256,8 @@ export const collectionsApi = {
 
 // Deliveries API
 export const deliveriesApi = {
-  list: (params?: { date?: string; customerId?: string; from?: string; to?: string; shift?: string; status?: string; limit?: string }) =>
+  // paid: '1' adds isPaid to each row (the server decides)
+  list: (params?: { date?: string; customerId?: string; from?: string; to?: string; shift?: string; status?: string; limit?: string; paid?: '1' }) =>
     api.get(`/deliveries${buildQuery(params)}`),
   get: (id: string) => api.get(`/deliveries/${id}`),
   today: (shift?: string) =>
@@ -328,7 +330,7 @@ export const reportsApi = {
   // One customer's dues split by month, most recent first (adds up to the balance)
   customerPending: (id: string) => api.get(`/reports/customer-pending/${id}`),
   collections: (from: string, to: string, farmerId?: string) =>
-    api.get(`/reports/collections?from=${from}&to=${to}${farmerId ? `&farmerId=${farmerId}` : ''}`),
+    api.get(`/reports/collections?from=${from}&to=${to}&paid=1${farmerId ? `&farmerId=${farmerId}` : ''}`),
   // summaryOnly: totals and groupings without the entry rows (rows=0)
   deliveries: (from: string, to: string, customerId?: string, summaryOnly = false) =>
     api.get(`/reports/deliveries?from=${from}&to=${to}${customerId ? `&customerId=${customerId}` : ''}${summaryOnly ? '&rows=0' : ''}`),

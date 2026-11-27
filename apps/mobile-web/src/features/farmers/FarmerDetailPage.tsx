@@ -19,11 +19,10 @@ import {
 import { AppShell } from '@/components/layout'
 import { CarryOver } from '@/components/common'
 import { Button, Input, Card, Badge, InlineLoader } from '@/components/ui'
-import { useFarmers, useCollections, usePayments, useRoutes, useAreas, usePaymentSummary } from '@/hooks'
+import { useFarmers, useCollections, useRoutes, useAreas, usePaymentSummary } from '@/hooks'
 import { routesApi } from '@/services/api'
-import { formatCurrency, formatDate, isEntryPaid } from '@/utils'
+import { formatCurrency, formatDate } from '@/utils'
 import type { Farmer, Collection } from '@/types'
-import type { PaidPeriodPayment } from '@/utils/paymentPeriod'
 
 const farmerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -44,14 +43,12 @@ export function FarmerDetailPage() {
   const navigate = useNavigate()
   const { getFarmer, updateFarmer, deleteFarmer } = useFarmers()
   const { getCollectionsByFarmer } = useCollections({ skipInitialFetch: true })
-  const { getPaymentsByFarmer } = usePayments({ skipInitialFetch: true })
   const { routes } = useRoutes()
 
   const [farmer, setFarmer] = useState<Farmer | null>(null)
   // Unpaid over the whole history plus advance/pending, from the server. Reloads when the balance changes.
   const summary = usePaymentSummary({ farmerId: id }, farmer?.balance)
   const [collections, setCollections] = useState<Collection[]>([])
-  const [paidPayments, setPaidPayments] = useState<PaidPeriodPayment[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -106,34 +103,12 @@ export function FarmerDetailPage() {
     setCollections(data)
   }, [getCollectionsByFarmer, id])
 
-  const loadPaidPeriods = useCallback(async () => {
-    if (!id) return
-    const payments = await getPaymentsByFarmer(id)
-    if (payments.length === 0) {
-      setPaidPayments([])
-      return
-    }
-
-    const withPeriod = payments
-      .filter((p) => p.periodFromDate && p.periodToDate)
-      .map((p) => ({
-        periodFromDate: p.periodFromDate,
-        periodToDate: p.periodToDate,
-        periodFromShift: p.periodFromShift,
-        periodToShift: p.periodToShift,
-        createdAt: p.createdAt
-      })) as PaidPeriodPayment[]
-
-    setPaidPayments(withPeriod)
-  }, [getPaymentsByFarmer, id])
-
   useEffect(() => {
     if (id) {
       loadFarmer()
       loadCollections()
-      loadPaidPeriods()
     }
-  }, [id, loadCollections, loadFarmer, loadPaidPeriods])
+  }, [id, loadCollections, loadFarmer])
 
   const onSubmit = async (data: FarmerFormData) => {
     if (!id) return
@@ -204,8 +179,8 @@ export function FarmerDetailPage() {
     )
   }
 
-  const isCollectionPaid = (c: Collection) =>
-    isEntryPaid(c.date, c.shift, c.createdAt, paidPayments)
+  // Paid or not is the server's answer (isPaid), never worked out here
+  const isCollectionPaid = (c: Collection) => !!c.isPaid
 
   const unpaidCollections = collections.filter((c) => !isCollectionPaid(c))
   const listedUnpaidQty = unpaidCollections.reduce(

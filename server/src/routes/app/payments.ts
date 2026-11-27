@@ -5,6 +5,7 @@ import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
 import { Prisma } from '@prisma/client'
 import { lockEntrySlot } from '../../lib/duplicates.js'
 import { lockOwnedRow, NotFoundError, wantsTotal } from '../../lib/db.js'
+import { paidSql } from '../../lib/paid.js'
 
 const router = Router()
 
@@ -44,6 +45,11 @@ const createPaymentSchema = z.object({
     return defined.length === 0 || defined.length === 4
   },
   { message: 'All period fields must be provided together (periodFromDate, periodToDate, periodFromShift, periodToShift)' }
+).refine(
+  // Regular payments say which days they pay for; only advances may have no period
+  // (also a CHECK in the database: "Payment_period_required")
+  (data) => data.type.startsWith('ADVANCE_') || !!data.periodFromDate,
+  { message: 'A payment period is required (only advances may have none)' }
 ).refine(
   (data) => {
     if (!data.periodFromDate || !data.periodToDate) return true
@@ -218,13 +224,8 @@ function personSql(businessId: string, { farmerId, customerId }: Person) {
   const periodPayments = Prisma.sql`"Payment" p WHERE p."businessId" = ${businessId} AND ${personPayment}
       AND p."periodFromDate" IS NOT NULL AND p."periodToDate" IS NOT NULL
       AND p."periodFromShift" IS NOT NULL AND p."periodToShift" IS NOT NULL`
-  // An entry is paid only if a payment's period covers it AND it existed when that payment was recorded
-  const notPaid = Prisma.sql`NOT EXISTS (
-            SELECT 1 FROM ${periodPayments}
-              AND e."createdAt" <= p."createdAt"
-              AND (e.date, e.shift) >= (p."periodFromDate", p."periodFromShift")
-              AND (e.date, e.shift) <= (p."periodToDate", p."periodToShift")
-          )`
+  // The paid rule lives in lib/paid.ts (one copy for the whole server and both apps)
+  const notPaid = Prisma.sql`NOT ${paidSql(farmerId ? 'collection' : 'delivery')}`
   return { entries, periodPayments, notPaid }
 }
 
@@ -234,26 +235,39 @@ function personSql(businessId: string, { farmerId, customerId }: Person) {
 //   advance  paid more than the entries of the periods paid for (or an advance payment);
 //            it is taken off the next payment
 //   pending  paid less than the entries of the periods paid for; it is added to the next payment
+// A gap under ₹1 (rounding, paise) counts as settled: no advance or pending is shown.
+// paidTill = end of the latest payment period (null when nothing has been paid for).
 // One query. Returns null when the person isn't in the business.
 async function personDues(businessId: string, person: Person) {
-  const { entries, notPaid } = personSql(businessId, person)
+  const { entries, notPaid, periodPayments } = personSql(businessId, person)
   const balanceSql = person.farmerId
     ? Prisma.sql`(SELECT f.balance FROM "Farmer" f WHERE f.id = ${person.farmerId} AND f."businessId" = ${businessId})`
     : Prisma.sql`(SELECT c.balance FROM "Customer" c WHERE c.id = ${person.customerId} AND c."businessId" = ${businessId})`
-  const [row] = await prisma.$queryRaw<{ count: number; liters: number; amount: number; balance: number | null }[]>`
-    SELECT COUNT(*)::int AS count,
-      COALESCE(SUM(e.quantity), 0)::float8 AS liters,
-      COALESCE(SUM(e."totalAmount"), 0)::float8 AS amount,
-      ${balanceSql}::float8 AS balance
-    FROM ${entries} AND ${notPaid}`
+  const [row] = await prisma.$queryRaw<{
+    count: number; liters: number; amount: number; balance: number | null; tillDate: string | null; tillShift: 'MORNING' | 'EVENING' | null
+  }[]>`
+    SELECT u.count, u.liters, u.amount,
+      ${balanceSql}::float8 AS balance,
+      (SELECT to_char(p."periodToDate", 'YYYY-MM-DD') FROM ${periodPayments}
+        ORDER BY p."periodToDate" DESC, p."periodToShift" DESC LIMIT 1) AS "tillDate",
+      (SELECT p."periodToShift"::text FROM ${periodPayments}
+        ORDER BY p."periodToDate" DESC, p."periodToShift" DESC LIMIT 1) AS "tillShift"
+    FROM (
+      SELECT COUNT(*)::int AS count,
+        COALESCE(SUM(e.quantity), 0)::float8 AS liters,
+        COALESCE(SUM(e."totalAmount"), 0)::float8 AS amount
+      FROM ${entries} AND ${notPaid}
+    ) u`
   if (!row || row.balance === null) return null
   const round = (n: number) => Math.round(n * 100) / 100
-  const gap = round(row.balance - row.amount)
+  const raw = round(row.balance - row.amount)
+  const gap = Math.abs(raw) < 1 ? 0 : raw
   return {
     balance: row.balance,
     unpaid: { count: row.count, liters: row.liters, amount: row.amount },
     advance: gap < 0 ? -gap : 0,
-    pending: gap > 0 ? gap : 0
+    pending: gap > 0 ? gap : 0,
+    paidTill: row.tillDate && row.tillShift ? { date: row.tillDate, shift: row.tillShift } : null
   }
 }
 

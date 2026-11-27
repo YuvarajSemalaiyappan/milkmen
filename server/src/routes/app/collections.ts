@@ -5,6 +5,7 @@ import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
 import type { Prisma } from '@prisma/client'
 import { checkEntryMove, DuplicateEntryError, duplicateResponse, lockEntrySlot, PaidPeriodError } from '../../lib/duplicates.js'
 import { lockOwnedRow, NotFoundError, wantsTotal } from '../../lib/db.js'
+import { withPaid } from '../../lib/paid.js'
 
 const router = Router()
 
@@ -115,9 +116,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       wantsTotal(pageStr) ? prisma.collection.count({ where }) : undefined
     ])
 
+    // paid=1: each row says whether it is paid (lib/paid.ts), one extra query for the whole page
     return res.json({
       success: true,
-      data: collections,
+      data: await withPaid('collection', collections, req.query.paid),
       ...(total !== undefined ? { total, page, limit } : {})
     })
   } catch (error) {

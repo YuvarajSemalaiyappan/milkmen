@@ -152,7 +152,7 @@ export function useCollections(options?: { skipInitialFetch?: boolean }) {
   const getCollectionsByFarmer = useCallback(
     async (farmerId: string, from?: string, to?: string, limit?: number) => {
       try {
-        const response = await collectionsApi.list({ farmerId, from, to }) as ApiResponse<Collection[]>
+        const response = await collectionsApi.list({ farmerId, from, to, paid: '1' }) as ApiResponse<Collection[]>
         if (response.success && response.data) {
           let result = response.data
           result.sort((a, b) => b.date.localeCompare(a.date))

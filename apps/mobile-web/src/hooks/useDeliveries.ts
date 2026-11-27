@@ -154,7 +154,7 @@ export function useDeliveries(options?: { skipInitialFetch?: boolean }) {
   const getDeliveriesByCustomer = useCallback(
     async (customerId: string, from?: string, to?: string, limit?: number) => {
       try {
-        const response = await deliveriesApi.list({ customerId, from, to }) as ApiResponse<Delivery[]>
+        const response = await deliveriesApi.list({ customerId, from, to, paid: '1' }) as ApiResponse<Delivery[]>
         if (response.success && response.data) {
           let result = response.data
           result.sort((a, b) => b.date.localeCompare(a.date))

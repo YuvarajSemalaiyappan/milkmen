@@ -70,6 +70,12 @@ other in the same piece of work**, unless it is listed as platform-only below.
   skips, balances), wording in `en.json`/`ta.json`, and how each screen calls the server.
 - Business rules live on the server where possible (e.g. `GET /payments/period`), so both apps
   get them from one place instead of two copies.
+- What is paid is decided only by `server/src/lib/paid.ts`: an entry is paid when a payment period
+  covers its date and shift and it existed when that payment was recorded. Lists return `isPaid` with
+  `paid=1`; `/payments/summary` returns unpaid totals, advance/pending (gaps under ₹1 count as settled)
+  and `paidTill`. The apps never keep their own copy of this rule.
+- Regular payments (`RECEIVED_FROM_CUSTOMER`, `PAID_TO_FARMER`) must have a full period; only advances may
+  have none (zod check on `POST /payments` and the database CHECK `Payment_period_required`).
 - Server changes must keep both apps working: check what each app reads before removing a field,
   and deploy the server before releasing an app that depends on it.
 - If the other app can't be changed right away, add the gap to "Known differences" below (and in

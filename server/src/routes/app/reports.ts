@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma.js'
 import { dayRange, ymd } from '../../lib/db.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
+import { withPaid } from '../../lib/paid.js'
 
 const router = Router()
 
@@ -502,7 +503,8 @@ router.get('/collections', authenticateToken, async (req: AuthRequest, res: Resp
       data: {
         from: ymd(fromDate),
         to: ymd(toDate),
-        collections,
+        // paid=1: each row says whether it is paid (lib/paid.ts)
+        collections: await withPaid('collection', collections, req.query.paid),
         byFarmer,
         byDate,
         totals: sumGroups(byDate)
