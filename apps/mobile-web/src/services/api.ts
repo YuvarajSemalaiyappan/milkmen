@@ -299,6 +299,9 @@ export const paymentsApi = {
   // Unpaid entries over the whole history, balance, advance and pending for one person
   summary: (params: { farmerId?: string; customerId?: string }) =>
     api.get(`/payments/summary${buildQuery(params)}`),
+  // One month of paid / unpaid days for the calendar on the farmer and customer pages
+  calendar: (params: { farmerId?: string; customerId?: string; month: string }) =>
+    api.get(`/payments/calendar${buildQuery(params)}`),
   create: (data: {
     farmerId?: string
     customerId?: string

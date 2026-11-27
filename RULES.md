@@ -73,9 +73,16 @@ other in the same piece of work**, unless it is listed as platform-only below.
 - What is paid is decided only by `server/src/lib/paid.ts`: an entry is paid when a payment period
   covers its date and shift and it existed when that payment was recorded. Lists return `isPaid` with
   `paid=1`; `/payments/summary` returns unpaid totals, advance/pending (gaps under ₹1 count as settled)
-  and `paidTill`. The apps never keep their own copy of this rule.
+  and `paidTill`; `/payments/calendar?month` gives paid/unpaid by day and shift for the calendar on the
+  farmer and customer pages. The apps never keep their own copy of this rule.
+- `Business.settledBefore`: entries dated before it count as paid and can't be moved (old history
+  cleared, balances untouched). Set to 1 Apr 2026 for Magizhl Milk by migration.
 - Regular payments (`RECEIVED_FROM_CUSTOMER`, `PAID_TO_FARMER`) must have a full period; only advances may
   have none (zod check on `POST /payments` and the database CHECK `Payment_period_required`).
+  A period never ends before it starts (CHECK `Payment_period_order`). If a regular payment's period ends
+  before it starts and starts at the default start (nothing is due), `POST /payments` saves it as an
+  advance with no period; any other backwards period is refused (400 `BAD_PERIOD`). `/payments/period`
+  returns `nothingDue` and both payment screens show it.
 - Server changes must keep both apps working: check what each app reads before removing a field,
   and deploy the server before releasing an app that depends on it.
 - If the other app can't be changed right away, add the gap to "Known differences" below (and in

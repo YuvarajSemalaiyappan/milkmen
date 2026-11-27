@@ -17,7 +17,7 @@ import {
   Moon
 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
-import { CarryOver } from '@/components/common'
+import { CarryOver, PaidCalendar } from '@/components/common'
 import { Button, Input, Card, Badge, InlineLoader } from '@/components/ui'
 import { useCustomers, useDeliveries, useRoutes, useAreas, usePaymentSummary } from '@/hooks'
 import { routesApi } from '@/services/api'
@@ -447,6 +447,9 @@ export function CustomerDetailPage() {
                 </div>
               </Card>
             </div>
+
+            {/* Paid / unpaid days, one month at a time */}
+            <PaidCalendar customerId={id} refreshKey={customer.balance} />
 
             {/* Quick Actions */}
             <div className="grid grid-cols-2 gap-3">

@@ -50,6 +50,8 @@ export function AddPaymentPage() {
   const [existingPaymentForPeriod, setExistingPaymentForPeriod] = useState(false)
   // Carried over from earlier payments (server): advance comes off, pending is added
   const [carry, setCarry] = useState({ advance: 0, pending: 0 })
+  // The server's default start for the chosen person (shift after the last paid period)
+  const [defaultFrom, setDefaultFrom] = useState<{ date: string; shift: Shift } | null>(null)
 
   // Pre-select from URL params
   useEffect(() => {
@@ -101,6 +103,7 @@ export function AddPaymentPage() {
         if (cancelled || !data) return
         setFromDate(data.from.date)
         setFromShift(data.from.shift)
+        setDefaultFrom(data.from)
         setToDate(today)
         setToShift(shift)
         applyPeriod(data)
@@ -114,6 +117,7 @@ export function AddPaymentPage() {
           setPeriodCount(0)
           setExistingPaymentForPeriod(false)
           setCarry({ advance: 0, pending: 0 })
+          setDefaultFrom(null)
           setAutoSelectDone(true)
         }
       })
@@ -168,6 +172,14 @@ export function AddPaymentPage() {
     if (isAdvance) lastPeriodKey.current = ''
   }, [isAdvance])
 
+  // A period that ends before it starts. If it starts at the default start, nothing is due (everything
+  // up to here is paid): the payment is saved as an advance (server rule, POST /payments does the same).
+  // Any other backwards period is a mistake and blocks saving. Same as the phone app.
+  const reversed = fromDate > toDate || (fromDate === toDate && fromShift === 'EVENING' && toShift === 'MORNING')
+  const nothingDue = !isAdvance && reversed && !!defaultFrom && defaultFrom.date === fromDate && defaultFrom.shift === fromShift
+  const badPeriod = !isAdvance && reversed && !nothingDue
+  const asAdvance = isAdvance || nothingDue
+
   const handleSubmit = async () => {
     const amountNum = parseFloat(amount)
     if (!amountNum || amountNum <= 0) return
@@ -179,8 +191,8 @@ export function AddPaymentPage() {
       setIsSubmitting(true)
 
       const paymentType: PaymentType = recipientType === 'farmer'
-        ? (isAdvance ? 'ADVANCE_TO_FARMER' : 'PAID_TO_FARMER')
-        : (isAdvance ? 'ADVANCE_FROM_CUSTOMER' : 'RECEIVED_FROM_CUSTOMER')
+        ? (asAdvance ? 'ADVANCE_TO_FARMER' : 'PAID_TO_FARMER')
+        : (asAdvance ? 'ADVANCE_FROM_CUSTOMER' : 'RECEIVED_FROM_CUSTOMER')
 
       await addPayment({
         farmerId: recipientType === 'farmer' ? selectedFarmer!.id : undefined,
@@ -190,10 +202,10 @@ export function AddPaymentPage() {
         type: paymentType,
         method: paymentMethod,
         notes: notes || undefined,
-        periodFromDate: isAdvance ? undefined : fromDate,
-        periodToDate: isAdvance ? undefined : toDate,
-        periodFromShift: isAdvance ? undefined : fromShift,
-        periodToShift: isAdvance ? undefined : toShift
+        periodFromDate: asAdvance ? undefined : fromDate,
+        periodToDate: asAdvance ? undefined : toDate,
+        periodFromShift: asAdvance ? undefined : fromShift,
+        periodToShift: asAdvance ? undefined : toShift
       })
 
       navigate(searchParams.get('from') || '/payments')
@@ -210,7 +222,7 @@ export function AddPaymentPage() {
     : null
   // Positive = paying more than due (kept as advance), negative = less (stays pending)
   const enteredAmount = parseFloat(amount) || 0
-  const mismatch = !isAdvance && toPay !== null && enteredAmount > 0 ? Math.round((enteredAmount - toPay) * 100) / 100 : 0
+  const mismatch = !asAdvance && toPay !== null && enteredAmount > 0 ? Math.round((enteredAmount - toPay) * 100) / 100 : 0
 
   const selected = recipientType === 'farmer' ? selectedFarmer : selectedCustomer
   const balance = selected
@@ -382,7 +394,16 @@ export function AddPaymentPage() {
                             </div>
                           </div>
                         )}
-                        {existingPaymentForPeriod && (
+                        {nothingDue && (
+                          <div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg text-left">
+                            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-800 dark:text-amber-200">{t('payment.nothingDueAdvance')}</p>
+                          </div>
+                        )}
+                        {badPeriod && (
+                          <p className="mt-3 text-sm text-red-600 dark:text-red-400 text-left">{t('payment.badPeriod')}</p>
+                        )}
+                        {!asAdvance && existingPaymentForPeriod && (
                           <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/30 rounded-lg text-left">
                             <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                             <p className="text-sm text-red-700 dark:text-red-300">
@@ -409,7 +430,7 @@ export function AddPaymentPage() {
               </div>
 
               {/* Quick amount buttons */}
-              {!isAdvance && toPay !== null && toPay > 0 && (
+              {!asAdvance && toPay !== null && toPay > 0 && (
                 <div className="flex gap-2 mb-4">
                   <Button
                     variant="outline"
@@ -482,7 +503,7 @@ export function AddPaymentPage() {
             <Button
               onClick={() => setShowConfirm(true)}
               isLoading={isSubmitting}
-              disabled={!amount || parseFloat(amount) <= 0 || (!isAdvance && existingPaymentForPeriod)}
+              disabled={!amount || parseFloat(amount) <= 0 || badPeriod || (!asAdvance && existingPaymentForPeriod)}
               fullWidth
               size="lg"
             >
@@ -518,7 +539,7 @@ export function AddPaymentPage() {
                         </div>
                       </div>
                     )}
-                    {isAdvance && (
+                    {asAdvance && (
                       <div className="flex justify-between">
                         <span>{t('payment.advance')}</span>
                         <span className="text-orange-600 dark:text-orange-400">{t('common.yes')}</span>

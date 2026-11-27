@@ -61,10 +61,13 @@ export async function checkEntryMove(
     (${date}::date, ${shift}::"Shift") >= (p."periodFromDate", p."periodFromShift")
     AND (${date}::date, ${shift}::"Shift") <= (p."periodToDate", p."periodToShift")`
 
+  // Days before the business's settledBefore count as paid too (see lib/paid.ts)
+  const settled = (date: string) => Prisma.sql`
+    EXISTS (SELECT 1 FROM "Business" b WHERE b.id = ${opts.businessId} AND ${date}::date < b."settledBefore")`
   const [state] = await tx.$queryRaw<{ isPaid: boolean; targetPaid: boolean }[]>`
     SELECT
-      EXISTS (SELECT 1 FROM ${periods} AND ${opts.entryCreatedAt.toISOString()}::timestamp <= p."createdAt" AND ${covers(opts.fromDate, opts.fromShift)}) AS "isPaid",
-      EXISTS (SELECT 1 FROM ${periods} AND ${covers(opts.toDate, opts.toShift)}) AS "targetPaid"`
+      (${settled(opts.fromDate)} OR EXISTS (SELECT 1 FROM ${periods} AND ${opts.entryCreatedAt.toISOString()}::timestamp <= p."createdAt" AND ${covers(opts.fromDate, opts.fromShift)})) AS "isPaid",
+      (${settled(opts.toDate)} OR EXISTS (SELECT 1 FROM ${periods} AND ${covers(opts.toDate, opts.toShift)})) AS "targetPaid"`
   if (state.isPaid) throw new PaidPeriodError('This entry is already paid, so its date or shift cannot be changed')
   if (state.targetPaid) throw new PaidPeriodError('That date and shift are inside a paid period')
 

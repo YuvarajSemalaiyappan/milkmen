@@ -9,6 +9,7 @@ import prisma from './prisma.js'
 // date and shift AND the entry already existed when that payment was recorded (an entry added
 // later inside a paid period is not silently counted as paid). Regular payments always have a
 // period (CHECK "Payment_period_required"); advances never cover entries.
+// Also paid: every entry dated before the business's settledBefore day (old history cleared).
 //
 // `e` must be the alias of a "Collection" or "Delivery" row.
 
@@ -17,14 +18,16 @@ export type EntryKind = 'collection' | 'delivery'
 /** SQL condition: entry `e` is covered by one of its person's payment periods. */
 export function paidSql(kind: EntryKind) {
   const person = kind === 'collection' ? Prisma.sql`p."farmerId" = e."farmerId"` : Prisma.sql`p."customerId" = e."customerId"`
-  return Prisma.sql`EXISTS (
+  return Prisma.sql`(EXISTS (
+    SELECT 1 FROM "Business" b WHERE b.id = e."businessId" AND e.date < b."settledBefore"
+  ) OR EXISTS (
     SELECT 1 FROM "Payment" p
     WHERE ${person} AND p."businessId" = e."businessId"
       AND p."periodFromDate" IS NOT NULL
       AND e."createdAt" <= p."createdAt"
       AND (e.date, e.shift) >= (p."periodFromDate", p."periodFromShift")
       AND (e.date, e.shift) <= (p."periodToDate", p."periodToShift")
-  )`
+  ))`
 }
 
 /** The ids, out of `ids`, of entries that are paid. One query whatever the list size. */

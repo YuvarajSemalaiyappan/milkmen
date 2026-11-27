@@ -239,6 +239,8 @@ export interface PaymentPeriod {
   // Carried over from earlier payments: advance is taken off this payment, pending is added
   advance: number
   pending: number
+  /** Default start is after `to`: everything is paid, so a payment now is saved as an advance */
+  nothingDue?: boolean
 }
 
 // GET /payments/summary: unpaid entries over the whole history, balance, advance and pending
@@ -286,4 +288,11 @@ export interface CustomerDue {
   totalPaid: number
   balance: number
   deliveries: Delivery[]
+}
+
+// GET /payments/calendar?month: paid / unpaid by day and shift (only days with entries)
+export type CalendarMark = 'paid' | 'unpaid' | null
+export interface PaymentCalendar {
+  month: string
+  days: { date: string; morning: CalendarMark; evening: CalendarMark }[]
 }

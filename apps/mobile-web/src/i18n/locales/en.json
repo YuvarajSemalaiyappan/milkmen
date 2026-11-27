@@ -320,7 +320,10 @@
     "toPay": "To pay",
     "amountMismatch": "Amount does not match",
     "extraAsAdvance": "{{amount}} more than due. The extra will be kept as advance and adjusted in the next payment.",
-    "shortAsPending": "{{amount}} less than due. It will stay pending and be added to the next payment."
+    "shortAsPending": "{{amount}} less than due. It will stay pending and be added to the next payment.",
+    "paidCalendar": "Paid calendar",
+    "nothingDueAdvance": "Nothing is due: everything up to these days is already paid. This payment will be saved as an advance and taken off the next payment.",
+    "badPeriod": "The 'from' date and shift must be before the 'to' date and shift."
   },
   "reports": {
     "duesView": "Dues",

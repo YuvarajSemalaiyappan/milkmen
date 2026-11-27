@@ -50,12 +50,6 @@ const createPaymentSchema = z.object({
   // (also a CHECK in the database: "Payment_period_required")
   (data) => data.type.startsWith('ADVANCE_') || !!data.periodFromDate,
   { message: 'A payment period is required (only advances may have none)' }
-).refine(
-  (data) => {
-    if (!data.periodFromDate || !data.periodToDate) return true
-    return data.periodFromDate <= data.periodToDate
-  },
-  { message: 'periodFromDate must be on or before periodToDate' }
 )
 
 const updatePaymentSchema = z.object({
@@ -271,6 +265,37 @@ async function personDues(businessId: string, person: Person) {
   }
 }
 
+type Slot = { date: string; shift: 'MORNING' | 'EVENING' }
+const slotAfter = (s: Slot): Slot => {
+  if (s.shift === 'MORNING') return { date: s.date, shift: 'EVENING' }
+  const next = new Date(`${s.date}T00:00:00Z`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  return { date: next.toISOString().slice(0, 10), shift: 'MORNING' }
+}
+const slotBefore = (a: Slot, b: Slot) => a.date < b.date || (a.date === b.date && a.shift === 'MORNING' && b.shift === 'EVENING')
+
+// Where a new payment's period starts by default: the shift after the last paid period, else the
+// first entry, else `to`; never before the business's settledBefore day (older entries are settled).
+// If that start is after `to`, nothing is due (see POST: the payment is saved as an advance).
+async function defaultStart(businessId: string, person: Person, to: Slot): Promise<Slot> {
+  const { entries, periodPayments } = personSql(businessId, person)
+  const [[lastPaid], [firstEntry], [biz]] = await Promise.all([
+    prisma.$queryRaw<Slot[]>`
+      SELECT to_char(p."periodToDate", 'YYYY-MM-DD') AS date, p."periodToShift"::text AS shift
+      FROM ${periodPayments}
+      ORDER BY p."periodToDate" DESC, p."periodToShift" DESC LIMIT 1`,
+    prisma.$queryRaw<Slot[]>`
+      SELECT to_char(e.date, 'YYYY-MM-DD') AS date, e.shift::text AS shift
+      FROM ${entries}
+      ORDER BY e.date ASC, e.shift ASC LIMIT 1`,
+    prisma.$queryRaw<{ settled: string | null }[]>`
+      SELECT to_char("settledBefore", 'YYYY-MM-DD') AS settled FROM "Business" WHERE id = ${businessId}`
+  ])
+  let from: Slot = lastPaid ? slotAfter(lastPaid) : firstEntry ?? to
+  if (biz?.settled && from.date < biz.settled) from = { date: biz.settled, shift: 'MORNING' }
+  return from
+}
+
 // GET /api/payments/summary?farmerId|customerId - Unpaid entries over the whole history, balance,
 // advance and pending (see personDues). Used by the farmer and customer detail pages.
 router.get('/summary', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -288,6 +313,46 @@ router.get('/summary', authenticateToken, async (req: AuthRequest, res: Response
   } catch (error) {
     console.error('Payment summary error:', error)
     return res.status(500).json({ success: false, error: 'Failed to calculate payment summary' })
+  }
+})
+
+// GET /api/payments/calendar?farmerId|customerId&month=YYYY-MM - Paid / unpaid by day and shift for
+// one month, for the calendar on the farmer and customer pages. Only days with entries are listed:
+//   days: [{ date, morning, evening }]  each 'paid' | 'unpaid' | null (no entry that shift)
+// A shift is 'paid' when all its entries are paid (lib/paid.ts). One query, one month at a time.
+router.get('/calendar', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId } = req.user!
+    const q = req.query as Record<string, string | undefined>
+    const farmerId = q.farmerId || null
+    const customerId = farmerId ? null : q.customerId || null
+    if (!farmerId && !customerId) {
+      return res.status(400).json({ success: false, error: 'farmerId or customerId is required' })
+    }
+    if (!q.month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(q.month)) {
+      return res.status(400).json({ success: false, error: 'month (YYYY-MM) is required' })
+    }
+    const first = `${q.month}-01`
+    const { entries } = personSql(businessId, { farmerId, customerId })
+    const kind = farmerId ? 'collection' : 'delivery'
+    const rows = await prisma.$queryRaw<{ date: string; shift: 'MORNING' | 'EVENING'; total: number; paid: number }[]>`
+      SELECT to_char(e.date, 'YYYY-MM-DD') AS date, e.shift::text AS shift,
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE ${paidSql(kind)})::int AS paid
+      FROM ${entries}
+        AND e.date >= ${first}::date AND e.date < (${first}::date + INTERVAL '1 month')
+      GROUP BY e.date, e.shift
+      ORDER BY e.date, e.shift`
+    const byDay = new Map<string, { date: string; morning: 'paid' | 'unpaid' | null; evening: 'paid' | 'unpaid' | null }>()
+    for (const r of rows) {
+      const day = byDay.get(r.date) ?? { date: r.date, morning: null, evening: null }
+      day[r.shift === 'MORNING' ? 'morning' : 'evening'] = r.paid === r.total ? 'paid' : 'unpaid'
+      byDay.set(r.date, day)
+    }
+    return res.json({ success: true, data: { month: q.month, days: [...byDay.values()] } })
+  } catch (error) {
+    console.error('Payment calendar error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to load payment calendar' })
   }
 })
 
@@ -321,30 +386,9 @@ router.get('/period', authenticateToken, async (req: AuthRequest, res: Response)
     const { entries, periodPayments, notPaid } = personSql(businessId, { farmerId, customerId })
 
     // Default start, only when the client didn't choose one
-    let from = isDay(q.from) && isShift(q.fromShift) ? { date: q.from, shift: q.fromShift } : null
-    if (!from) {
-      const [[lastPaid], [firstEntry]] = await Promise.all([
-        prisma.$queryRaw<{ date: string; shift: 'MORNING' | 'EVENING' }[]>`
-          SELECT to_char(p."periodToDate", 'YYYY-MM-DD') AS date, p."periodToShift"::text AS shift
-          FROM ${periodPayments}
-          ORDER BY p."periodToDate" DESC, p."periodToShift" DESC LIMIT 1`,
-        prisma.$queryRaw<{ date: string; shift: 'MORNING' | 'EVENING' }[]>`
-          SELECT to_char(e.date, 'YYYY-MM-DD') AS date, e.shift::text AS shift
-          FROM ${entries}
-          ORDER BY e.date ASC, e.shift ASC LIMIT 1`
-      ])
-      if (lastPaid) {
-        // The shift after the last paid one
-        if (lastPaid.shift === 'MORNING') from = { date: lastPaid.date, shift: 'EVENING' }
-        else {
-          const next = new Date(`${lastPaid.date}T00:00:00Z`)
-          next.setUTCDate(next.getUTCDate() + 1)
-          from = { date: next.toISOString().slice(0, 10), shift: 'MORNING' }
-        }
-      } else {
-        from = firstEntry ?? { date: q.to, shift: 'MORNING' }
-      }
-    }
+    const from: Slot = isDay(q.from) && isShift(q.fromShift)
+      ? { date: q.from, shift: q.fromShift }
+      : await defaultStart(businessId, { farmerId, customerId }, { date: q.to, shift: q.toShift })
     const to = { date: q.to, shift: q.toShift }
 
     const fromKey = Prisma.sql`(${from.date}::date, ${from.shift}::"Shift")`
@@ -371,7 +415,12 @@ router.get('/period', authenticateToken, async (req: AuthRequest, res: Response)
     // unpaid.amount - advance + pending (see personDues)
     return res.json({
       success: true,
-      data: { from, to, unpaid, overlaps: overlap.overlaps, advance: dues?.advance ?? 0, pending: dues?.pending ?? 0 }
+      // nothingDue: the default start is after `to` (everything up to `to` is paid or settled);
+      // a payment now is saved as an advance (see POST)
+      data: {
+        from, to, unpaid, overlaps: overlap.overlaps, advance: dues?.advance ?? 0, pending: dues?.pending ?? 0,
+        nothingDue: !(isDay(q.from) && isShift(q.fromShift)) && slotBefore(to, from)
+      }
     })
   } catch (error) {
     console.error('Payment period error:', error)
@@ -434,7 +483,21 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const { farmerId, customerId, date, amount, type, method, notes, periodFromDate, periodToDate, periodFromShift, periodToShift } = validation.data
+    const { farmerId, customerId, date, amount, method, notes } = validation.data
+    let { type, periodFromDate, periodToDate, periodFromShift, periodToShift } = validation.data
+
+    // A period that ends before it starts: if it starts at the default start, nothing is due and the
+    // money is an advance (saved as one, with no period). Any other backwards period is a mistake.
+    if (periodFromDate && periodToDate && periodFromShift && periodToShift &&
+        slotBefore({ date: periodToDate, shift: periodToShift }, { date: periodFromDate, shift: periodFromShift })) {
+      const start = await defaultStart(businessId, { farmerId: farmerId ?? null, customerId: farmerId ? null : customerId ?? null }, { date: periodToDate, shift: periodToShift })
+      if (start.date !== periodFromDate || start.shift !== periodFromShift) {
+        return res.status(400).json({ success: false, error: 'The payment period ends before it starts', code: 'BAD_PERIOD' })
+      }
+      type = type === 'PAID_TO_FARMER' ? 'ADVANCE_TO_FARMER' : type === 'RECEIVED_FROM_CUSTOMER' ? 'ADVANCE_FROM_CUSTOMER' : type
+      periodFromDate = periodToDate = undefined
+      periodFromShift = periodToShift = undefined
+    }
 
     const hasPeriod = !!(periodFromDate && periodToDate && periodFromShift && periodToShift)
 
