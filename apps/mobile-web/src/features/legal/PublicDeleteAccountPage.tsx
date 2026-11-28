@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { LANGUAGES } from '@/i18n/languages'
 import { CheckCircle, Milk } from 'lucide-react'
 import { Button, Card, Input } from '@/components/ui'
 import { accountApi } from '@/services/api'
@@ -46,6 +47,7 @@ export function PublicDeleteAccountPage() {
 
   const lang = (code: string, label: string) => (
     <button
+      key={code}
       type="button"
       onClick={() => i18n.changeLanguage(code)}
       className={`px-3 py-1 rounded-full text-sm ${i18n.language === code
@@ -63,9 +65,8 @@ export function PublicDeleteAccountPage() {
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
             <Milk className="w-6 h-6 text-white" />
           </div>
-          <div className="flex gap-2">
-            {lang('en', 'English')}
-            {lang('ta', 'தமிழ்')}
+          <div className="flex flex-wrap justify-end gap-2 max-w-[75%]">
+            {LANGUAGES.map(({ code, label }) => lang(code, label))}
           </div>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('account.publicTitle')}</h1>

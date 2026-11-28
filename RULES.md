@@ -67,7 +67,7 @@ are two front ends for the same business. **Any change to how one behaves must b
 other in the same piece of work**, unless it is listed as platform-only below.
 
 - This covers features, screens, fields, validation, business rules (what is paid, duplicates,
-  skips, balances), wording in `en.json`/`ta.json`, and how each screen calls the server.
+  skips, balances), wording in every locale file (`en.json`, `ta.json` and the other Indian languages), and how each screen calls the server.
 - Business rules live on the server where possible (e.g. `GET /payments/period`), so both apps
   get them from one place instead of two copies.
 - What is paid is decided only by `server/src/lib/paid.ts`: an entry is paid when a payment period
@@ -131,3 +131,11 @@ because they show the route's people with their details; screens that only filte
 - Admin panel → Deletion requests: delete the business (owner) or the login (staff), then mark the request Done.
   The `DeletionRequest` row has no foreign keys, so it stays as the record that the request was handled.
 - If the privacy policy's facts change (new data collected, new service provider, analytics), update the page.
+
+## Languages
+
+Both apps ship English, Tamil, Hindi, Bengali, Marathi, Telugu, Gujarati, Kannada, Malayalam, Odia, Punjabi
+and Assamese. The list (codes and native names) is `src/i18n/languages.ts` in each app; dates use
+`localeOf(lang)` (`<code>-IN`), never a hard-coded `'ta' ? 'ta-IN' : 'en-IN'`. Every locale file has exactly the
+keys of that app's `en.json`; a new string goes into all of them (missing ones fall back to English).
+Everything except English and Tamil was machine-translated and needs a native speaker's review.

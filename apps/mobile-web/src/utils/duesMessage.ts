@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next'
 import { reportsApi } from '@/services/api'
 import { formatCurrency } from './format'
+import { localeOf } from '@/i18n/languages'
 import type { ApiResponse } from '@/types'
 
 interface CustomerPending {
@@ -11,7 +12,7 @@ interface CustomerPending {
 
 export const prettyMonth = (month: string, lang: string, long = false) => {
   const [y, m] = month.split('-').map(Number)
-  return new Date(y, m - 1, 1).toLocaleDateString(lang === 'ta' ? 'ta-IN' : 'en-IN', {
+  return new Date(y, m - 1, 1).toLocaleDateString(localeOf(lang), {
     month: long ? 'long' : 'short',
     year: 'numeric'
   })

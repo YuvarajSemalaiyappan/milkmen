@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { LANGUAGES } from '@/i18n/languages'
 import {
   Globe,
   User,
@@ -116,33 +117,23 @@ export function SettingsPage() {
               {t('settings.language')}
             </span>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleLanguageChange('en')}
-              className={`flex-1 py-3 px-4 rounded-lg border-2 font-medium transition-colors ${
-                currentLanguage === 'en'
-                  ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                  : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                {currentLanguage === 'en' && <Check className="w-4 h-4" />}
-                {t('settings.english')}
-              </div>
-            </button>
-            <button
-              onClick={() => handleLanguageChange('ta')}
-              className={`flex-1 py-3 px-4 rounded-lg border-2 font-medium transition-colors ${
-                currentLanguage === 'ta'
-                  ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                  : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                {currentLanguage === 'ta' && <Check className="w-4 h-4" />}
-                {t('settings.tamil')}
-              </div>
-            </button>
+          <div className="grid grid-cols-3 gap-2">
+            {LANGUAGES.map(({ code, label }) => (
+              <button
+                key={code}
+                onClick={() => handleLanguageChange(code)}
+                className={`py-3 px-2 rounded-lg border-2 font-medium transition-colors ${
+                  currentLanguage === code
+                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                    : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  {currentLanguage === code && <Check className="w-4 h-4 shrink-0" />}
+                  {label}
+                </div>
+              </button>
+            ))}
           </div>
         </Card>
 

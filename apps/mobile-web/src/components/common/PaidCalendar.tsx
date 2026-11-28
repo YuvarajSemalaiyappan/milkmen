@@ -5,6 +5,7 @@ import { clsx } from 'clsx'
 import { Card } from '@/components/ui'
 import { paymentsApi } from '@/services/api'
 import { toLocalDateString } from '@/utils'
+import { localeOf } from '@/i18n/languages'
 import type { ApiResponse, CalendarMark, PaymentCalendar } from '@/types'
 
 const thisMonth = () => toLocalDateString(new Date()).slice(0, 7)
@@ -42,7 +43,7 @@ export function PaidCalendar({ farmerId, customerId, refreshKey }: { farmerId?: 
 
   const loading = result?.key !== key
   const current = thisMonth()
-  const lang = i18n.language === 'ta' ? 'ta-IN' : 'en-IN'
+  const lang = localeOf(i18n.language)
   const [y, m] = month.split('-').map(Number)
   const daysInMonth = new Date(y, m, 0).getDate()
   const lead = new Date(y, m - 1, 1).getDay() // Sunday = 0
