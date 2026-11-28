@@ -1,18 +1,23 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '@/store'
-import { farmersApi, customersApi } from '@/services/api'
-import type { Shift, ApiResponse } from '@/types'
+import { farmersApi, customersApi, orderShareApi } from '@/services/api'
+import type { Shift, ApiResponse, OrderFollow } from '@/types'
 
 type OrderType = 'customer' | 'farmer'
 
 type FarmerOrderRow = { farmerId: string; sortOrder: number; shift: Shift | null }
 type CustomerOrderRow = { customerId: string; sortOrder: number; shift: Shift | null }
 
-// Farmers and customers each keep a separate order per shift (pass the shift)
+// Farmers and customers each keep a separate order per shift (pass the shift).
+// Following someone's order (both shifts): the server returns their order, live, and saving is off
+// (`following` is set). `reload` fetches again after following, stopping or copying.
 export function useSortOrder(type: OrderType, shift?: Shift) {
   const userId = useAuthStore((s) => s.user?.id)
   const [orderMap, setOrderMap] = useState<Map<string, number>>(new Map())
   const [isLoaded, setIsLoaded] = useState(false)
+  const [following, setFollowing] = useState<OrderFollow['following']>(null)
+  const [version, setVersion] = useState(0)
+  const reload = useCallback(() => setVersion((v) => v + 1), [])
 
   useEffect(() => {
     if (!userId) {
@@ -25,6 +30,7 @@ export function useSortOrder(type: OrderType, shift?: Shift) {
     ;(async () => {
       try {
         const newMap = new Map<string, number>()
+        const follow = orderShareApi.get(type).then((r) => (r as ApiResponse<OrderFollow>).data?.following ?? null).catch(() => null)
         if (type === 'farmer') {
           const res = (await farmersApi.getSortOrder(shift)) as ApiResponse<FarmerOrderRow[]>
           res.data?.forEach((row) => newMap.set(row.farmerId, row.sortOrder))
@@ -32,7 +38,11 @@ export function useSortOrder(type: OrderType, shift?: Shift) {
           const res = (await customersApi.getSortOrder(shift)) as ApiResponse<CustomerOrderRow[]>
           res.data?.forEach((row) => newMap.set(row.customerId, row.sortOrder))
         }
-        if (!cancelled) setOrderMap(newMap)
+        const who = await follow
+        if (!cancelled) {
+          setOrderMap(newMap)
+          setFollowing(who)
+        }
       } catch (error) {
         console.error('Failed to load sort order:', error)
         if (!cancelled) setOrderMap(new Map())
@@ -43,7 +53,7 @@ export function useSortOrder(type: OrderType, shift?: Shift) {
     return () => {
       cancelled = true
     }
-  }, [userId, type, shift])
+  }, [userId, type, shift, version])
 
   const applySortOrder = useCallback(<T extends { id: string }>(items: T[]): T[] => {
     if (orderMap.size === 0) return items
@@ -58,7 +68,7 @@ export function useSortOrder(type: OrderType, shift?: Shift) {
   }, [orderMap])
 
   const saveSortOrder = useCallback(async (orderedIds: string[]) => {
-    if (!userId) return
+    if (!userId || following) return
 
     // Update local state immediately
     const newMap = new Map<string, number>()
@@ -79,7 +89,7 @@ export function useSortOrder(type: OrderType, shift?: Shift) {
     } catch (error) {
       console.error('Failed to sync sort order to server:', error)
     }
-  }, [userId, type, shift])
+  }, [userId, type, shift, following])
 
-  return { applySortOrder, saveSortOrder, isLoaded }
+  return { applySortOrder, saveSortOrder, isLoaded, following, reload }
 }

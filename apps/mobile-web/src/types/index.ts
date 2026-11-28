@@ -296,3 +296,13 @@ export interface PaymentCalendar {
   month: string
   days: { date: string; morning: CalendarMark; evening: CalendarMark }[]
 }
+
+// GET /farmers|customers/sort-order/follow: sharing the collect/deliver order between users
+export interface OrderFollow {
+  /** The user whose order this user follows (live, read-only); null = their own order */
+  following: { id: string; name: string } | null
+  /** Users who follow this user's order (they see its changes) */
+  followers: { id: string; name: string }[]
+  /** Other active users of the business, to follow or copy (phoneEnd tells same names apart) */
+  users: { id: string; name: string; role: string; phoneEnd: string }[]
+}

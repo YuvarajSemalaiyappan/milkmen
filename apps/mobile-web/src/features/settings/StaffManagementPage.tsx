@@ -4,11 +4,14 @@ import { Users, Plus, Phone, Shield, MoreVertical, Key, Trash2, UserX, UserCheck
 import { AppShell } from '@/components/layout'
 import { Card, Button, Input, Badge, InlineLoader } from '@/components/ui'
 import { useAuthStore, selectIsOwner } from '@/store'
-import { api } from '@/services/api'
+import { api, orderShareApi } from '@/services/api'
 import type { ApiResponse, User, Role } from '@/types'
 
 interface StaffMember extends User {
   isActive: boolean
+  /** Whose collect/deliver order they follow (null = their own); see server lib/order-follow.ts */
+  followFarmerOrderId?: string | null
+  followCustomerOrderId?: string | null
 }
 
 export function StaffManagementPage() {
@@ -403,6 +406,43 @@ export function StaffManagementPage() {
                       </div>
                     )}
                   </div>
+                  {/* Whose collect/deliver order this person uses: their own, or follow someone (live, read-only) */}
+                  {member.id !== currentUser?.id && member.role !== 'OWNER' && member.isActive && (
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      {(['farmer', 'customer'] as const).map((kind) => {
+                        const value = (kind === 'farmer' ? member.followFarmerOrderId : member.followCustomerOrderId) ?? ''
+                        return (
+                          <label key={kind} className="block text-xs text-gray-500 dark:text-gray-400">
+                            <span className="flex items-center gap-1">
+                              {kind === 'farmer' ? t('order.farmersOrder') : t('order.customersOrder')}
+                              {busyAction === `follow-${kind}:${member.id}` && <Loader2 className="w-3 h-3 animate-spin" />}
+                            </span>
+                            <select
+                              className="mt-1 w-full px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                              value={value}
+                              disabled={!!busyAction}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                runAction(`follow-${kind}:${member.id}`, async () => {
+                                  try {
+                                    await orderShareApi.follow(kind, v || null, member.id)
+                                    await loadStaff()
+                                  } catch (err) {
+                                    setError(err instanceof Error ? err.message : t('common.error'))
+                                  }
+                                })
+                              }}
+                            >
+                              <option value="">{t('order.ownOrder')}</option>
+                              {staff.filter((u) => u.id !== member.id && u.isActive).map((u) => (
+                                <option key={u.id} value={u.id}>{u.name} · …{u.phone.slice(-4)}</option>
+                              ))}
+                            </select>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

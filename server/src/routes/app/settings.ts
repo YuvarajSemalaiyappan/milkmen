@@ -4,6 +4,7 @@ import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { effectiveStatus } from '../../lib/plan.js'
 import { authenticateToken, requireOwner, requireOwnerOrManager, AuthRequest } from '../../middleware/auth.js'
+import { releaseFollowers } from '../../lib/order-follow.js'
 
 const router = Router()
 
@@ -248,6 +249,9 @@ router.get('/staff', authenticateToken, requireOwner, async (req: AuthRequest, r
         phone: true,
         role: true,
         isActive: true,
+        // Whose collect/deliver order they follow (null = their own); see lib/order-follow.ts
+        followFarmerOrderId: true,
+        followCustomerOrderId: true,
         createdAt: true,
         updatedAt: true
       },
@@ -348,6 +352,8 @@ router.put('/staff/:id', authenticateToken, requireOwner, async (req: AuthReques
         updatedAt: true
       }
     })
+    // Deactivated: people following this user's order keep a copy of it (lib/order-follow.ts)
+    if (validation.data.isActive === false) await releaseFollowers(id, req.user!.businessId)
 
     return res.json({ success: true, data: user })
   } catch (error) {
@@ -379,6 +385,8 @@ router.delete('/staff/:id', authenticateToken, requireOwner, async (req: AuthReq
       where: { id },
       data: { isActive: false }
     })
+    // People following this user's order keep a copy of it (lib/order-follow.ts)
+    await releaseFollowers(id, req.user!.businessId)
 
     return res.json({ success: true, message: 'Staff member deactivated' })
   } catch (error) {

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { authenticateToken, AuthRequest } from '../../middleware/auth.js'
 import { locationFields, pinAudit, pinIsComplete, pinMessage } from '../../lib/location.js'
+import { addOrderFollowRoutes, assertOwnOrder, FollowingOrderError, orderOwner } from '../../lib/order-follow.js'
 
 const router = Router()
 
@@ -122,12 +123,18 @@ router.get('/subscribed', authenticateToken, async (req: AuthRequest, res: Respo
   }
 })
 
+
+// Following / copying another user's order: GET|PUT /sort-order/follow, POST /sort-order/copy
+addOrderFollowRoutes(router, 'customer')
+
 // GET /api/customers/sort-order - Get current user's customer sort order map
 // Optional ?shift=MORNING|EVENING to scope by shift (null shift returned when omitted)
 // NOTE: Must be before /:id routes to avoid "sort-order" matching as an ID
 router.get('/sort-order', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const { userId } = req.user!
+    // Following someone: their order (live); see lib/order-follow.ts
+    const { userId: me, businessId } = req.user!
+    const { ownerId: userId } = await orderOwner(me, businessId, 'customer')
     const shiftParam = req.query.shift
     const shiftValue =
       shiftParam === 'MORNING' || shiftParam === 'EVENING'
@@ -153,6 +160,7 @@ router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Respo
   try {
     const { userId, businessId } = req.user!
     const { orders } = req.body
+    await assertOwnOrder(userId, businessId, 'customer')
 
     if (!Array.isArray(orders) || orders.length === 0) {
       return res.status(400).json({
@@ -196,6 +204,9 @@ router.put('/sort-order', authenticateToken, async (req: AuthRequest, res: Respo
 
     return res.json({ success: true, message: 'Sort orders updated' })
   } catch (error) {
+    if (error instanceof FollowingOrderError) {
+      return res.status(409).json({ success: false, error: error.message, code: 'FOLLOWING_ORDER' })
+    }
     console.error('Bulk update sort order error:', error)
     return res.status(500).json({
       success: false,
@@ -397,6 +408,8 @@ router.post('/:id/sort-order', authenticateToken, async (req: AuthRequest, res: 
     const customerId = req.params.id as string
     const { sortOrder, shift } = req.body
 
+    await assertOwnOrder(userId, businessId, 'customer')
+
     if (typeof sortOrder !== 'number') {
       return res.status(400).json({
         success: false,
@@ -430,6 +443,9 @@ router.post('/:id/sort-order', authenticateToken, async (req: AuthRequest, res: 
       message: 'Sort order updated'
     })
   } catch (error) {
+    if (error instanceof FollowingOrderError) {
+      return res.status(409).json({ success: false, error: error.message, code: 'FOLLOWING_ORDER' })
+    }
     console.error('Update sort order error:', error)
     return res.status(500).json({
       success: false,

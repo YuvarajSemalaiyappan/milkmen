@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Phone, MapPin, ChevronRight } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, InlineLoader } from '@/components/ui'
-import { ShiftToggle, RouteFilter, SortableList, ShiftBadge } from '@/components/common'
+import { ShiftToggle, RouteFilter, SortableList, ShiftBadge, OrderShare } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
 import { useSortOrder } from '@/hooks/useSortOrder'
 import { collectionsApi } from '@/services/api'
@@ -26,7 +26,7 @@ export function CollectionsPage() {
 
   const { activeFarmers, isLoading: farmersLoading } = useFarmers()
   const { farmerIds: routeFarmerIds } = useRouteFarmerIds(selectedRouteId, selectedAreaId)
-  const { applySortOrder, saveSortOrder } = useSortOrder('farmer', currentShift)
+  const { applySortOrder, saveSortOrder, following, reload } = useSortOrder('farmer', currentShift)
 
   // Today's collections (the whole day: a day is a bounded list)
   // The list endpoint includes each entry's farmer name
@@ -91,6 +91,9 @@ export function CollectionsPage() {
         {/* Route Filter (includes Area Filter) */}
         <RouteFilter />
 
+        {/* Follow or copy someone's order (see components/common/OrderShare.tsx) */}
+        <OrderShare kind="farmer" onChanged={reload} />
+
         {isLoading ? (
           <div className="text-center py-8 text-gray-500"><InlineLoader label={t('common.loading')} /></div>
         ) : (
@@ -106,6 +109,7 @@ export function CollectionsPage() {
                 <SortableList
                   items={sortedFarmerIds}
                   onReorder={handleReorder}
+                  disabled={!!following}
                   renderItem={(id) => {
                     const farmer = farmerMap.get(id)
                     if (!farmer) return null

@@ -75,6 +75,11 @@ other in the same piece of work**, unless it is listed as platform-only below.
   `paid=1`; `/payments/summary` returns unpaid totals, advance/pending (gaps under ₹1 count as settled)
   and `paidTill`; `/payments/calendar?month` gives paid/unpaid by day and shift for the calendar on the
   farmer and customer pages. The apps never keep their own copy of this rule.
+- Sharing the collect/deliver order (`server/src/lib/order-follow.ts`): a user can follow another user's
+  farmer and/or customer order (`User.followFarmerOrderId` / `followCustomerOrderId`, both shifts): the
+  sort-order GET returns the followed order, live; saving it answers 409 `FOLLOWING_ORDER`. Stopping keeps a
+  copy; copy once with `POST /…/sort-order/copy`. The owner can set it for staff (`userId`). Chains resolve,
+  loops are refused, deactivating a user gives their followers a copy. Both apps: `OrderShare`.
 - `Business.settledBefore`: entries dated before it count as paid and can't be moved (old history
   cleared, balances untouched). Set to 1 Apr 2026 for Magizhl Milk by migration.
 - Regular payments (`RECEIVED_FROM_CUSTOMER`, `PAID_TO_FARMER`) must have a full period; only advances may

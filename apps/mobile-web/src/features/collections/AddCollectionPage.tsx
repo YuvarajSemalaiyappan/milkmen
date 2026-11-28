@@ -57,7 +57,7 @@ export function AddCollectionPage() {
     setFilteredFarmers(activeFarmers)
   }, [activeFarmers])
 
-  const { applySortOrder, saveSortOrder } = useSortOrder('farmer', currentShift)
+  const { applySortOrder, saveSortOrder, following } = useSortOrder('farmer', currentShift)
 
   // Filter by route/area
   const routeFilteredFarmers = useMemo(() => {
@@ -175,6 +175,7 @@ export function AddCollectionPage() {
                 <SortableList
                   items={routeFilteredFarmers.map((f) => f.id)}
                   onReorder={handleReorder}
+                  disabled={!!following}
                   renderItem={(id) => {
                     const farmer = routeFilteredFarmers.find((f) => f.id === id)!
                     const hasAM = farmer.collectAM !== false

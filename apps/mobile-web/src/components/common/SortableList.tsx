@@ -60,9 +60,11 @@ interface SortableListProps {
   onReorder: (newIds: string[]) => void
   renderItem: (id: string) => ReactNode
   renderOverlay?: (id: string) => ReactNode
+  /** No dragging (e.g. while following someone else's order) */
+  disabled?: boolean
 }
 
-export function SortableList({ items, onReorder, renderItem, renderOverlay }: SortableListProps) {
+export function SortableList({ items, onReorder, renderItem, renderOverlay, disabled = false }: SortableListProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
 
   const touchSensor = useSensor(TouchSensor, {
@@ -72,6 +74,7 @@ export function SortableList({ items, onReorder, renderItem, renderOverlay }: So
     activationConstraint: { distance: 8 }
   })
   const sensors = useSensors(touchSensor, pointerSensor)
+  const noSensors = useSensors()
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as string)
@@ -93,7 +96,7 @@ export function SortableList({ items, onReorder, renderItem, renderOverlay }: So
 
   return (
     <DndContext
-      sensors={sensors}
+      sensors={disabled ? noSensors : sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}

@@ -588,5 +588,22 @@
     "nameRequired": "Enter your name",
     "invalidPhone": "Enter a valid phone number",
     "backToLogin": "Back to login"
+  },
+  "order": {
+    "share": "Share the order",
+    "following": "Following {{name}}'s order",
+    "followingHint": "It changes when {{name}} changes it, and you can't change it while following.",
+    "stopFollowing": "Stop following (keep a copy)",
+    "follow": "Follow someone's order",
+    "followHint": "Live: their changes show here too. Read-only for you.",
+    "followConfirm": "Follow {{name}}'s order? Your current order is replaced while you follow.",
+    "copyFrom": "Copy someone's order",
+    "copyHint": "A one-time copy that you can change.",
+    "copyConfirm": "Replace your order with {{name}}'s order?",
+    "followers": "Followed by {{names}}: your changes show for them too.",
+    "ownOrder": "Own order",
+    "farmersOrder": "Farmers order",
+    "customersOrder": "Customers order",
+    "noOthers": "No other users in the business yet."
   }
 }

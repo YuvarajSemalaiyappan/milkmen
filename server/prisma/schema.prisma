@@ -44,6 +44,10 @@ model User {
   role      Role     @default(STAFF)
   isActive  Boolean  @default(true)
   mustChangePin Boolean @default(false) // Force PIN change on next login
+  // Following another user's collect/deliver order (both shifts), live and read-only for this user.
+  // Plain ids (users of the same business); see server/src/lib/order-follow.ts
+  followFarmerOrderId   String?
+  followCustomerOrderId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

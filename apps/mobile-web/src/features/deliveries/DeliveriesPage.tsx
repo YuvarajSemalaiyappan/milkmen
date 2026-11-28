@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Phone, MapPin, ChevronRight } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, InlineLoader } from '@/components/ui'
-import { ShiftToggle, RouteFilter, SortableList, ShiftBadge } from '@/components/common'
+import { ShiftToggle, RouteFilter, SortableList, ShiftBadge, OrderShare } from '@/components/common'
 import { useAppStore, useRouteStore } from '@/store'
 import { useSortOrder } from '@/hooks/useSortOrder'
 import { deliveriesApi } from '@/services/api'
@@ -35,7 +35,7 @@ export function DeliveriesPage() {
 
   const { activeCustomers, isLoading: customersLoading } = useCustomers()
   const { customerIds: routeCustomerIds } = useRouteCustomerIds(selectedRouteId, selectedAreaId)
-  const { applySortOrder, saveSortOrder } = useSortOrder('customer', currentShift)
+  const { applySortOrder, saveSortOrder, following, reload } = useSortOrder('customer', currentShift)
 
   // Today's deliveries (the whole day: a day is a bounded list)
   const [todayDeliveries, setTodayDeliveries] = useState<DeliveryRow[] | null>(null)
@@ -97,6 +97,9 @@ export function DeliveriesPage() {
         {/* Route Filter (includes Area Filter) */}
         <RouteFilter />
 
+        {/* Follow or copy someone's order (see components/common/OrderShare.tsx) */}
+        <OrderShare kind="customer" onChanged={reload} />
+
         {isLoading ? (
           <div className="text-center py-8 text-gray-500"><InlineLoader label={t('common.loading')} /></div>
         ) : (
@@ -112,6 +115,7 @@ export function DeliveriesPage() {
                 <SortableList
                   items={sortedCustomerIds}
                   onReorder={handleReorder}
+                  disabled={!!following}
                   renderItem={(id) => {
                     const customer = customerMap.get(id)
                     if (!customer) return null

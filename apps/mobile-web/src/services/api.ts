@@ -402,3 +402,14 @@ export const accountApi = {
   requestDeletionPublic: (data: { name: string; phone: string; businessName?: string; reason?: string }) =>
     api.post<{ success: boolean; data: DeletionRequestInfo }>('/account/deletion-request/public', data, { skipAuth: true })
 }
+
+// Sharing the collect/deliver order (both shifts): follow someone's order (live, read-only),
+// stop following (keeps a copy), or copy once. userId: the owner changing it for a staff member.
+export const orderShareApi = {
+  get: (kind: 'farmer' | 'customer', userId?: string) =>
+    api.get(`/${kind}s/sort-order/follow${userId ? `?userId=${userId}` : ''}`),
+  follow: (kind: 'farmer' | 'customer', followUserId: string | null, userId?: string) =>
+    api.put(`/${kind}s/sort-order/follow`, { followUserId, userId }),
+  copy: (kind: 'farmer' | 'customer', fromUserId: string, userId?: string) =>
+    api.post(`/${kind}s/sort-order/copy`, { fromUserId, userId })
+}
