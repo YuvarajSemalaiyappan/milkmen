@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { LanguagePicker } from '@/components/common/LanguagePicker'
+import { isLanguage, LANGUAGES, type Language } from '@/i18n/languages'
 import { Users, Plus, Phone, Shield, MoreVertical, Key, Trash2, UserX, UserCheck, Loader2 } from 'lucide-react'
 import { AppShell } from '@/components/layout'
 import { Card, Button, Input, Badge, InlineLoader } from '@/components/ui'
 import { useAuthStore, selectIsOwner } from '@/store'
 import { api, orderShareApi } from '@/services/api'
 import type { ApiResponse, User, Role } from '@/types'
+
+const languageName = (code?: string | null) => LANGUAGES.find((l) => l.code === code)?.label
 
 interface StaffMember extends User {
   isActive: boolean
@@ -15,7 +19,7 @@ interface StaffMember extends User {
 }
 
 export function StaffManagementPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const isOwner = useAuthStore(selectIsOwner)
   const currentUser = useAuthStore((state) => state.user)
 
@@ -44,6 +48,9 @@ export function StaffManagementPage() {
     pin: '',
     role: 'STAFF' as Role
   })
+  // The new person's app language; null = the owner's own language (same as the phone app)
+  const [newLanguage, setNewLanguage] = useState<Language | null>(null)
+  const staffLanguage = newLanguage ?? (isLanguage(i18n.language) ? i18n.language : 'en')
 
 
   const loadStaff = useCallback(async () => {
@@ -91,13 +98,15 @@ export function StaffManagementPage() {
         name: newStaff.name.trim(),
         phone: newStaff.phone,
         pin: newStaff.pin,
-        role: newStaff.role
+        role: newStaff.role,
+        language: staffLanguage
       })
       if (response.success && response.data) {
         setStaff([...staff, response.data])
         setSuccess(t('settings.staffAdded'))
         setIsAddingStaff(false)
         setNewStaff({ name: '', phone: '', pin: '', role: 'STAFF' })
+        setNewLanguage(null)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('common.error'))
@@ -277,6 +286,11 @@ export function StaffManagementPage() {
                 </div>
               </div>
 
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('settings.language')}</p>
+                <LanguagePicker value={staffLanguage} onChange={setNewLanguage} />
+              </div>
+
               <div className="flex gap-3">
                 <Button
                   variant="outline"
@@ -342,6 +356,7 @@ export function StaffManagementPage() {
                         <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                           <Phone className="w-3 h-3" />
                           {member.phone}
+                          {languageName(member.language) ? ` · ${languageName(member.language)}` : ''}
                         </div>
                       </div>
                     </div>

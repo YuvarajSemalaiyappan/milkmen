@@ -58,6 +58,16 @@ router.get('/stats', authenticateAdmin, async (_req: AdminRequest, res: Response
       }
     })
 
+    // Active users by app language; null = not reported yet (shown as "Not known")
+    const byLanguage = await prisma.user.groupBy({
+      by: ['language'],
+      _count: { _all: true },
+      where: { isActive: true }
+    })
+    const usersByLanguage = byLanguage
+      .map((l: { language: string | null; _count: { _all: number } }) => ({ language: l.language, count: l._count._all }))
+      .sort((a: { count: number }, b: { count: number }) => b.count - a.count)
+
     const planCounts: Record<string, number> = {}
     businessesByPlan.forEach(item => {
       planCounts[item.plan] = item._count.plan
@@ -83,7 +93,8 @@ router.get('/stats', authenticateAdmin, async (_req: AdminRequest, res: Response
           validFrom: p.validFrom.toISOString(),
           validUntil: p.validUntil.toISOString()
         })),
-        businessesByPlan: planCounts
+        businessesByPlan: planCounts,
+        usersByLanguage
       }
     })
   } catch (error) {

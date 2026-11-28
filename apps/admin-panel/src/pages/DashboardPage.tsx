@@ -3,6 +3,7 @@ import { Building2, CreditCard, AlertTriangle, IndianRupee } from 'lucide-react'
 import { StatCard, Card, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, SubscriptionBadge } from '@/components/ui'
 import { dashboardApi } from '@/services'
 import type { DashboardStats } from '@/types'
+import { languageName } from '@/languages'
 
 export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -96,6 +97,32 @@ export function DashboardPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </Card>
+
+        <Card>
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+            Users by Language
+          </h3>
+          <p className="text-sm text-gray-500 mb-4">Active users of all businesses, by the language set in their app.</p>
+          <div className="space-y-4">
+            {(stats?.usersByLanguage || []).map(({ language, count }) => {
+              const total = (stats?.usersByLanguage || []).reduce((sum, l) => sum + l.count, 0) || 1
+              return (
+                <div key={language ?? 'unknown'} className="flex items-center justify-between">
+                  <span className={`text-sm ${language ? 'text-gray-600' : 'text-gray-400'}`}>{languageName(language)}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-32 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${language ? 'bg-blue-600' : 'bg-gray-300'}`}
+                        style={{ width: `${(count / total) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900 w-8 text-right">{count}</span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </Card>
 

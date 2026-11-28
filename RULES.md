@@ -139,3 +139,10 @@ and Assamese. The list (codes and native names) is `src/i18n/languages.ts` in ea
 `localeOf(lang)` (`<code>-IN`), never a hard-coded `'ta' ? 'ta-IN' : 'en-IN'`. Every locale file has exactly the
 keys of that app's `en.json`; a new string goes into all of them (missing ones fall back to English).
 Everything except English and Tamil was machine-translated and needs a native speaker's review.
+
+Each user's language is also saved on the server (`User.language`, codes in `server/src/lib/languages.ts`):
+picked on Create Account (`POST /auth/register` `language`) and when the owner adds staff (`POST /settings/staff`),
+changed with `PUT /settings/language` (both apps call it on every change and once per app start), and returned
+on login, where the account's language is applied unless the user just picked one on the login screen
+(`lib/language.ts` on the phone, `utils/language.ts` on the web). Null = not reported yet. The admin sees the
+counts on the Dashboard ("Users by Language") and each user's language on the business page.

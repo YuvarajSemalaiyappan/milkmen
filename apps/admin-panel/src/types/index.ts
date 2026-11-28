@@ -60,6 +60,8 @@ export interface DashboardStats {
   totalRevenue: number
   recentPayments: SubscriptionPayment[]
   businessesByPlan: Record<SubscriptionPlan, number>
+  /** Active users by app language, most first; language null = not reported yet */
+  usersByLanguage: { language: string | null; count: number }[]
 }
 
 // Toast types

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import bcrypt from 'bcrypt'
 import { z } from 'zod'
+import { languageSchema } from '../../lib/languages.js'
 import prisma from '../../lib/prisma.js'
 import { effectiveStatus } from '../../lib/plan.js'
 import { authenticateToken, requireOwner, requireOwnerOrManager, AuthRequest } from '../../middleware/auth.js'
@@ -27,7 +28,9 @@ const addStaffSchema = z.object({
   name: z.string().min(2).max(100),
   phone: z.string().min(10).max(15),
   pin: z.string().length(4).regex(/^\d{4}$/, 'PIN must be 4 digits'),
-  role: z.enum(['STAFF', 'MANAGER'])
+  role: z.enum(['STAFF', 'MANAGER']),
+  // The language the new staff member's app opens in; they can change it in their own Settings.
+  language: languageSchema.optional()
 })
 
 const updateStaffSchema = z.object({
@@ -103,6 +106,7 @@ router.get('/profile', authenticateToken, async (req: AuthRequest, res: Response
         phone: true,
         role: true,
         isActive: true,
+        language: true,
         createdAt: true
       }
     })
@@ -142,6 +146,25 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
   } catch (error) {
     console.error('Update profile error:', error)
     return res.status(500).json({ success: false, error: 'Failed to update profile' })
+  }
+})
+
+// PUT /api/settings/language - Save the language this user picked in the app (both apps call it on every change,
+// and after login when the server has none yet), so the admin can see which languages are in use.
+router.put('/language', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const validation = z.object({ language: languageSchema }).safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({ success: false, error: 'Invalid language' })
+    }
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { language: validation.data.language }
+    })
+    return res.json({ success: true, data: { language: validation.data.language } })
+  } catch (error) {
+    console.error('Update language error:', error)
+    return res.status(500).json({ success: false, error: 'Failed to save language' })
   }
 })
 
@@ -252,6 +275,7 @@ router.get('/staff', authenticateToken, requireOwner, async (req: AuthRequest, r
         // Whose collect/deliver order they follow (null = their own); see lib/order-follow.ts
         followFarmerOrderId: true,
         followCustomerOrderId: true,
+        language: true,
         createdAt: true,
         updatedAt: true
       },
@@ -276,7 +300,7 @@ router.post('/staff', authenticateToken, requireOwner, async (req: AuthRequest, 
       return res.status(400).json({ success: false, error: 'Invalid input', details: validation.error.issues })
     }
 
-    const { name, phone, pin, role } = validation.data
+    const { name, phone, pin, role, language } = validation.data
 
     // Check if phone already exists in this business
     const existing = await prisma.user.findFirst({
@@ -296,7 +320,8 @@ router.post('/staff', authenticateToken, requireOwner, async (req: AuthRequest, 
         phone,
         pinHash,
         role,
-        mustChangePin: true
+        mustChangePin: true,
+        language: language ?? null
       },
       select: {
         id: true,

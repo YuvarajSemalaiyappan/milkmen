@@ -128,6 +128,7 @@ router.get('/:id', authenticateAdmin, async (req: AdminRequest, res: Response) =
             phone: true,
             role: true,
             isActive: true,
+            language: true,
             createdAt: true
           },
           orderBy: { createdAt: 'asc' }
@@ -165,6 +166,7 @@ router.get('/:id', authenticateAdmin, async (req: AdminRequest, res: Response) =
           phone: u.phone,
           role: u.role,
           isActive: u.isActive,
+          language: u.language,
           createdAt: u.createdAt.toISOString()
         }))
       }

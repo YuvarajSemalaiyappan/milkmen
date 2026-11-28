@@ -7,6 +7,7 @@ import { businessesApi, subscriptionsApi } from '@/services'
 import type { Business, SubscriptionPayment, SubscriptionPlan } from '@/types'
 import { format } from 'date-fns'
 import { PLANS, pricesFrom, type Prices } from '@/plans'
+import { languageName } from '@/languages'
 
 interface BusinessUser {
   id: string
@@ -14,6 +15,7 @@ interface BusinessUser {
   phone: string
   role: string
   isActive: boolean
+  language: string | null
   createdAt: string
 }
 
@@ -337,6 +339,7 @@ export function BusinessDetailPage() {
                 <TableHeader>Name</TableHeader>
                 <TableHeader>Phone</TableHeader>
                 <TableHeader>Role</TableHeader>
+                <TableHeader>Language</TableHeader>
                 <TableHeader>Status</TableHeader>
                 <TableHeader>Actions</TableHeader>
               </TableRow>
@@ -351,6 +354,7 @@ export function BusinessDetailPage() {
                       {user.role}
                     </Badge>
                   </TableCell>
+                  <TableCell className={user.language ? '' : 'text-gray-400'}>{languageName(user.language)}</TableCell>
                   <TableCell>
                     <Badge variant={user.isActive ? 'success' : 'default'}>
                       {user.isActive ? 'Active' : 'Inactive'}

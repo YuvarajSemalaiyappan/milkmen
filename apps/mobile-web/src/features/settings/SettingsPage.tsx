@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { LANGUAGES } from '@/i18n/languages'
+import { LanguagePicker } from '@/components/common/LanguagePicker'
+import { chooseLanguage } from '@/utils/language'
 import {
   Globe,
   User,
@@ -10,7 +11,6 @@ import {
   Info,
   LogOut,
   ChevronRight,
-  Check,
   Sun,
   Moon,
   Monitor,
@@ -31,10 +31,6 @@ export function SettingsPage() {
   const setTheme = useAppStore((state) => state.setTheme)
 
   const currentLanguage = i18n.language
-
-  const handleLanguageChange = (lang: string) => {
-    i18n.changeLanguage(lang)
-  }
 
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme)
@@ -117,24 +113,7 @@ export function SettingsPage() {
               {t('settings.language')}
             </span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {LANGUAGES.map(({ code, label }) => (
-              <button
-                key={code}
-                onClick={() => handleLanguageChange(code)}
-                className={`py-3 px-2 rounded-lg border-2 font-medium transition-colors ${
-                  currentLanguage === code
-                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                    : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-1">
-                  {currentLanguage === code && <Check className="w-4 h-4 shrink-0" />}
-                  {label}
-                </div>
-              </button>
-            ))}
-          </div>
+          <LanguagePicker value={currentLanguage} onChange={chooseLanguage} />
         </Card>
 
         {/* Theme Selection */}

@@ -1,4 +1,5 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
+import { reportLanguageOnce } from '@/utils/language'
 import { Header, type HeaderProps } from './Header'
 import { BottomNav } from './BottomNav'
 import { Sidebar } from './Sidebar'
@@ -16,6 +17,8 @@ export function AppShell({
   fullHeight = false,
   ...headerProps
 }: AppShellProps) {
+  // Signed-in pages only: tell the server this user's language once per page load.
+  useEffect(reportLanguageOnce, [])
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
       {/* Sidebar for desktop */}

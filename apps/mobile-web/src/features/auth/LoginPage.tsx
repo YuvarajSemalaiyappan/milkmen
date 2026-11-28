@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { languageAfterLogin } from '@/utils/language'
 import { Milk, Phone } from 'lucide-react'
 import { Button, Input, Card, InlineLoader } from '@/components/ui'
 import { PinPad } from '@/components/common'
@@ -82,11 +83,14 @@ export function LoginPage() {
           businessId: result.data.user.businessId,
           name: result.data.user.name,
           phone: result.data.user.phone,
-          role: result.data.user.role
+          role: result.data.user.role,
+          language: result.data.user.language
         },
         result.data.token,
         result.data.refreshToken
       )
+
+      languageAfterLogin(result.data.user.language)
 
       // Store subscription info
       if (result.data.subscription) {

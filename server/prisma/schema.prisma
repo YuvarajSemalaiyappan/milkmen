@@ -48,6 +48,9 @@ model User {
   // Plain ids (users of the same business); see server/src/lib/order-follow.ts
   followFarmerOrderId   String?
   followCustomerOrderId String?
+  // App language code (en, ta, hi, ...; see src/lib/languages.ts). Chosen when the account is created,
+  // changed in Settings. Null = not reported yet (accounts made before languages were saved).
+  language  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

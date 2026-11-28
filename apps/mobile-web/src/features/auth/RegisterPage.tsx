@@ -8,6 +8,8 @@ import { Building2, Phone, User, Lock, ArrowRight, Milk } from 'lucide-react'
 import { Button, Input, Card } from '@/components/ui'
 import { useAuthStore } from '@/store'
 import { clsx } from 'clsx'
+import { LanguagePicker } from '@/components/common/LanguagePicker'
+import { chooseLanguage } from '@/utils/language'
 
 const phoneSchema = z.string().refine(
   (val) => /^[6-9]\d{9}$/.test(val.replace(/\D/g, '')),
@@ -31,7 +33,7 @@ type RegisterFormData = z.infer<typeof registerSchema>
 const steps = ['business', 'owner', 'pin'] as const
 
 export function RegisterPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   // Phone passed from the login screen when the number has no account
   const [searchParams] = useSearchParams()
@@ -82,7 +84,8 @@ export function RegisterPage() {
           businessName: data.businessName,
           phone: data.businessPhone.replace(/\D/g, ''),
           ownerName: data.ownerName,
-          pin: data.pin
+          pin: data.pin,
+          language: i18n.language
         })
       })
 
@@ -194,6 +197,11 @@ export function RegisterPage() {
                   </div>
                   {t('auth.businessDetails')}
                 </h2>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('settings.language')}</p>
+                  <LanguagePicker value={i18n.language} onChange={chooseLanguage} />
+                </div>
 
                 <Input
                   label={t('auth.businessName')}

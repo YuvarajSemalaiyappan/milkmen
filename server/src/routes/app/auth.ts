@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import prisma from '../../lib/prisma.js'
 import { effectiveStatus } from '../../lib/plan.js'
+import { languageSchema } from '../../lib/languages.js'
 import type { Prisma } from '@prisma/client'
 
 const router = Router()
@@ -23,7 +24,9 @@ const registerSchema = z.object({
   ownerName: z.string().min(2).max(100),
   phone: z.string().min(10).max(15),
   pin: z.string().length(4),
-  address: z.string().optional()
+  address: z.string().optional(),
+  // Picked on the Create Account screen. Optional so older app builds can still register.
+  language: languageSchema.optional()
 })
 
 // Generate tokens
@@ -100,7 +103,7 @@ router.post('/register', async (req, res) => {
       })
     }
 
-    const { businessName, ownerName, phone, pin, address } = validation.data
+    const { businessName, ownerName, phone, pin, address, language } = validation.data
 
     // Check if phone already exists
     const existingBusiness = await prisma.business.findUnique({
@@ -135,7 +138,8 @@ router.post('/register', async (req, res) => {
           name: ownerName,
           phone,
           pinHash,
-          role: 'OWNER'
+          role: 'OWNER',
+          language: language ?? null
         }
       })
 
@@ -167,7 +171,8 @@ router.post('/register', async (req, res) => {
           name: result.user.name,
           phone: result.user.phone,
           role: result.user.role,
-          businessId: result.business.id
+          businessId: result.business.id,
+          language: result.user.language
         },
         business: {
           id: result.business.id,
@@ -259,7 +264,8 @@ router.post('/login', async (req, res) => {
           phone: user.phone,
           role: user.role,
           businessId: user.businessId,
-          mustChangePin: user.mustChangePin
+          mustChangePin: user.mustChangePin,
+          language: user.language
         },
         business: {
           id: user.business.id,

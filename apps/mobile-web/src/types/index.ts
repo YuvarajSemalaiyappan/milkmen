@@ -32,6 +32,8 @@ export interface User {
   phone: string
   role: Role
   isActive: boolean
+  /** App language code (null = not reported yet) */
+  language?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -212,6 +214,8 @@ export interface AuthUser {
   name: string
   phone: string
   role: Role
+  /** App language saved on the server; null until the app reports one */
+  language?: string | null
 }
 
 export interface AuthState {
